@@ -378,6 +378,8 @@ main() {
 
     curl -fL "$image_url" -o "$TMP_DIR/inventarsystem-image-$tag.tar.gz"
     sudo docker load -i "$TMP_DIR/inventarsystem-image-$tag.tar.gz" >/dev/null
+    # Compatibility alias: some legacy compose bundles may still reference :latest.
+    sudo docker tag "ghcr.io/aiirondev/legendary-octo-garbanzo:$tag" "ghcr.io/aiirondev/legendary-octo-garbanzo:latest" >/dev/null 2>&1 || true
 
     if [ ! -f "$PROJECT_DIR/start.sh" ]; then
         echo "Error: release bundle is missing start.sh"
