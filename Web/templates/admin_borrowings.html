@@ -100,6 +100,9 @@
           {% if e.invoice_number %}
             <div style="font-weight:600;">{{ e.invoice_number }}</div>
             <div style="font-size:0.85rem; color:#666;">{{ e.invoice_amount }}</div>
+            {% if e.invoice_corrections_count %}
+              <div style="font-size:0.78rem; color:#7c2d12; margin-top:4px;">{{ e.invoice_corrections_count }} Korrektur(en)</div>
+            {% endif %}
             {% if e.invoice_paid %}
               <div style="display:inline-block; margin-top:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.75rem; font-weight:700;">Bezahlt</div>
               {% if e.invoice_paid_at %}
@@ -127,6 +130,13 @@
                   Als repariert markieren
                 {% endif %}
               </button>
+            </form>
+            {% endif %}
+            {% if e.invoice_number %}
+            <form method="post" action="{{ url_for('admin_add_invoice_correction', borrow_id=e.id) }}" onsubmit="return confirm('Korrekturbuchung hinzufügen?');">
+              <input type="text" name="correction_reason" placeholder="Korrekturgrund" required style="padding:6px; border:1px solid #ddd; border-radius:6px; min-width:160px;">
+              <input type="text" name="amount_delta" placeholder="Delta (optional)" style="padding:6px; border:1px solid #ddd; border-radius:6px; width:120px;">
+              <button type="submit" class="btn btn-outline-danger">Korrektur</button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('admin_reset_borrowing', borrow_id=e.id) }}" onsubmit="return confirm('Ausleihe zurücksetzen?');">

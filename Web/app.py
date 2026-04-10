@@ -30,6 +30,7 @@ from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
+import audit_log as al
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
@@ -131,6 +132,43 @@ def _get_current_module(path):
     if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
         return 'library'
     return 'inventory'
+
+
+def _append_audit_event(db, event_type, payload):
+    """Write an audit entry; never break business flow on audit failures."""
+    try:
+        al.append_audit_event(
+            db=db,
+            event_type=event_type,
+            actor=session.get('username', 'system'),
+            payload=payload,
+            request_ip=request.remote_addr,
+            source='web',
+        )
+    except Exception as exc:
+        app.logger.warning(f"Audit write failed for {event_type}: {exc}")
+
+
+_AUDIT_INDEXES_READY = False
+
+
+def _ensure_audit_indexes_once():
+    """Ensure audit indexes exist once per process."""
+    global _AUDIT_INDEXES_READY
+    if _AUDIT_INDEXES_READY:
+        return
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        _AUDIT_INDEXES_READY = True
+    except Exception as exc:
+        app.logger.warning(f"Could not ensure audit indexes: {exc}")
+    finally:
+        if client:
+            client.close()
 
 
 def _parse_money_value(value):
@@ -1134,6 +1172,8 @@ def library_loans_admin():
         flash('Bibliotheks-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
+    _ensure_audit_indexes_once()
+
     def fmt_dt(dt):
         try:
             return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
@@ -1151,7 +1191,7 @@ def library_loans_admin():
         ausleihungen_col = db['ausleihungen']
 
         library_items = list(items_col.find(
-            {'ItemType': {'$in': LIBRARY_ITEM_TYPES}},
+            {'ItemType': {'$in': LIBRARY_ITEM_TYPES}, 'Deleted': {'$ne': True}},
             {'Name': 1, 'Code_4': 1, 'Anschaffungskosten': 1, 'Condition': 1, 'HasDamage': 1, 'DamageReports': 1, 'Verfuegbar': 1, 'User': 1, 'ItemType': 1, 'Author': 1, 'ISBN': 1}
         ))
         item_map = {str(item['_id']): item for item in library_items if item.get('_id')}
@@ -1197,6 +1237,7 @@ def library_loans_admin():
                 'invoice_amount': fmt_money(invoice_data.get('amount')) if invoice_data.get('amount') is not None else fmt_money(item_doc.get('Anschaffungskosten')),
                 'invoice_paid': bool(invoice_data.get('paid', False)),
                 'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
+                'invoice_corrections_count': len(record.get('InvoiceCorrections', []) or []),
                 'has_damage': item_has_damage,
                 'damage_count': len(damage_reports),
                 'damage_text': (damage_reports[0].get('description', '') if damage_reports else ''),
@@ -2375,14 +2416,16 @@ def get_items():
         items_col = db['items']
         items_cur = items_col.find({
             'IsGroupedSubItem': {'$ne': True},
-            'ItemType': {'$nin': LIBRARY_ITEM_TYPES}
+            'ItemType': {'$nin': LIBRARY_ITEM_TYPES},
+            'Deleted': {'$ne': True},
         })
         items = []
         for itm in items_cur:
             item_id_str = str(itm['_id'])
             grouped_children = list(items_col.find({
                 'ParentItemId': item_id_str,
-                'IsGroupedSubItem': True
+                'IsGroupedSubItem': True,
+                'Deleted': {'$ne': True},
             }))
             grouped_count = 1 + len(grouped_children)
 
@@ -2422,7 +2465,7 @@ def get_item_json(id):
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-        item = db['items'].find_one({'_id': ObjectId(id)})
+        item = db['items'].find_one({'_id': ObjectId(id), 'Deleted': {'$ne': True}})
         if not item:
             return jsonify({'error': 'not found'}), 404
         item['_id'] = str(item['_id'])
@@ -3655,43 +3698,68 @@ def delete_item(id):
         flash('Element nicht gefunden.', 'error')
         return redirect(url_for('home_admin'))
 
-    # Collect all referenced images once to avoid duplicate deletion attempts
-    image_filenames = []
-    seen_images = set()
-    for group_item in group_items:
-        for filename in group_item.get('Images', []):
-            if filename and filename not in seen_images:
-                seen_images.add(filename)
-                image_filenames.append(filename)
-    
-    # Attempt to delete image files
-    stats = {'originals': 0, 'thumbnails': 0, 'previews': 0, 'errors': 0}
-    try:
-        stats = delete_item_images(image_filenames)
-        app.logger.info(f"Item group deletion ({len(group_item_ids)} IDs) - Images removed: " +
-                      f"originals={stats['originals']}, thumbnails={stats['thumbnails']}, " +
-                      f"previews={stats['previews']}, errors={stats['errors']}")
-    except Exception as e:
-        app.logger.error(f"Error deleting images for item group {id}: {str(e)}")
-
-    # Delete all items in the group and related borrow entries
+    # GoBD hardening: keep files and records immutable, use soft-delete markers only.
     delete_success = True
-    for group_item_id in group_item_ids:
-        if not it.remove_item(group_item_id):
-            delete_success = False
+    soft_deleted_items = 0
+    soft_deleted_borrows = 0
+    now = datetime.datetime.now()
 
+    client = None
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-        db['ausleihungen'].delete_many({'Item': {'$in': group_item_ids}})
-        client.close()
+
+        for group_item_id in group_item_ids:
+            result = db['items'].update_one(
+                {'_id': ObjectId(group_item_id), 'Deleted': {'$ne': True}},
+                {'$set': {
+                    'Deleted': True,
+                    'DeletedAt': now,
+                    'DeletedBy': session.get('username', ''),
+                    'LastUpdated': now,
+                    'Verfuegbar': False,
+                }}
+            )
+            if result.modified_count > 0:
+                soft_deleted_items += 1
+            elif result.matched_count == 0:
+                delete_success = False
+
+        borrow_result = db['ausleihungen'].update_many(
+            {
+                'Item': {'$in': group_item_ids},
+                'Status': {'$ne': 'deleted'}
+            },
+            {'$set': {
+                'Status': 'deleted',
+                'DeletedAt': now,
+                'DeletedBy': session.get('username', ''),
+                'LastUpdated': now,
+            }}
+        )
+        soft_deleted_borrows = borrow_result.modified_count
+
+        _append_audit_event(
+            db,
+            'inventory_item_soft_deleted',
+            {
+                'root_item_id': id,
+                'group_item_ids': group_item_ids,
+                'soft_deleted_items': soft_deleted_items,
+                'soft_deleted_borrow_records': soft_deleted_borrows,
+            }
+        )
     except Exception as e:
-        app.logger.error(f"Error deleting borrowing records for item group {id}: {str(e)}")
+        app.logger.error(f"Error during soft-delete for item group {id}: {str(e)}")
+        delete_success = False
+    finally:
+        if client:
+            client.close()
 
     if delete_success:
-        flash(f'Elementgruppe erfolgreich gelöscht ({len(group_item_ids)} Versionen). {stats["originals"]} Bilder entfernt.', 'success')
+        flash(f'Elementgruppe revisionssicher deaktiviert ({soft_deleted_items}/{len(group_item_ids)} Versionen).', 'success')
     else:
-        flash('Fehler beim Löschen des Elements aus der Datenbank.', 'error')
+        flash('Fehler beim revisionssicheren Deaktivieren des Elements.', 'error')
         
     return redirect(url_for('home_admin'))
 
@@ -5075,6 +5143,8 @@ def admin_borrowings():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
 
+    _ensure_audit_indexes_once()
+
     client = MongoClient(MONGODB_HOST, MONGODB_PORT)
     db = client[MONGODB_DB]
     ausleihungen = db['ausleihungen']
@@ -5127,6 +5197,7 @@ def admin_borrowings():
             'invoice_created_at': fmt_dt(invoice_data.get('created_at')) if isinstance(invoice_data.get('created_at'), datetime.datetime) else '',
             'invoice_paid': bool(invoice_data.get('paid', False)),
             'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
+            'invoice_corrections_count': len(r.get('InvoiceCorrections', []) or []),
             'has_damage': has_damage,
         })
 
@@ -5138,6 +5209,75 @@ def admin_borrowings():
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
     )
+
+
+@app.route('/admin/audit/verify', methods=['GET'])
+def admin_verify_audit_chain():
+    """Admin endpoint to verify audit chain integrity."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        result = al.verify_audit_chain(db)
+        status_code = 200 if result.get('ok') else 409
+        return jsonify(result), status_code
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/audit', methods=['GET'])
+def admin_audit_dashboard():
+    """Admin dashboard for audit chain status and recent events."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        verify_result = al.verify_audit_chain(db)
+
+        audit_rows = list(
+            db['audit_log'].find(
+                {},
+                {
+                    'chain_index': 1,
+                    'event_type': 1,
+                    'actor': 1,
+                    'source': 1,
+                    'ip': 1,
+                    'timestamp': 1,
+                    'created_at': 1,
+                    'entry_hash': 1,
+                    'prev_hash': 1,
+                    'payload': 1,
+                }
+            ).sort('chain_index', -1).limit(200)
+        )
+
+        return render_template(
+            'admin_audit.html',
+            verify_result=verify_result,
+            audit_rows=audit_rows,
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        )
+    except Exception as exc:
+        app.logger.error(f"Error loading audit dashboard: {exc}")
+        flash('Fehler beim Laden des Audit-Dashboards.', 'error')
+        return redirect(url_for('home_admin'))
+    finally:
+        if client:
+            client.close()
 
 
 @app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
@@ -5241,6 +5381,10 @@ def admin_create_invoice(borrow_id):
         now = datetime.datetime.now()
 
         existing_invoice = borrow_doc.get('InvoiceData') or {}
+        if existing_invoice.get('invoice_number'):
+            flash('Für diese Ausleihe existiert bereits eine Rechnung. Bitte Korrekturbuchung verwenden.', 'warning')
+            return redirect(url_for('admin_borrowings'))
+
         invoice_number = existing_invoice.get('invoice_number') or _build_invoice_number(borrow_doc['_id'], now)
         borrower = borrow_doc.get('User', '')
         item_name = item_doc.get('Name', '')
@@ -5266,6 +5410,7 @@ def admin_create_invoice(borrow_id):
 
         update_fields = {
             'InvoiceData': invoice_data,
+            'InvoiceLocked': True,
             'LastUpdated': now,
         }
         if close_borrowing:
@@ -5312,6 +5457,19 @@ def admin_create_invoice(borrow_id):
             })
         except Exception as log_err:
             app.logger.warning(f"Damage invoice log write failed for borrow {borrow_id}: {log_err}")
+
+        _append_audit_event(
+            db,
+            'invoice_created',
+            {
+                'borrow_id': borrow_id,
+                'invoice_number': invoice_number,
+                'amount': round(amount_value, 2),
+                'mark_destroyed': mark_destroyed,
+                'close_borrowing': close_borrowing,
+                'item_id': str(item_doc.get('_id')),
+            }
+        )
 
         pdf_buffer = _build_invoice_pdf(invoice_data)
         return send_file(
@@ -5386,6 +5544,16 @@ def admin_mark_invoice_paid(borrow_id):
             })
         except Exception as log_err:
             app.logger.warning(f"Damage invoice paid log write failed for borrow {borrow_id}: {log_err}")
+
+        _append_audit_event(
+            db,
+            'invoice_marked_paid',
+            {
+                'borrow_id': borrow_id,
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'amount': invoice_data.get('amount'),
+            }
+        )
 
         flash('Rechnung wurde als bezahlt markiert.', 'success')
         return redirect(url_for('admin_borrowings'))
@@ -5492,6 +5660,19 @@ def admin_finalize_invoice_and_repair(borrow_id):
         except Exception as log_err:
             app.logger.warning(f"Damage invoice finalize log write failed for borrow {borrow_id}: {log_err}")
 
+        _append_audit_event(
+            db,
+            'invoice_finalized_and_repaired',
+            {
+                'borrow_id': borrow_id,
+                'item_id': str(item_doc.get('_id')) if item_doc else '',
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'amount': invoice_data.get('amount'),
+                'repaired': repaired,
+                'resolved_damage_reports': resolved_count,
+            }
+        )
+
         if repaired:
             flash('Rechnung als bezahlt markiert und Element als repariert abgeschlossen.', 'success')
         else:
@@ -5551,6 +5732,83 @@ def admin_view_invoice_pdf(borrow_id):
         app.logger.error(f"Error loading stored invoice PDF for borrow {borrow_id}: {e}")
         flash('Fehler beim Öffnen der Rechnung.', 'error')
         return redirect(url_for('library_loans_admin'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/borrowings/<borrow_id>/invoice/correction', methods=['POST'])
+def admin_add_invoice_correction(borrow_id):
+    """Append an invoice correction entry without mutating the original invoice body."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+
+        borrow_doc = ausleihungen.find_one({'_id': ObjectId(borrow_id)}, {'InvoiceData': 1})
+        if not borrow_doc:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        invoice_data = borrow_doc.get('InvoiceData') or {}
+        if not invoice_data:
+            flash('Korrektur nicht möglich: Es existiert noch keine Rechnung.', 'warning')
+            return redirect(url_for('admin_borrowings'))
+
+        correction_reason = str(request.form.get('correction_reason', '')).strip()
+        if not correction_reason:
+            flash('Bitte eine Begründung für die Korrektur angeben.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        delta_raw = request.form.get('amount_delta')
+        delta_value = _parse_money_value(delta_raw) if delta_raw not in (None, '') else 0.0
+        if delta_value is None:
+            flash('Ungültiger Korrekturbetrag.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        now = datetime.datetime.now()
+        correction_number = f"CORR-{now.strftime('%Y%m%d-%H%M%S')}-{str(borrow_doc.get('_id'))[-6:].upper()}"
+        correction_entry = {
+            'correction_number': correction_number,
+            'reason': correction_reason,
+            'amount_delta': round(delta_value, 2),
+            'amount_delta_text': _format_money_value(delta_value),
+            'created_at': now,
+            'created_by': session.get('username', ''),
+            'invoice_number': invoice_data.get('invoice_number', ''),
+        }
+
+        ausleihungen.update_one(
+            {'_id': borrow_doc['_id']},
+            {
+                '$push': {'InvoiceCorrections': {'$each': [correction_entry], '$position': 0}},
+                '$set': {'LastUpdated': now, 'InvoiceLocked': True}
+            }
+        )
+
+        _append_audit_event(
+            db,
+            'invoice_correction_added',
+            {
+                'borrow_id': borrow_id,
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'correction_number': correction_number,
+                'amount_delta': round(delta_value, 2),
+                'reason': correction_reason,
+            }
+        )
+
+        flash('Korrekturbuchung wurde revisionssicher ergänzt.', 'success')
+        return redirect(url_for('admin_borrowings'))
+    except Exception as e:
+        app.logger.error(f"Error creating invoice correction for borrow {borrow_id}: {e}")
+        flash('Fehler beim Anlegen der Korrekturbuchung.', 'error')
+        return redirect(url_for('admin_borrowings'))
     finally:
         if client:
             client.close()

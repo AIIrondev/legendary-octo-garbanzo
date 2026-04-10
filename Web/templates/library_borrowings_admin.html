@@ -282,6 +282,9 @@
             {% if e.invoice_number %}
               <div class="mono">{{ e.invoice_number }}</div>
               <div class="muted">{{ e.invoice_amount }}</div>
+              {% if e.invoice_corrections_count %}
+                <div class="muted" style="color:#7c2d12;">{{ e.invoice_corrections_count }} Korrektur(en)</div>
+              {% endif %}
               <div style="margin-top:6px;">
                 <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_view_invoice_pdf', borrow_id=e.id) }}" target="_blank" rel="noopener">PDF öffnen</a>
               </div>
@@ -323,6 +326,14 @@
               {% elif e.has_damage %}
               <form method="post" action="{{ url_for('mark_damage_repaired', id=e.item_id) }}" onsubmit="return confirm('Medium als repariert markieren?');">
                 <button type="submit" class="btn btn-success btn-sm">Als repariert markieren</button>
+              </form>
+              {% endif %}
+
+              {% if e.invoice_number %}
+              <form method="post" action="{{ url_for('admin_add_invoice_correction', borrow_id=e.id) }}" onsubmit="return confirm('Korrekturbuchung hinzufügen?');">
+                <input type="text" name="correction_reason" placeholder="Korrekturgrund" required style="padding:6px; border:1px solid #ddd; border-radius:6px; min-width:140px;">
+                <input type="text" name="amount_delta" placeholder="Delta optional" style="padding:6px; border:1px solid #ddd; border-radius:6px; width:120px;">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Korrektur</button>
               </form>
               {% endif %}
 

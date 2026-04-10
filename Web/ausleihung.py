@@ -365,8 +365,7 @@ def cancel_ausleihung(id):
 
 def remove_ausleihung(id):
     """
-    Entfernt einen Ausleihungsdatensatz aus der Datenbank.
-    Hinweis: Normalerweise ist es besser, Datensätze zu markieren als sie zu löschen.
+    Markiert einen Ausleihungsdatensatz als gelöscht (Soft-Delete).
     
     Args:
         id (str): ID des zu entfernenden Ausleihungsdatensatzes
@@ -378,9 +377,17 @@ def remove_ausleihung(id):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
-        result = ausleihungen.delete_one({'_id': ObjectId(id)})
+        now = datetime.datetime.now()
+        result = ausleihungen.update_one(
+            {'_id': ObjectId(id), 'Status': {'$ne': 'deleted'}},
+            {'$set': {
+                'Status': 'deleted',
+                'DeletedAt': now,
+                'LastUpdated': now,
+            }}
+        )
         client.close()
-        return result.deleted_count > 0
+        return result.modified_count > 0
     except Exception as e:
         # print(f"Error removing ausleihung: {e}") # Log the error
         return False
@@ -429,14 +436,15 @@ def get_ausleihungen(status=None, start=None, end=None, date_filter='overlap'):
         collection = db['ausleihungen']
         
         # Query erstellen
-        query = {}
+        query = {'Status': {'$ne': 'deleted'}}
         
         # Status-Filter hinzufügen
         if status is not None:
             if isinstance(status, list):
-                query['Status'] = {'$in': status}
+                allowed_status = [s for s in status if s != 'deleted']
+                query['Status'] = {'$in': allowed_status}
             else:
-                query['Status'] = status
+                query['Status'] = status if status != 'deleted' else '__blocked_deleted_status__'
         
         # Datum parsen, wenn als String angegeben
         if start is not None and isinstance(start, str):
@@ -561,7 +569,7 @@ def get_ausleihung_by_user(user_id, status=None, use_client_side_verification=Tr
         db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
-        query = {'User': user_id}
+        query = {'User': user_id, 'Status': {'$ne': 'deleted'}}
         
         # Wenn clientseitige Verifikation verwendet wird, holen wir ALLE Ausleihungen
         # und filtern später clientseitig
@@ -610,12 +618,12 @@ def get_ausleihung_by_user(user_id, status=None, use_client_side_verification=Tr
             
             # Status-Matching
             if isinstance(status, list):
-                if current_status in status:
+                if current_status in status and current_status != 'deleted':
                     # Status aktualisieren und zur Ergebnismenge hinzufügen
                     ausleihung['VerifiedStatus'] = current_status
                     filtered_results.append(ausleihung)
             else:
-                if current_status == status:
+                if current_status == status and current_status != 'deleted':
                     # Status aktualisieren und zur Ergebnismenge hinzufügen
                     ausleihung['VerifiedStatus'] = current_status
                     filtered_results.append(ausleihung)
@@ -644,7 +652,7 @@ def get_ausleihung_by_item(item_id, status=None, include_history=False):
         ausleihungen = db['ausleihungen']
         
         # Build query
-        query = {'Item': item_id}
+        query = {'Item': item_id, 'Status': {'$ne': 'deleted'}}
         if status and not include_history:
             query['Status'] = status
         

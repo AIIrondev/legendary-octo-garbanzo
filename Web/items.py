@@ -43,6 +43,14 @@ def _non_library_query(extra_query=None):
     return base_query
 
 
+def _active_record_query(extra_query=None):
+    """Build a query that excludes logically deleted records."""
+    base_query = {'Deleted': {'$ne': True}}
+    if extra_query:
+        base_query.update(extra_query)
+    return base_query
+
+
 # === ITEM MANAGEMENT ===
 
 def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, filter3=None,
@@ -118,7 +126,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
 
 def remove_item(id):
     """
-    Remove an item from the inventory.
+    Soft-delete an item from the inventory.
     
     Args:
         id (str): ID of the item to remove
@@ -130,9 +138,17 @@ def remove_item(id):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        result = items.delete_one({'_id': ObjectId(id)})
+        result = items.update_one(
+            {'_id': ObjectId(id), 'Deleted': {'$ne': True}},
+            {'$set': {
+                'Deleted': True,
+                'DeletedAt': datetime.datetime.now(),
+                'LastUpdated': datetime.datetime.now(),
+                'Verfuegbar': False,
+            }}
+        )
         client.close()
-        return result.deleted_count > 0
+        return result.modified_count > 0
     except Exception as e:
         print(f"Error removing item: {e}")
         return False
@@ -155,7 +171,7 @@ def get_group_item_ids(id):
         db = client[cfg.MONGODB_DB]
         items = db['items']
 
-        base_item = items.find_one({'_id': ObjectId(id)})
+        base_item = items.find_one(_active_record_query({'_id': ObjectId(id)}))
         if not base_item:
             client.close()
             return []
@@ -165,7 +181,7 @@ def get_group_item_ids(id):
         # Prefer SeriesGroupId because it represents the full logical group.
         series_group_id = base_item.get('SeriesGroupId')
         if series_group_id:
-            for group_item in items.find({'SeriesGroupId': series_group_id}, {'_id': 1}):
+            for group_item in items.find(_active_record_query({'SeriesGroupId': series_group_id}), {'_id': 1}):
                 resolved_ids.add(str(group_item['_id']))
         else:
             resolved_ids.add(str(base_item['_id']))
@@ -173,10 +189,10 @@ def get_group_item_ids(id):
             parent_item_id = base_item.get('ParentItemId')
             if parent_item_id:
                 resolved_ids.add(str(parent_item_id))
-                for sibling in items.find({'ParentItemId': str(parent_item_id), 'IsGroupedSubItem': True}, {'_id': 1}):
+                for sibling in items.find(_active_record_query({'ParentItemId': str(parent_item_id), 'IsGroupedSubItem': True}), {'_id': 1}):
                     resolved_ids.add(str(sibling['_id']))
             else:
-                for child in items.find({'ParentItemId': str(base_item['_id']), 'IsGroupedSubItem': True}, {'_id': 1}):
+                for child in items.find(_active_record_query({'ParentItemId': str(base_item['_id']), 'IsGroupedSubItem': True}), {'_id': 1}):
                     resolved_ids.add(str(child['_id']))
 
         client.close()
@@ -342,7 +358,7 @@ def is_code_unique(code_4, exclude_id=None):
     items = db['items']
     
     # Build query to find items with this code
-    query = {'Code_4': code_4}
+    query = {'Code_4': code_4, 'Deleted': {'$ne': True}}
     
     # If we're editing an item, exclude it from the uniqueness check
     if exclude_id:
@@ -368,7 +384,7 @@ def get_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find(_non_library_query())
+        items_return = items.find(_active_record_query(_non_library_query()))
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -391,7 +407,7 @@ def get_available_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find(_non_library_query({'Verfuegbar': True}))
+        items_return = items.find(_active_record_query(_non_library_query({'Verfuegbar': True})))
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -414,7 +430,7 @@ def get_borrowed_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find(_non_library_query({'Verfuegbar': False}))
+        items_return = items.find(_active_record_query(_non_library_query({'Verfuegbar': False})))
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -440,7 +456,7 @@ def get_item(id):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        item = items.find_one({'_id': ObjectId(id)})
+        item = items.find_one(_active_record_query({'_id': ObjectId(id)}))
         client.close()
         return item
     except Exception as e:
@@ -462,7 +478,7 @@ def get_item_by_name(name):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        item = items.find_one({'Name': name})
+        item = items.find_one(_active_record_query({'Name': name}))
         client.close()
         return item
     except Exception as e:
@@ -486,13 +502,13 @@ def get_items_by_filter(filter_value):
         items = db['items']
         
         # Use $or to find matches in any filter field
-        query = _non_library_query({
+        query = _active_record_query(_non_library_query({
             '$or': [
                 {'Filter': filter_value},
                 {'Filter2': filter_value},
                 {'Filter3': filter_value}
             ]
-        })
+        }))
         
         results = list(items.find(query))
         client.close()
@@ -518,7 +534,7 @@ def get_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        non_library = _non_library_query()
+        non_library = _active_record_query(_non_library_query())
         filters = items.distinct('Filter', non_library)
         filters2 = items.distinct('Filter2', non_library)
         filters3 = items.distinct('Filter3', non_library)
@@ -550,7 +566,7 @@ def get_primary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter', _non_library_query()) if f]
+        filters = [f for f in items.distinct('Filter', _active_record_query(_non_library_query())) if f]
         client.close()
         return filters
     except Exception as e:
@@ -569,7 +585,7 @@ def get_secondary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter2', _non_library_query()) if f]
+        filters = [f for f in items.distinct('Filter2', _active_record_query(_non_library_query())) if f]
         client.close()
         return filters
     except Exception as e:
@@ -588,7 +604,7 @@ def get_tertiary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter3', _non_library_query()) if f]
+        filters = [f for f in items.distinct('Filter3', _active_record_query(_non_library_query())) if f]
         client.close()
         return filters
     except Exception as e:
@@ -610,7 +626,7 @@ def get_item_by_code_4(code_4):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        results = list(items.find(_non_library_query({"Code_4": code_4})))
+        results = list(items.find(_active_record_query(_non_library_query({"Code_4": code_4}))))
         
         # Convert ObjectId to string
         for item in results:
@@ -640,7 +656,14 @@ def unstuck_item(id):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
-        result = ausleihungen.delete_many({'Item': id})
+        result = ausleihungen.update_many(
+            {'Item': id, 'Status': {'$nin': ['cancelled', 'deleted']}},
+            {'$set': {
+                'Status': 'cancelled',
+                'CancelledReason': 'unstuck_reset',
+                'LastUpdated': datetime.datetime.now()
+            }}
+        )
         
         # Also reset the item status
         items = db['items']
@@ -980,7 +1003,7 @@ def get_items_with_appointments():
         db = client[cfg.MONGODB_DB]
         items = db['items']
         
-        items_return = items.find({'NextAppointment': {'$exists': True}})
+        items_return = items.find({'NextAppointment': {'$exists': True}, 'Deleted': {'$ne': True}})
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
