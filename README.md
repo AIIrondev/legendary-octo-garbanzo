@@ -120,19 +120,19 @@ Das Inventarsystem stellt folgende Wartungsskripte bereit:
 **Option 1**
 
 ```bash
-wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
+wget -O - https://raw.githubusercontent.com/aiirondev/legendary-octo-garbanzo/main/install.sh | sudo bash
 ```
 
 **Option 2**
 
 ```bash
-curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
+curl -s https://raw.githubusercontent.com/aiirondev/legendary-octo-garbanzo/main/install.sh | sudo bash
 ```
 
 Legacy-MongoDB uebernehmen und altes Host-System aufraeumen:
 
 ```bash
-curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | \
+curl -s https://raw.githubusercontent.com/aiirondev/legendary-octo-garbanzo/main/install.sh | \
   sudo bash -s -- --migrate-legacy-db --remove-legacy-system
 ```
 
