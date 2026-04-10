@@ -47,6 +47,72 @@ refresh_start_script_from_main() {
     fi
 }
 
+pin_compose_app_image() {
+    local tag="$1"
+    local compose_file
+    compose_file="$PROJECT_DIR/docker-compose.yml"
+
+    if [ ! -f "$compose_file" ]; then
+        echo "Warning: $compose_file not found; cannot pin app image"
+        return 0
+    fi
+
+    python3 - <<'PY' "$compose_file" "$tag"
+import re
+import sys
+
+compose_file, tag = sys.argv[1], sys.argv[2]
+target_image = f"ghcr.io/aiirondev/legendary-octo-garbanzo:{tag}"
+
+with open(compose_file, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+out = []
+in_app = False
+in_build = False
+image_set = False
+
+for line in lines:
+    stripped = line.lstrip(" ")
+    indent = len(line) - len(stripped)
+
+    if not in_app and re.match(r"^\s{2}app:\s*$", line):
+        in_app = True
+        image_set = False
+        out.append(line)
+        out.append(f"    image: {target_image}\n")
+        image_set = True
+        continue
+
+    if in_app:
+        if indent == 2 and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
+            in_app = False
+            in_build = False
+
+        if in_app:
+            if in_build:
+                if indent > 4:
+                    continue
+                in_build = False
+
+            if re.match(r"^\s{4}build:\s*$", line):
+                in_build = True
+                continue
+
+            if re.match(r"^\s{4}image:\s*", line):
+                if image_set:
+                    continue
+                out.append(f"    image: {target_image}\n")
+                image_set = True
+                continue
+
+    out.append(line)
+
+with open(compose_file, "w", encoding="utf-8") as f:
+    f.writelines(out)
+PY
+}
+
 install_docker_if_missing() {
     if command -v docker >/dev/null 2>&1; then
         return 0
@@ -302,6 +368,8 @@ main() {
 
     curl -fL "$bundle_url" -o "$TMP_DIR/$BUNDLE_ASSET"
     sudo tar -xzf "$TMP_DIR/$BUNDLE_ASSET" -C "$PROJECT_DIR"
+
+    pin_compose_app_image "$tag"
 
     if [ -z "$image_url" ]; then
         echo "Error: release image asset is missing"
