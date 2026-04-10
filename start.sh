@@ -290,6 +290,44 @@ EOF
     fi
 }
 
+ensure_runtime_config_json() {
+        local config_path backup_path
+        config_path="$SCRIPT_DIR/config.json"
+
+        if [ -d "$config_path" ]; then
+                backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
+                mv "$config_path" "$backup_path"
+                echo "Warning: moved unexpected directory $config_path to $backup_path"
+        fi
+
+        if [ ! -f "$config_path" ]; then
+                cat > "$config_path" <<'EOF'
+{
+    "ver": "2.6.5",
+    "dbg": false,
+    "host": "0.0.0.0",
+    "port": 443,
+    "mongodb": {
+        "host": "mongodb",
+        "port": 27017,
+        "db": "Inventarsystem"
+    },
+    "modules": {
+        "library": {
+            "enabled": false
+        },
+        "student_cards": {
+            "enabled": false,
+            "default_borrow_days": 14,
+            "max_borrow_days": 365
+        }
+    }
+}
+EOF
+                echo "Created default runtime config at $config_path"
+        fi
+}
+
 ensure_app_image_loaded() {
     if docker image inspect "$APP_IMAGE_VALUE" >/dev/null 2>&1; then
         return 0
@@ -558,6 +596,7 @@ ensure_runtime_dependencies
 setup_boot_autostart_service
 ensure_tls_certificates
 ensure_nginx_config_mount_source
+ensure_runtime_config_json
 setup_scheduled_jobs
 configure_nuitka_mode
 resolve_app_image
