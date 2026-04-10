@@ -203,6 +203,7 @@ jobs:
               expose:
                 - "8000"
               volumes:
+                - ./config.json:/app/config.json:ro
                 - app_uploads:/app/Web/uploads
                 - app_thumbnails:/app/Web/thumbnails
                 - app_previews:/app/Web/previews
@@ -225,6 +226,7 @@ jobs:
           cp stop.sh release-bundle/stop.sh
           cp restart.sh release-bundle/restart.sh
           cp backup.sh release-bundle/backup.sh
+          cp config.json release-bundle/config.json
           cp update.sh release-bundle/update.sh
           cp init-admin.sh release-bundle/init-admin.sh
 

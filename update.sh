@@ -325,6 +325,11 @@ download_and_extract_bundle() {
         cp -f "$tmp_dir/update.sh" "$PROJECT_DIR/update.sh"
     fi
 
+    if [ ! -f "$PROJECT_DIR/config.json" ] && [ -f "$tmp_dir/config.json" ]; then
+        cp -f "$tmp_dir/config.json" "$PROJECT_DIR/config.json"
+        log_message "Installed default config.json from release bundle"
+    fi
+
     chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh"
 }
 
