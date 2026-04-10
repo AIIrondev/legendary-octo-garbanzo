@@ -171,6 +171,20 @@ def _ensure_audit_indexes_once():
             client.close()
 
 
+def _append_audit_event_standalone(event_type, payload):
+    """Write audit event by opening a short-lived DB connection."""
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        _append_audit_event(db, event_type, payload)
+    except Exception as exc:
+        app.logger.warning(f"Standalone audit write failed for {event_type}: {exc}")
+    finally:
+        if client:
+            client.close()
+
+
 def _parse_money_value(value):
     """Parse a user-facing money value into a float when possible."""
     if value is None:
@@ -1428,6 +1442,19 @@ def api_library_scan_action():
             it.update_item_status(item_id, False, borrower_name)
             au.add_ausleihung(item_id, borrower_name, now, end_date=end_date)
 
+            _append_audit_event(
+                db,
+                'ausleihung_borrowed',
+                {
+                    'channel': 'library_scan',
+                    'item_id': item_id,
+                    'item_name': item_doc.get('Name', ''),
+                    'borrower': borrower_name,
+                    'student_card_id': student_card_id,
+                    'borrow_duration_days': borrow_duration_days,
+                }
+            )
+
             return jsonify({
                 'ok': True,
                 'action': 'borrowed',
@@ -1456,6 +1483,19 @@ def api_library_scan_action():
             }}
         )
         it.update_item_status(item_id, True, borrower_name)
+
+        _append_audit_event(
+            db,
+            'ausleihung_returned',
+            {
+                'channel': 'library_scan',
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'borrower': borrower_name,
+                'student_card_id': student_card_id,
+                'completed_records': update_result.modified_count,
+            }
+        )
 
         return jsonify({
             'ok': True,
@@ -4217,6 +4257,18 @@ def ausleihen(id):
             it.update_item_status(unit_id, False, effective_borrower)
             au.add_ausleihung(unit_id, effective_borrower, start_date, end_date=end_date)
 
+        _append_audit_event_standalone(
+            'ausleihung_borrowed',
+            {
+                'channel': 'inventory_route',
+                'item_id': id,
+                'borrower': effective_borrower,
+                'borrow_duration_days': borrow_duration_days,
+                'selected_unit_ids': [str(unit.get('_id')) for unit in selected_units],
+                'selected_unit_codes': [str(unit.get('Code_4') or '') for unit in selected_units],
+            }
+        )
+
         if len(selected_units) == 1:
             selected_code = selected_units[0].get('Code_4') or '-'
             flash(f'Exemplar {selected_code} erfolgreich ausgeliehen', 'success')
@@ -4295,6 +4347,16 @@ def ausleihen(id):
         it.update_item_status(id, False, effective_borrower)
         start_date = datetime.datetime.now()
         au.add_ausleihung(id, effective_borrower, start_date, end_date=end_date)
+        _append_audit_event_standalone(
+            'ausleihung_borrowed',
+            {
+                'channel': 'inventory_route',
+                'item_id': id,
+                'borrower': effective_borrower,
+                'borrow_duration_days': borrow_duration_days,
+                'single_item': True,
+            }
+        )
         flash('Element erfolgreich ausgeliehen', 'success')
     else:
         # Handle multi-exemplar item
@@ -4333,6 +4395,17 @@ def ausleihen(id):
                 'parent_id': id,
                 'exemplar_number': exemplar['number']
             })
+
+        _append_audit_event_standalone(
+            'ausleihung_borrowed',
+            {
+                'channel': 'inventory_route',
+                'item_id': id,
+                'borrower': effective_borrower,
+                'borrow_duration_days': borrow_duration_days,
+                'exemplar_numbers': [ex.get('number') for ex in new_borrowed_exemplars],
+            }
+        )
         
         flash(f'{exemplare_count} Exemplare erfolgreich ausgeliehen', 'success')
     
@@ -4408,6 +4481,17 @@ def zurueckgeben(id):
                 flash(f'Element erfolgreich zurückgegeben ({updated_count} Datensätze abgeschlossen)', 'success')
             else:
                 flash('Element erfolgreich zurückgegeben', 'success')
+
+            _append_audit_event_standalone(
+                'ausleihung_returned',
+                {
+                    'channel': 'inventory_route',
+                    'item_id': id,
+                    'returned_by': username,
+                    'original_borrower': original_user,
+                    'completed_records': updated_count,
+                }
+            )
                 
         except Exception as e:
             print(f"Error in return process: {e}")
@@ -5317,9 +5401,31 @@ def admin_reset_borrowing(borrow_id):
                 except Exception:
                     pass
             flash('Aktive Ausleihe wurde zurückgesetzt (abgeschlossen).', 'success')
+            _append_audit_event(
+                db,
+                'ausleihung_admin_reset',
+                {
+                    'borrow_id': borrow_id,
+                    'from_status': 'active',
+                    'to_status': 'completed',
+                    'item_id': str(item_id or ''),
+                    'borrower': str(user or ''),
+                }
+            )
         elif status == 'planned':
             ausleihungen.update_one({'_id': rec['_id']}, {'$set': {'Status': 'cancelled', 'LastUpdated': now}})
             flash('Geplante Ausleihe wurde storniert.', 'success')
+            _append_audit_event(
+                db,
+                'ausleihung_admin_reset',
+                {
+                    'borrow_id': borrow_id,
+                    'from_status': 'planned',
+                    'to_status': 'cancelled',
+                    'item_id': str(item_id or ''),
+                    'borrower': str(user or ''),
+                }
+            )
         else:
             flash('Diese Ausleihe ist weder aktiv noch geplant.', 'warning')
 
@@ -7041,6 +7147,16 @@ def cancel_ausleihung_route(id):
         if au.cancel_ausleihung(id):
             print(f"Successfully canceled ausleihung with ID: {id}")
             flash('Ausleihung wurde erfolgreich storniert', 'success')
+            _append_audit_event_standalone(
+                'ausleihung_cancelled',
+                {
+                    'borrow_id': id,
+                    'item_id': str(ausleihung.get('Item') or ''),
+                    'cancelled_by': username,
+                    'owner_user': str(ausleihung_user or ''),
+                    'status_before': str(ausleihung_status or ''),
+                }
+            )
             # Also clear NextAppointment on the related item if it matches this appointment
             try:
                 item_id = str(ausleihung.get('Item')) if ausleihung.get('Item') is not None else None
