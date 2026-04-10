@@ -19,6 +19,9 @@ permissions:
   contents: write
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   release-docker:
     runs-on: ubuntu-latest
@@ -221,11 +224,11 @@ jobs:
           cp start.sh release-bundle/start.sh
           cp stop.sh release-bundle/stop.sh
           cp restart.sh release-bundle/restart.sh
-          cp backup-docker.sh release-bundle/backup-docker.sh
+          cp backup.sh release-bundle/backup.sh
           cp update.sh release-bundle/update.sh
           cp init-admin.sh release-bundle/init-admin.sh
 
-          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup-docker.sh release-bundle/update.sh release-bundle/init-admin.sh
+          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup.sh release-bundle/update.sh release-bundle/init-admin.sh
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
       - name: Create or update GitHub Release
