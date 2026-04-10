@@ -3533,7 +3533,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
                 // Display existing images
                 const existingImagesContainer = document.getElementById('edit-existing-images');
+                const editForm = document.getElementById('edit-item-form');
                 existingImagesContainer.innerHTML = '';
+                if (editForm) {
+                    editForm.querySelectorAll('input[name="existing_images"], input[name="removed_images"]').forEach(input => input.remove());
+                }
                 if (item.Images && Array.isArray(item.Images)) {
                     item.Images.forEach((image, index) => {
                         const isVideo = isVideoFile(image);
@@ -3548,22 +3552,46 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 image : 
                                 `{{ url_for('uploaded_file', filename='') }}${image}`);
 
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.gap = '8px';
+                        row.style.alignItems = 'center';
+
                         if (isVideo) {
-                            imageDiv.innerHTML = `
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <video src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" controls></video>
-                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
-                                </div>
-                            `;
+                            const video = document.createElement('video');
+                            video.src = imageSrc;
+                            video.style.maxWidth = '100px';
+                            video.style.maxHeight = '100px';
+                            video.style.objectFit = 'contain';
+                            video.controls = true;
+                            row.appendChild(video);
                         } else {
-                            imageDiv.innerHTML = `
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <img src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" alt="Existierendes Bild ${index + 1}">
-                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
-                                </div>
-                            `;
+                            const img = document.createElement('img');
+                            img.src = imageSrc;
+                            img.style.maxWidth = '100px';
+                            img.style.maxHeight = '100px';
+                            img.style.objectFit = 'contain';
+                            img.alt = `Existierendes Bild ${index + 1}`;
+                            row.appendChild(img);
                         }
+
+                        const deleteButton = document.createElement('button');
+                        deleteButton.type = 'button';
+                        deleteButton.className = 'delete-image-button';
+                        deleteButton.textContent = 'Löschen';
+                        deleteButton.addEventListener('click', () => removeExistingImage(image, deleteButton));
+                        row.appendChild(deleteButton);
+
+                        imageDiv.appendChild(row);
                         existingImagesContainer.appendChild(imageDiv);
+
+                        if (editForm) {
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'existing_images';
+                            hiddenInput.value = image;
+                            editForm.appendChild(hiddenInput);
+                        }
                     });
                 }
 
