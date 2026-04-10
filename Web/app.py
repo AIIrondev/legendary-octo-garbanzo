@@ -895,6 +895,394 @@ def normalize_and_validate_isbn(isbn_raw):
     return ''
 
 
+def _normalize_excel_header(value):
+    """Normalize Excel header labels for robust auto-mapping."""
+    if value is None:
+        return ''
+    text = str(value).strip().lower()
+    text = text.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss')
+    text = re.sub(r'[^a-z0-9]+', '_', text)
+    text = re.sub(r'_+', '_', text).strip('_')
+    return text
+
+
+def _excel_bool(value, default=True):
+    """Parse a flexible Excel bool-like cell value."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {'1', 'true', 'yes', 'y', 'ja', 'j', 'x'}:
+        return True
+    if text in {'0', 'false', 'no', 'n', 'nein'}:
+        return False
+    return default
+
+
+def _excel_int(value):
+    """Parse int-like values from Excel cells."""
+    if value is None or str(value).strip() == '':
+        return None
+    try:
+        return int(float(str(value).replace(',', '.')))
+    except Exception:
+        return None
+
+
+def _excel_float(value):
+    """Parse float-like values from Excel cells."""
+    if value is None or str(value).strip() == '':
+        return None
+    try:
+        return float(str(value).replace(',', '.'))
+    except Exception:
+        return None
+
+
+def _excel_list(value):
+    """Parse list-like filter values from comma/semicolon/newline separated strings."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [sanitize_form_value(v) for v in value if str(v).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    parts = re.split(r'[;,\n\|]+', text)
+    cleaned = [sanitize_form_value(p.strip()) for p in parts if p and p.strip()]
+    # Deduplicate while preserving order.
+    seen = set()
+    unique = []
+    for entry in cleaned:
+        if entry not in seen:
+            unique.append(entry)
+            seen.add(entry)
+    return unique
+
+
+def _upload_excel_items(scope='inventory'):
+    """Bulk import inventory/library items from Excel with validation-first workflow."""
+    if 'username' not in session:
+        flash('Nicht angemeldet.', 'error')
+        return redirect(url_for('login'))
+
+    if not us.check_admin(session['username']):
+        flash('Administratorrechte erforderlich.', 'error')
+        return redirect(url_for('home'))
+
+    is_library_scope = scope == 'library'
+    file_field = 'library_excel' if is_library_scope else 'inventory_excel'
+    fallback_route = 'library_admin' if is_library_scope else 'upload_admin'
+
+    if is_library_scope:
+        if not cfg.LIBRARY_MODULE_ENABLED:
+            flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+            return redirect(url_for('home_admin'))
+
+    excel_file = request.files.get(file_field)
+    if not excel_file or not excel_file.filename:
+        flash('Bitte eine Excel-Datei auswählen.', 'error')
+        return redirect(url_for(fallback_route))
+
+    filename_lower = excel_file.filename.lower()
+    if not filename_lower.endswith('.xlsx'):
+        flash('Nur .xlsx Dateien werden unterstützt.', 'error')
+        return redirect(url_for(fallback_route))
+
+    try:
+        from openpyxl import load_workbook
+    except Exception:
+        flash('Excel-Import benötigt das Paket openpyxl. Bitte Abhängigkeiten aktualisieren.', 'error')
+        return redirect(url_for(fallback_route))
+
+    try:
+        workbook = load_workbook(excel_file, data_only=True, read_only=True)
+        sheet = workbook.active
+    except Exception as exc:
+        flash(f'Excel-Datei konnte nicht gelesen werden: {exc}', 'error')
+        return redirect(url_for(fallback_route))
+
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    if not header_row:
+        flash('Die Excel-Datei enthält keine Kopfzeile.', 'error')
+        return redirect(url_for(fallback_route))
+
+    header_map = {}
+    for idx, raw_header in enumerate(header_row):
+        normalized = _normalize_excel_header(raw_header)
+        if normalized:
+            header_map[normalized] = idx
+
+    synonyms = {
+        'name': ['name', 'titel', 'artikel', 'item', 'bezeichnung'],
+        'ort': ['ort', 'location', 'standort', 'platz'],
+        'beschreibung': ['beschreibung', 'description', 'desc', 'details'],
+        'filter1': ['filter1', 'filter', 'fach', 'unterrichtsfach', 'kategorie1', 'category1'],
+        'filter2': ['filter2', 'jahrgang', 'jahrgangsstufe', 'klasse', 'kategorie2', 'category2'],
+        'filter3': ['filter3', 'bereich', 'gruppe', 'typ', 'kategorie3', 'category3'],
+        'anschaffungsjahr': ['anschaffungsjahr', 'jahr', 'year'],
+        'anschaffungskosten': ['anschaffungskosten', 'kosten', 'cost', 'preis', 'price'],
+        'code_4': ['code_4', 'code4', 'code', 'inventarnummer', 'inventar_nr', 'id_code'],
+        'reservierbar': ['reservierbar', 'reservable', 'bookable'],
+        'anzahl': ['anzahl', 'menge', 'quantity', 'count'],
+        'isbn': ['isbn'],
+        'item_type': ['item_type', 'typ', 'type'],
+    }
+
+    def col_index(key):
+        for candidate in synonyms.get(key, []):
+            normalized = _normalize_excel_header(candidate)
+            if normalized in header_map:
+                return header_map[normalized]
+        return None
+
+    required_columns = {'name': col_index('name'), 'ort': col_index('ort'), 'beschreibung': col_index('beschreibung')}
+    missing_required = [k for k, v in required_columns.items() if v is None]
+    if missing_required:
+        missing_label = ', '.join(missing_required)
+        flash(f'Pflichtspalten fehlen in Excel: {missing_label}', 'error')
+        return redirect(url_for(fallback_route))
+
+    mapped_indices = {
+        'name': col_index('name'),
+        'ort': col_index('ort'),
+        'beschreibung': col_index('beschreibung'),
+        'filter1': col_index('filter1'),
+        'filter2': col_index('filter2'),
+        'filter3': col_index('filter3'),
+        'anschaffungsjahr': col_index('anschaffungsjahr'),
+        'anschaffungskosten': col_index('anschaffungskosten'),
+        'code_4': col_index('code_4'),
+        'reservierbar': col_index('reservierbar'),
+        'anzahl': col_index('anzahl'),
+        'isbn': col_index('isbn'),
+        'item_type': col_index('item_type'),
+    }
+
+    validation_only = (request.form.get('excel_action') or '').strip().lower() == 'validate'
+
+    max_rows = 15000
+    max_generated_items = 50000
+    max_items_per_row = 1000
+
+    # Validation phase: parse + map + validate every row before any write.
+    planned_rows = []
+    validation_errors = []
+    validation_warnings = []
+    reserved_codes = set()
+    known_locations = set(it.get_predefined_locations())
+
+    def is_code_available(candidate_code):
+        return candidate_code not in reserved_codes and it.is_code_unique(candidate_code)
+
+    def resolve_unique_code(base_candidate):
+        if is_code_available(base_candidate):
+            reserved_codes.add(base_candidate)
+            return base_candidate
+
+        suffix = 1
+        while suffix <= 1000:
+            alt = f"{base_candidate}-{suffix}"
+            if is_code_available(alt):
+                reserved_codes.add(alt)
+                return alt
+            suffix += 1
+        return None
+
+    processed_rows = 0
+    planned_item_total = 0
+    row_limit_exceeded = False
+
+    for row_number, row_values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        processed_rows += 1
+        if processed_rows > max_rows:
+            row_limit_exceeded = True
+            break
+
+        def val(key):
+            idx = mapped_indices.get(key)
+            if idx is None or idx >= len(row_values):
+                return None
+            return row_values[idx]
+
+        name = sanitize_form_value(val('name'))
+        ort = sanitize_form_value(val('ort'))
+        beschreibung = sanitize_form_value(val('beschreibung'))
+
+        if not name and not ort and not beschreibung:
+            # Fully empty row.
+            continue
+
+        row_errors = []
+
+        if not name or not ort or not beschreibung:
+            row_errors.append('Pflichtfeld Name/Ort/Beschreibung fehlt')
+
+        if ort and ort not in known_locations:
+            validation_warnings.append((row_number, f'Ort "{ort}" wird neu angelegt'))
+
+        filter1 = expand_filter_selection(_excel_list(val('filter1')), 1)
+        filter2 = expand_filter_selection(_excel_list(val('filter2')), 2)
+        filter3 = _excel_list(val('filter3'))
+
+        anschaffungsjahr = _excel_int(val('anschaffungsjahr'))
+        raw_year = val('anschaffungsjahr')
+        if raw_year not in (None, '') and anschaffungsjahr is None:
+            row_errors.append('Anschaffungsjahr ist kein gültiger Integer')
+
+        anschaffungskosten = _excel_float(val('anschaffungskosten'))
+        raw_cost = val('anschaffungskosten')
+        if raw_cost not in (None, '') and anschaffungskosten is None:
+            row_errors.append('Anschaffungskosten sind keine gültige Zahl')
+
+        reservierbar = _excel_bool(val('reservierbar'), default=True)
+
+        count = _excel_int(val('anzahl')) or 1
+        raw_count = val('anzahl')
+        if raw_count not in (None, '') and _excel_int(raw_count) is None:
+            row_errors.append('Anzahl ist kein gültiger Integer')
+        count = max(1, min(count, max_items_per_row))
+
+        raw_code = val('code_4')
+        base_code = sanitize_form_value(str(raw_code).strip()) if raw_code is not None and str(raw_code).strip() else None
+
+        item_isbn = ''
+        raw_isbn = val('isbn')
+        if raw_isbn:
+            item_isbn = normalize_and_validate_isbn(str(raw_isbn))
+            if not item_isbn:
+                row_errors.append('ISBN ist ungültig (erwartet ISBN-10/13)')
+        if is_library_scope and not item_isbn:
+            row_errors.append('Für den Bibliotheksimport ist eine gültige ISBN erforderlich')
+
+        raw_item_type = sanitize_form_value(str(val('item_type')).strip().lower()) if val('item_type') else ''
+        item_type = 'book' if is_library_scope else (raw_item_type or ('book' if item_isbn else 'general'))
+
+        planned_codes = []
+        if base_code:
+            for position in range(1, count + 1):
+                candidate = base_code if position == 1 else f"{base_code}-{position}"
+                code = resolve_unique_code(candidate)
+                if not code:
+                    row_errors.append(f'Code konnte nicht eindeutig erzeugt werden ({candidate})')
+                    break
+                planned_codes.append(code)
+        else:
+            planned_codes = [None] * count
+
+        if row_errors:
+            validation_errors.append((row_number, '; '.join(row_errors)))
+            continue
+
+        planned_rows.append({
+            'row_number': row_number,
+            'name': name,
+            'ort': ort,
+            'beschreibung': beschreibung,
+            'filter1': filter1,
+            'filter2': filter2,
+            'filter3': filter3,
+            'anschaffungsjahr': anschaffungsjahr,
+            'anschaffungskosten': anschaffungskosten,
+            'reservierbar': reservierbar,
+            'count': count,
+            'codes': planned_codes,
+            'isbn': item_isbn,
+            'item_type': item_type,
+        })
+        planned_item_total += count
+
+        if planned_item_total > max_generated_items:
+            row_limit_exceeded = True
+            break
+
+    if row_limit_exceeded:
+        flash(
+            f'Importgrenze überschritten. Maximal erlaubt: {max_rows} Zeilen und {max_generated_items} erzeugte Artikel pro Datei.',
+            'error'
+        )
+        return redirect(url_for(fallback_route))
+
+    if validation_errors:
+        details = '; '.join([f'Zeile {n}: {msg}' for n, msg in validation_errors[:15]])
+        flash(f'Validierung fehlgeschlagen ({len(validation_errors)} Zeilen). {details}', 'error')
+        return redirect(url_for(fallback_route))
+
+    if validation_only:
+        warning_text = ''
+        if validation_warnings:
+            warning_details = '; '.join([f'Zeile {n}: {msg}' for n, msg in validation_warnings[:10]])
+            warning_text = f' Hinweise: {warning_details}'
+        planned_count = sum(row['count'] for row in planned_rows)
+        flash(f'Validierung erfolgreich: {len(planned_rows)} Zeilen geprüft, {planned_count} Artikel würden importiert.{warning_text}', 'success')
+        return redirect(url_for(fallback_route))
+
+    # Import phase: only runs after successful validation.
+    created_total = 0
+    import_errors = []
+    for row in planned_rows:
+        if row['ort'] and row['ort'] not in known_locations:
+            it.add_predefined_location(row['ort'])
+            known_locations.add(row['ort'])
+
+        series_group_id = str(uuid.uuid4()) if row['count'] > 1 else None
+        row_created_ids = []
+
+        for position in range(1, row['count'] + 1):
+            parent_item_id = str(row_created_ids[0]) if row_created_ids else None
+            code = row['codes'][position - 1] if position - 1 < len(row['codes']) else None
+            item_id = it.add_item(
+                name=row['name'],
+                ort=row['ort'],
+                beschreibung=row['beschreibung'],
+                images=[],
+                filter=row['filter1'],
+                filter2=row['filter2'],
+                filter3=row['filter3'],
+                ansch_jahr=row['anschaffungsjahr'],
+                ansch_kost=row['anschaffungskosten'],
+                code_4=code,
+                reservierbar=row['reservierbar'],
+                series_group_id=series_group_id,
+                series_count=row['count'],
+                series_position=position,
+                is_grouped_sub_item=(position > 1),
+                parent_item_id=parent_item_id,
+                isbn=row['isbn'],
+                item_type=row['item_type'],
+            )
+            if not item_id:
+                import_errors.append((row['row_number'], 'Fehler beim Anlegen des Artikels'))
+                break
+            row_created_ids.append(item_id)
+
+        created_total += len(row_created_ids)
+
+    if created_total == 0:
+        details = '; '.join([f'Zeile {n}: {msg}' for n, msg in import_errors[:10]])
+        flash(f'Keine Artikel importiert. {details}', 'error')
+        return redirect(url_for(fallback_route))
+
+    if import_errors:
+        flash(f'Excel-Import abgeschlossen: {created_total} Artikel importiert, {len(import_errors)} Zeilen fehlgeschlagen.', 'warning')
+    else:
+        flash(f'Excel-Import erfolgreich: {created_total} Artikel importiert.', 'success')
+    return redirect(url_for('home_admin'))
+
+
+@app.route('/upload_inventory_excel', methods=['POST'])
+def upload_inventory_excel():
+    """Bulk import for non-library inventory."""
+    return _upload_excel_items(scope='inventory')
+
+
+@app.route('/upload_library_excel', methods=['POST'])
+def upload_library_excel():
+    """Bulk import dedicated to library items (ISBN required)."""
+    return _upload_excel_items(scope='library')
+
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """

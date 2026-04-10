@@ -710,6 +710,28 @@
 
 <div class="upload-container">
     <a href="{{ url_for(back_target|default('home_admin')) }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
+
+    {% if show_library_features %}
+    <div style="border:1px solid #dbe4ee; border-radius:8px; padding:14px; margin-bottom:16px; background:#f8fbff;">
+        <h3 style="margin:0 0 8px 0;">Excel-Import Bibliothek (Mehrere Bücher)</h3>
+        <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>-Datei hoch. Spalten werden automatisch erkannt (z.B. Name, Ort, Beschreibung, ISBN, Code, Anzahl). Für den Bibliotheksimport ist eine gültige ISBN je Zeile erforderlich.</p>
+        <form method="POST" action="{{ url_for('upload_library_excel') }}" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <input type="file" name="library_excel" accept=".xlsx" required>
+            <button type="submit" class="btn btn-secondary" name="excel_action" value="validate">Nur validieren</button>
+            <button type="submit" class="btn btn-primary" name="excel_action" value="import">Bibliothek importieren</button>
+        </form>
+    </div>
+    {% else %}
+    <div style="border:1px solid #dbe4ee; border-radius:8px; padding:14px; margin-bottom:16px; background:#f8fbff;">
+        <h3 style="margin:0 0 8px 0;">Excel-Import Inventar (Mehrere Artikel)</h3>
+        <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>-Datei hoch. Spalten werden automatisch erkannt (z.B. Name, Ort, Beschreibung, Filter1/2/3, Kosten, Jahr, Code, Anzahl).</p>
+        <form method="POST" action="{{ url_for('upload_inventory_excel') }}" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <input type="file" name="inventory_excel" accept=".xlsx" required>
+            <button type="submit" class="btn btn-secondary" name="excel_action" value="validate">Nur validieren</button>
+            <button type="submit" class="btn btn-primary" name="excel_action" value="import">Inventar importieren</button>
+        </form>
+    </div>
+    {% endif %}
     
     <div class="upload-form">
         <h1>{{ page_title|default('Artikel hochladen') }}</h1>

@@ -10,3 +10,4 @@ pytz
 requests
 reportlab
 python-barcode
+openpyxl
