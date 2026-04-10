@@ -32,21 +32,30 @@
         top: 46%;
         transform: translateY(-50%);
         z-index: 220;
-        border: none;
+        border: 1px solid #0b5ed7;
         border-radius: 10px 0 0 10px;
         padding: 10px 10px 10px 8px;
-        background: #dc3545;
+        background: linear-gradient(180deg, #0d6efd 0%, #0b5ed7 100%);
         color: #fff;
         font-weight: 700;
         font-size: 0.85rem;
         letter-spacing: 0.02em;
         cursor: pointer;
-        box-shadow: 0 8px 18px rgba(220, 53, 69, 0.22);
+        box-shadow: 0 8px 18px rgba(13, 110, 253, 0.26);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
     }
 
     .bulk-delete-drawer-toggle .drawer-icon {
         display: inline-block;
         margin-right: 4px;
+    }
+
+    .bulk-delete-drawer-toggle:hover {
+        box-shadow: 0 10px 20px rgba(13, 110, 253, 0.3);
+    }
+
+    .bulk-delete-drawer-toggle:active {
+        transform: translateY(-50%) scale(0.98);
     }
 
     .bulk-delete-drawer {
@@ -56,11 +65,11 @@
         transform: translate(120%, -50%);
         width: min(360px, calc(100vw - 24px));
         z-index: 219;
-        border: 1px solid #f2c4c4;
-        background: #fff8f8;
+        border: 1px solid #dbe3ee;
+        background: #ffffff;
         border-radius: 14px;
         padding: 14px;
-        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 18px 34px rgba(15, 23, 42, 0.15);
         transition: transform 0.25s ease;
     }
 
@@ -74,13 +83,13 @@
     }
 
     .bulk-delete-summary {
-        color: #7a4a4a;
+        color: #334155;
         font-size: 0.92rem;
         margin-top: 4px;
     }
 
     .bulk-delete-drawer small {
-        color: #7a4a4a;
+        color: #64748b;
         display: block;
         margin-top: 2px;
         line-height: 1.35;
@@ -94,19 +103,30 @@
     }
 
     .bulk-delete-actions button {
-        border: 1px solid #cfd8dc;
+        border: 1px solid #dbe3ee;
         border-radius: 8px;
         padding: 9px 12px;
         cursor: pointer;
-        background: #fff;
+        background: #f8fafc;
+        color: #1e293b;
         font-weight: 600;
         text-align: left;
+    }
+
+    .bulk-delete-actions button:hover {
+        background: #eef4ff;
+        border-color: #bfdbfe;
     }
 
     .bulk-delete-actions .danger {
         background: #dc3545;
         color: #fff;
         border-color: #c82333;
+    }
+
+    .bulk-delete-actions .danger:hover {
+        background: #c82333;
+        border-color: #b21f2d;
     }
 
     /* Filter styles */
@@ -359,7 +379,7 @@
         align-items: center;
         gap: 6px;
         font-size: 0.9rem;
-        color: #6b1f1f;
+        color: #475569;
         cursor: pointer;
         user-select: none;
     }
@@ -374,7 +394,7 @@
     .bulk-delete-drawer-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(15, 23, 42, 0.18);
+        background: rgba(15, 23, 42, 0.14);
         z-index: 218;
         display: none;
     }
@@ -2239,7 +2259,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         </h1>
         <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
         <button type="button" id="bulk-delete-drawer-toggle" class="bulk-delete-drawer-toggle" aria-expanded="false" onclick="toggleBulkDeleteDrawer()">
-            <span class="drawer-icon">🗑</span> Löschen
+            <span class="drawer-icon">⚙</span> Auswahl
         </button>
         <div id="bulk-delete-drawer-overlay" class="bulk-delete-drawer-overlay" onclick="setBulkDeleteDrawer(false)"></div>
         <div id="bulk-delete-drawer" class="bulk-delete-drawer" aria-hidden="true">
@@ -2993,7 +3013,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         if (toggle) {
             toggle.setAttribute('aria-expanded', bulkDeleteDrawerOpen ? 'true' : 'false');
-            toggle.innerHTML = bulkDeleteDrawerOpen ? '<span class="drawer-icon">✕</span> Löschung' : '<span class="drawer-icon">🗑</span> Löschen';
+            toggle.innerHTML = bulkDeleteDrawerOpen ? '<span class="drawer-icon">✕</span> Auswahl' : '<span class="drawer-icon">⚙</span> Auswahl';
         }
     }
 
