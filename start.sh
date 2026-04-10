@@ -364,7 +364,7 @@ configure_nuitka_mode() {
 }
 
 resolve_app_image() {
-    local env_image release_tag
+    local env_image="" release_tag=""
 
     if [ -f "$ENV_FILE" ]; then
         env_image="$(awk -F= '/^INVENTAR_APP_IMAGE=/{print $2}' "$ENV_FILE" | tail -n1 | tr -d ' ' || true)"
@@ -374,7 +374,6 @@ resolve_app_image() {
         fi
     fi
 
-    release_tag=""
     if [ -f "$SCRIPT_DIR/.release-version" ]; then
         release_tag="$(tr -d '[:space:]' < "$SCRIPT_DIR/.release-version")"
     fi
