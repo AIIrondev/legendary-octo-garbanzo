@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALLER_SOURCE="${BASH_SOURCE[0]-$0}"
+if [ -n "$INSTALLER_SOURCE" ] && [ "$INSTALLER_SOURCE" != "bash" ] && [ "$INSTALLER_SOURCE" != "-bash" ] && [ "$INSTALLER_SOURCE" != "sh" ] && [ "$INSTALLER_SOURCE" != "-" ] && [ -e "$INSTALLER_SOURCE" ]; then
+    INSTALLER_DIR="$(cd "$(dirname "$INSTALLER_SOURCE")" && pwd)"
+else
+    INSTALLER_DIR="$(pwd)"
+fi
 PROJECT_DIR="/opt/Inventarsystem"
-REPO_SLUG="AIIrondev/Inventarsystem"
+REPO_SLUG="AIIrondev/legendary-octo-garbanzo"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
 BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
 APP_IMAGE_ASSET_PREFIX="inventarsystem-image-"
@@ -321,13 +326,13 @@ EOF
 NUITKA_BUILD=0
 INVENTAR_HTTP_PORT=80
 INVENTAR_HTTPS_PORT=443
-INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag
+INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag
 EOF
         sudo install -m 644 "$tmp_dir/.docker-build.env" "$PROJECT_DIR/.docker-build.env"
     elif sudo grep -q '^INVENTAR_APP_IMAGE=' "$PROJECT_DIR/.docker-build.env"; then
-        sudo sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag|" "$PROJECT_DIR/.docker-build.env"
+        sudo sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag|" "$PROJECT_DIR/.docker-build.env"
     else
-        echo "INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag" | sudo tee -a "$PROJECT_DIR/.docker-build.env" >/dev/null
+        echo "INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag" | sudo tee -a "$PROJECT_DIR/.docker-build.env" >/dev/null
     fi
 
     backup_legacy_database
