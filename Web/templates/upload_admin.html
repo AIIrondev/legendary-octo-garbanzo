@@ -1114,9 +1114,17 @@
                         while (select.children.length > 1) {
                             select.removeChild(select.lastChild);
                         }
+
+                        const allOption = document.createElement('option');
+                        allOption.value = '__ALL__';
+                        allOption.textContent = '-- Alle auswählen --';
+                        select.appendChild(allOption);
                         
                         // Add new options - data.values contains the array
                         data.values.forEach(value => {
+                            if (!value || String(value).trim() === '') {
+                                return;
+                            }
                             const option = document.createElement('option');
                             option.value = value;
                             option.textContent = value;

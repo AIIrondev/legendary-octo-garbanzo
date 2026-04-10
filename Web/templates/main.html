@@ -1923,6 +1923,42 @@
         applyFilters();
     }
 
+    function bulkToggleFilterOptions(filterNum, shouldSelect) {
+        const filterKey = `filter${filterNum}`;
+        const checkboxes = Array.from(document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`));
+        if (checkboxes.length === 0) {
+            return;
+        }
+
+        const nextValues = new Set(activeFilters[filterKey]);
+
+        checkboxes.forEach(checkbox => {
+            const value = checkbox.value;
+            const group = checkbox.dataset.group || '';
+            const filterValue = group ? `${group}:${value}` : value;
+            checkbox.checked = shouldSelect;
+
+            if (shouldSelect) {
+                nextValues.add(filterValue);
+            } else {
+                nextValues.delete(filterValue);
+            }
+        });
+
+        activeFilters[filterKey] = Array.from(nextValues);
+        updateSelectedFilters(filterNum);
+
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+
+        saveFilterState();
+        applyFilters();
+    }
+
     function populateFilterOptions(containerId, filterValues, filterNum) {
         const container = document.getElementById(containerId);
         if (!container) {
@@ -1932,6 +1968,27 @@
         
         container.innerHTML = ''; // Clear previous options
         
+        const bulkActions = document.createElement('div');
+        bulkActions.style.display = 'flex';
+        bulkActions.style.gap = '8px';
+        bulkActions.style.marginBottom = '10px';
+
+        const selectAllBtn = document.createElement('button');
+        selectAllBtn.type = 'button';
+        selectAllBtn.className = 'clear-filter';
+        selectAllBtn.textContent = 'Alle wählen';
+        selectAllBtn.onclick = () => bulkToggleFilterOptions(filterNum, true);
+
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.type = 'button';
+        clearAllBtn.className = 'clear-filter';
+        clearAllBtn.textContent = 'Alle abwählen';
+        clearAllBtn.onclick = () => bulkToggleFilterOptions(filterNum, false);
+
+        bulkActions.appendChild(selectAllBtn);
+        bulkActions.appendChild(clearAllBtn);
+        container.appendChild(bulkActions);
+
         // First group values by category/prefix if they exist
         const groupedValues = {};
         

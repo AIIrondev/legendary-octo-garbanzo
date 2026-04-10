@@ -713,6 +713,42 @@ def sanitize_form_value(value):
     return value
 
 
+FILTER_SELECT_ALL_TOKEN = '__ALL__'
+
+
+def expand_filter_selection(selected_values, filter_num):
+    """Expand special filter token into all predefined values for a filter."""
+    if not isinstance(selected_values, list):
+        return []
+
+    has_select_all = False
+    cleaned_values = []
+    seen = set()
+
+    for raw_value in selected_values:
+        value = str(raw_value).strip() if raw_value is not None else ''
+        if not value:
+            continue
+        if value == FILTER_SELECT_ALL_TOKEN:
+            has_select_all = True
+            continue
+        if value not in seen:
+            cleaned_values.append(value)
+            seen.add(value)
+
+    if not has_select_all:
+        return cleaned_values
+
+    predefined_values = it.get_predefined_filter_values(filter_num)
+    for predefined_value in predefined_values:
+        value = str(predefined_value).strip() if predefined_value is not None else ''
+        if value and value not in seen:
+            cleaned_values.append(value)
+            seen.add(value)
+
+    return cleaned_values
+
+
 def normalize_isbn(isbn_raw):
     """Return only digits/X from ISBN input in canonical uppercase form."""
     if isbn_raw is None:
@@ -2638,6 +2674,10 @@ def upload_item():
             flash('Fehler beim Verarbeiten der Formulardaten. Bitte versuchen Sie es erneut.', 'error')
             return redirect(url_for('home_admin'))
 
+    # Expand special "all values" selections for predefined filters.
+    filter_upload = expand_filter_selection(filter_upload, 1)
+    filter_upload2 = expand_filter_selection(filter_upload2, 2)
+
     # Validation
     if not name or not ort or not beschreibung:
         error_msg = 'Bitte füllen Sie alle erforderlichen Felder aus'
@@ -3683,6 +3723,10 @@ def edit_item(id):
     filter1 = sanitize_form_value(request.form.getlist('filter'))
     filter2 = sanitize_form_value(request.form.getlist('filter2'))
     filter3 = sanitize_form_value(request.form.getlist('filter3'))
+
+    # Expand special "all values" selections for predefined filters.
+    filter1 = expand_filter_selection(filter1, 1)
+    filter2 = expand_filter_selection(filter2, 2)
     
     anschaffungs_jahr = sanitize_form_value(request.form.get('anschaffungsjahr'))
     anschaffungs_kosten = sanitize_form_value(request.form.get('anschaffungskosten'))
@@ -5905,6 +5949,10 @@ def add_filter_value(filter_num):
     
     if not value:
         flash('Bitte geben Sie einen Wert ein', 'error')
+        return redirect(url_for('manage_filters'))
+
+    if value == FILTER_SELECT_ALL_TOKEN:
+        flash('Dieser Wert ist reserviert und kann nicht als Filterwert gespeichert werden.', 'error')
         return redirect(url_for('manage_filters'))
     
     # Add the value to the filter
