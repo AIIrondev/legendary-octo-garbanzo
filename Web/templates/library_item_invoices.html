@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Rechnungen Element - {{ APP_VERSION }}{% endblock %}
+
+{% block content %}
+<style>
+  .invoice-history-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .invoice-history-head {
+    background: linear-gradient(135deg, #ffffff 0%, #f7f9fc 100%);
+    border: 1px solid #dbe4ee;
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+  }
+
+  .invoice-history-head h1 {
+    margin: 0 0 6px 0;
+    font-size: 1.55rem;
+  }
+
+  .head-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: #4b5563;
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+
+  .head-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .invoice-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .invoice-table th,
+  .invoice-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #edf2f7;
+    vertical-align: top;
+    text-align: left;
+  }
+
+  .invoice-table th {
+    font-size: 0.83rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    background: #f8fafc;
+  }
+
+  .invoice-table tr:hover td {
+    background: #fbfdff;
+  }
+
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .badge-open { background: #fee2e2; color: #991b1b; }
+  .badge-paid { background: #dcfce7; color: #166534; }
+  .badge-active { background: #dbeafe; color: #1d4ed8; }
+  .badge-completed { background: #dcfce7; color: #166534; }
+  .badge-planned { background: #fef3c7; color: #b45309; }
+
+  .mono {
+    font-family: monospace;
+    font-size: 0.92rem;
+  }
+
+  .muted {
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #6b7280;
+    padding: 36px 20px;
+  }
+
+  @media (max-width: 900px) {
+    .invoice-table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+</style>
+
+<div class="invoice-history-shell">
+  <div class="invoice-history-head">
+    <h1>Rechnungshistorie pro Element</h1>
+    <div class="head-meta">
+      <span><strong>Element:</strong> {{ item.name or '—' }}</span>
+      <span><strong>Code:</strong> {{ item.code or '—' }}</span>
+      <span><strong>Autor:</strong> {{ item.author or '—' }}</span>
+      <span><strong>ISBN:</strong> {{ item.isbn or '—' }}</span>
+    </div>
+    <div class="head-actions">
+      <a class="btn btn-outline-secondary" href="{{ url_for('library_loans_admin') }}">Zur Bibliotheks-Ausleihenverwaltung</a>
+      <a class="btn btn-secondary" href="{{ url_for('library_view') }}">Bibliothek öffnen</a>
+    </div>
+  </div>
+
+  <div class="invoice-card">
+    {% if invoices %}
+    <table class="invoice-table">
+      <thead>
+        <tr>
+          <th>Rechnung</th>
+          <th>Betrag</th>
+          <th>Ausleihe</th>
+          <th>Status</th>
+          <th>Schaden</th>
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in invoices %}
+        <tr>
+          <td>
+            <div class="mono">{{ row.invoice_number or '—' }}</div>
+            <div class="muted">erstellt {{ row.invoice_created_at or '—' }}</div>
+            {% if row.invoice_created_by %}<div class="muted">von {{ row.invoice_created_by }}</div>{% endif %}
+          </td>
+          <td>{{ row.invoice_amount }}</td>
+          <td>
+            <div>{{ row.borrow_user or '—' }}</div>
+            <div class="muted">{{ row.borrow_start or '' }}{% if row.borrow_end %} bis {{ row.borrow_end }}{% endif %}</div>
+            {% if row.borrow_status == 'active' %}
+              <span class="badge-pill badge-active">Aktiv</span>
+            {% elif row.borrow_status == 'planned' %}
+              <span class="badge-pill badge-planned">Geplant</span>
+            {% else %}
+              <span class="badge-pill badge-completed">Abgeschlossen</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.invoice_paid %}
+              <span class="badge-pill badge-paid">Bezahlt</span>
+              {% if row.invoice_paid_at %}<div class="muted">am {{ row.invoice_paid_at }}</div>{% endif %}
+              {% if row.invoice_paid_by %}<div class="muted">durch {{ row.invoice_paid_by }}</div>{% endif %}
+            {% else %}
+              <span class="badge-pill badge-open">Offen</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="muted">{{ row.invoice_reason or 'Keine Beschreibung' }}</div>
+          </td>
+          <td>
+            <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_view_invoice_pdf', borrow_id=row.borrow_id) }}" target="_blank" rel="noopener">PDF öffnen</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="empty-state">Für dieses Element wurden noch keine Rechnungen gespeichert.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

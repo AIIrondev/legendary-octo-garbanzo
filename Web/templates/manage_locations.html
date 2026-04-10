@@ -1,0 +1,200 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Orte verwalten{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Orte verwalten</h1>
+    
+    <div class="card">
+        <div class="card-header">
+            <h2>Neuen Ort hinzufügen</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('add_location_value') }}">
+                <div class="form-group">
+                    <label for="location-value">Ort:</label>
+                    <input type="text" id="location-value" name="value" required placeholder="Neuen Ort eingeben">
+                </div>
+                <button type="submit" class="btn btn-primary">Hinzufügen</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <h2>Vorhandene Orte</h2>
+        </div>
+        <div class="card-body">
+            {% if location_values %}
+                <div class="location-values-list">
+                    {% for value in location_values %}
+                        <div class="location-value-item">
+                            <span class="location-value">{{ value }}</span>
+                            <form method="POST" action="{{ url_for('remove_location_value', value=value) }}" class="inline-form">
+                                <button type="submit" class="btn btn-danger btn-sm" 
+                                        onclick="return confirm('Sind Sie sicher, dass Sie diesen Ort entfernen möchten?')">
+                                    Entfernen
+                                </button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="no-values-message">
+                    Es wurden noch keine Orte definiert.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="actions-container">
+        <a href="{{ url_for('home_admin') }}" class="btn btn-secondary">Zurück zur Übersicht</a>
+    </div>
+</div>
+
+<style>
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    h1 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #343a40;
+    }
+    
+    .card {
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        background-color: #fff;
+        border: 1px solid #e9ecef;
+    }
+    
+    .card-header {
+        background-color: #f8f9fa;
+        padding: 15px 20px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .card-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        color: #495057;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    
+    .form-group input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-primary {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0069d9;
+    }
+    
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background-color: #5a6268;
+    }
+    
+    .btn-danger {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background-color: #c82333;
+    }
+    
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.875rem;
+    }
+    
+    .mt-4 {
+        margin-top: 1.5rem;
+    }
+    
+    .location-values-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 15px;
+    }
+    
+    .location-value-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #6c757d;
+    }
+    
+    .location-value {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .no-values-message {
+        color: #6c757d;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+    }
+    
+    .inline-form {
+        display: inline;
+    }
+    
+    .actions-container {
+        margin-top: 20px;
+        display: flex;
+        justify-content: flex-end;
+    }
+</style>
+{% endblock %}

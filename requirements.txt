@@ -1,0 +1,12 @@
+flask
+werkzeug
+gunicorn
+pymongo==4.6.3
+pillow
+qrcode
+apscheduler
+python-dateutil
+pytz
+requests
+reportlab
+python-barcode

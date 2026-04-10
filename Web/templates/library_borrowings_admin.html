@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+
+{% block title %}Bibliotheks-Ausleihen - {{ APP_VERSION }}{% endblock %}
+
+{% block content %}
+<style>
+  .library-admin-shell {
+    max-width: 1460px;
+    margin: 0 auto;
+    padding: 18px 20px 32px;
+  }
+
+  .library-admin-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    padding: 20px 22px;
+    background: linear-gradient(135deg, #ffffff 0%, #f7f9fc 100%);
+    border: 1px solid #dbe4ee;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  .library-admin-hero h1 {
+    margin: 0 0 6px 0;
+    font-size: 1.9rem;
+  }
+
+  .library-admin-hero p {
+    margin: 0;
+    color: #5b6472;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .hero-actions .btn {
+    white-space: nowrap;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .summary-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  }
+
+  .summary-card .label {
+    display: block;
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+
+  .summary-card .value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #1f2937;
+  }
+
+  .filter-bar {
+    display: grid;
+    grid-template-columns: 1fr 220px 220px;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .filter-bar input,
+  .filter-bar select {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #d6dde6;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .panel {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    margin-bottom: 18px;
+  }
+
+  .panel h2 {
+    margin: 0 0 12px 0;
+    font-size: 1.2rem;
+  }
+
+  .library-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .library-table th,
+  .library-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #edf2f7;
+    vertical-align: top;
+    text-align: left;
+  }
+
+  .library-table th {
+    font-size: 0.84rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    background: #f8fafc;
+  }
+
+  .library-table tr:hover td {
+    background: #fbfdff;
+  }
+
+  .mono {
+    font-family: monospace;
+    font-size: 0.92rem;
+  }
+
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .badge-active { background: #dbeafe; color: #1d4ed8; }
+  .badge-planned { background: #fef3c7; color: #b45309; }
+  .badge-completed { background: #dcfce7; color: #166534; }
+  .badge-open { background: #fee2e2; color: #991b1b; }
+  .badge-paid { background: #dcfce7; color: #166534; }
+  .badge-damaged { background: #fee2e2; color: #991b1b; }
+
+  .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .row-actions form {
+    margin: 0;
+  }
+
+  .row-actions .btn {
+    white-space: nowrap;
+  }
+
+  .muted {
+    color: #6b7280;
+    font-size: 0.92rem;
+  }
+
+  .empty-state {
+    padding: 28px 16px;
+    text-align: center;
+    color: #6b7280;
+  }
+
+  @media (max-width: 900px) {
+    .library-admin-hero {
+      flex-direction: column;
+    }
+
+    .filter-bar {
+      grid-template-columns: 1fr;
+    }
+
+    .library-table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+</style>
+
+<div class="library-admin-shell">
+  <div class="library-admin-hero">
+    <div>
+      <h1>Bibliotheks-Ausleihen</h1>
+      <p>Nur Bibliotheksmedien. Hier kannst du offene Ausleihen abschließen, Rechnungen bezahlen und defekte Medien direkt zurücksetzen.</p>
+    </div>
+    <div class="hero-actions">
+      <a class="btn btn-secondary" href="{{ url_for('library_view') }}">Bibliothek öffnen</a>
+      <a class="btn btn-primary" href="{{ url_for('library_admin') }}">Bücher hochladen</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin_borrowings') }}">Alle Ausleihen</a>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <span class="label">Ausleihen</span>
+      <div class="value">{{ loan_entries|length }}</div>
+    </div>
+    <div class="summary-card">
+      <span class="label">Defekte Medien</span>
+      <div class="value">{{ damaged_items|length }}</div>
+    </div>
+    <div class="summary-card">
+      <span class="label">Direkt reparierbar</span>
+      <div class="value">{{ damaged_items|length }}</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input id="library-search" type="text" placeholder="Nach Element, Benutzer, Ausweis oder Rechnung suchen...">
+    <select id="loan-status-filter">
+      <option value="">Alle Ausleihen</option>
+      <option value="active">Aktiv</option>
+      <option value="planned">Geplant</option>
+      <option value="completed">Abgeschlossen</option>
+    </select>
+    <select id="damage-filter">
+      <option value="all">Alle Einträge</option>
+      <option value="damage">Nur defekt</option>
+      <option value="clean">Nur ohne Schaden</option>
+    </select>
+  </div>
+
+  <div class="panel">
+    <h2>Bibliotheks-Ausleihen</h2>
+    {% if loan_entries %}
+    <table class="library-table" id="loans-table">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Element</th>
+          <th>Benutzer</th>
+          <th>Zeit</th>
+          <th>Rechnung</th>
+          <th>Schaden</th>
+          <th>Aktionen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in loan_entries %}
+        <tr class="loan-row" data-borrow-id="{{ e.id }}" data-item-id="{{ e.item_id }}" data-item-name="{{ e.item_name }}" data-item-code="{{ e.item_code }}" data-item-cost="{{ e.item_cost_raw }}" data-user-name="{{ e.user }}" data-search="{{ (e.item_name ~ ' ' ~ e.item_code ~ ' ' ~ e.user ~ ' ' ~ e.invoice_number ~ ' ' ~ e.item_author ~ ' ' ~ e.item_isbn)|lower }}" data-status="{{ e.status }}" data-has-damage="{{ '1' if e.has_damage else '0' }}">
+          <td>
+            {% if e.status == 'active' %}
+              <span class="badge-pill badge-active">Aktiv</span>
+            {% elif e.status == 'planned' %}
+              <span class="badge-pill badge-planned">Geplant</span>
+            {% else %}
+              <span class="badge-pill badge-completed">Abgeschlossen</span>
+            {% endif %}
+          </td>
+          <td>
+            <div><strong>{{ e.item_name }}</strong></div>
+            <div class="muted">{{ e.item_author or '—' }}</div>
+            <div class="mono">{{ e.item_code or '—' }}</div>
+            <div style="margin-top:6px;">
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('library_item_invoices', item_id=e.item_id) }}">Rechnungen</a>
+            </div>
+          </td>
+          <td>
+            <div>{{ e.user }}</div>
+            <div class="muted">{{ e.start }}{% if e.end %} bis {{ e.end }}{% endif %}</div>
+          </td>
+          <td>
+            <div>{{ e.period or '—' }}</div>
+            {% if e.notes %}<div class="muted">{{ e.notes }}</div>{% endif %}
+          </td>
+          <td>
+            {% if e.invoice_number %}
+              <div class="mono">{{ e.invoice_number }}</div>
+              <div class="muted">{{ e.invoice_amount }}</div>
+              <div style="margin-top:6px;">
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_view_invoice_pdf', borrow_id=e.id) }}" target="_blank" rel="noopener">PDF öffnen</a>
+              </div>
+              {% if e.invoice_paid %}
+                <span class="badge-pill badge-paid">Bezahlt</span>
+                {% if e.invoice_paid_at %}<div class="muted">am {{ e.invoice_paid_at }}</div>{% endif %}
+              {% else %}
+                <span class="badge-pill badge-open">Offen</span>
+              {% endif %}
+            {% else %}
+              <span class="muted">Keine Rechnung</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.has_damage %}
+              <span class="badge-pill badge-damaged">{{ e.damage_count }} Schaden{% if e.damage_count != 1 %}s{% endif %}</span>
+              {% if e.damage_text %}<div class="muted" style="margin-top:6px;">{{ e.damage_text }}</div>{% endif %}
+            {% else %}
+              <span class="muted">Kein Schaden</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              {% if e.status == 'active' %}
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="openDamageReportPrompt(this)">Schaden melden</button>
+              {% endif %}
+              {% if e.invoice_number and ((not e.invoice_paid) or e.has_damage) %}
+              <form method="post" action="{{ url_for('admin_finalize_invoice_and_repair', borrow_id=e.id) }}" onsubmit="return confirm('Rechnung als bezahlt und Element als repariert markieren?');">
+                <button type="submit" class="btn btn-success btn-sm">
+                  {% if not e.invoice_paid and e.has_damage %}
+                    Bezahlt + repariert
+                  {% elif not e.invoice_paid %}
+                    Als bezahlt markieren
+                  {% else %}
+                    Als repariert markieren
+                  {% endif %}
+                </button>
+              </form>
+              {% elif e.has_damage %}
+              <form method="post" action="{{ url_for('mark_damage_repaired', id=e.item_id) }}" onsubmit="return confirm('Medium als repariert markieren?');">
+                <button type="submit" class="btn btn-success btn-sm">Als repariert markieren</button>
+              </form>
+              {% endif %}
+
+              {% if e.status in ['active', 'planned'] %}
+              <form method="post" action="{{ url_for('admin_reset_borrowing', borrow_id=e.id) }}" onsubmit="return confirm('Ausleihe zurücksetzen?');">
+                <button type="submit" class="btn btn-warning btn-sm">Zurücksetzen</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div id="loans-empty" class="empty-state" style="display:none;">Keine passenden Bibliotheks-Ausleihen gefunden.</div>
+    {% else %}
+      <div class="empty-state">Keine Bibliotheks-Ausleihen gefunden.</div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Defekte Bibliotheksmedien ohne aktive Ausleihe</h2>
+    {% if damaged_items %}
+    <table class="library-table" id="damaged-table">
+      <thead>
+        <tr>
+          <th>Element</th>
+          <th>Code</th>
+          <th>Schaden</th>
+          <th>Status</th>
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in damaged_items %}
+        <tr class="damaged-row" data-search="{{ (item.name ~ ' ' ~ item.code ~ ' ' ~ item.author ~ ' ' ~ item.isbn ~ ' ' ~ item.damage_text)|lower }}" data-status="damage" data-has-damage="1">
+          <td>
+            <div><strong>{{ item.name }}</strong></div>
+            <div class="muted">{{ item.author or '—' }}</div>
+            <div class="muted">{{ item.isbn or '—' }}</div>
+          </td>
+          <td class="mono">{{ item.code or '—' }}</td>
+          <td>
+            <span class="badge-pill badge-damaged">{{ item.damage_count }} Schaden{% if item.damage_count != 1 %}s{% endif %}</span>
+            {% if item.damage_text %}<div class="muted" style="margin-top:6px;">{{ item.damage_text }}</div>{% endif %}
+          </td>
+          <td>
+            {% if item.available %}
+              <span class="badge-pill badge-completed">Bereit zum Zurücksetzen</span>
+            {% else %}
+              <span class="badge-pill badge-open">Nicht verfügbar</span>
+            {% endif %}
+            {% if item.last_updated %}<div class="muted" style="margin-top:6px;">{{ item.last_updated }}</div>{% endif %}
+          </td>
+          <td>
+            <div class="row-actions" style="margin-bottom:8px;">
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('library_item_invoices', item_id=item.id) }}">Rechnungen</a>
+            </div>
+            <form method="post" action="{{ url_for('mark_damage_repaired', id=item.id) }}" onsubmit="return confirm('Dieses Medium als repariert und wieder verfügbar markieren?');">
+              <button type="submit" class="btn btn-success btn-sm">Als repariert markieren</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div id="damaged-empty" class="empty-state" style="display:none;">Keine passenden defekten Medien gefunden.</div>
+    {% else %}
+      <div class="empty-state">Keine defekten Bibliotheksmedien ohne aktive Ausleihe gefunden.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="damage-invoice-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.72); z-index:9999; padding:20px; overflow:auto;">
+  <div style="max-width:760px; margin:40px auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0;">Rechnung erstellen</h2>
+        <p style="margin:6px 0 0; color:#666;">Die Rechnung nutzt das bestehende Rechnungssystem und kann direkt nach der Schadensmeldung erstellt werden.</p>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="closeDamageInvoiceModal()">Schließen</button>
+    </div>
+
+    <form id="damage-invoice-form" method="post" action="">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div>
+          <label for="damage-invoice-item" style="display:block; font-weight:700; margin-bottom:6px;">Element</label>
+          <input id="damage-invoice-item" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-borrower" style="display:block; font-weight:700; margin-bottom:6px;">Schüler</label>
+          <input id="damage-invoice-borrower" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-code" style="display:block; font-weight:700; margin-bottom:6px;">Element-ID / Code</label>
+          <input id="damage-invoice-code" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-amount" style="display:block; font-weight:700; margin-bottom:6px;">Preis</label>
+          <input id="damage-invoice-amount" name="invoice_amount" type="text" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;" placeholder="z.B. 12,50">
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label for="damage-invoice-reason" style="display:block; font-weight:700; margin-bottom:6px;">Schadensbeschreibung</label>
+        <textarea id="damage-invoice-reason" name="damage_reason" rows="5" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; resize:vertical;" placeholder="Beschreiben Sie kurz den Schaden oder die Zerstörung."></textarea>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-bottom:18px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input id="damage-invoice-destroyed" type="checkbox" name="mark_destroyed" checked>
+          Element als zerstört markieren
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input id="damage-invoice-close" type="checkbox" name="close_borrowing" checked>
+          Ausleihe abschließen
+        </label>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeDamageInvoiceModal()">Abbrechen</button>
+        <button type="submit" class="btn btn-danger">PDF-Rechnung erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  const searchInput = document.getElementById('library-search');
+  const statusFilter = document.getElementById('loan-status-filter');
+  const damageFilter = document.getElementById('damage-filter');
+  const loanRows = Array.from(document.querySelectorAll('.loan-row'));
+  const damagedRows = Array.from(document.querySelectorAll('.damaged-row'));
+  const loansEmpty = document.getElementById('loans-empty');
+  const damagedEmpty = document.getElementById('damaged-empty');
+  const damageInvoiceModal = document.getElementById('damage-invoice-modal');
+  const damageInvoiceForm = document.getElementById('damage-invoice-form');
+  const damageInvoiceItem = document.getElementById('damage-invoice-item');
+  const damageInvoiceBorrower = document.getElementById('damage-invoice-borrower');
+  const damageInvoiceCode = document.getElementById('damage-invoice-code');
+  const damageInvoiceAmount = document.getElementById('damage-invoice-amount');
+  const damageInvoiceReason = document.getElementById('damage-invoice-reason');
+
+  function openDamageReportPrompt(button) {
+    const row = button.closest('.loan-row');
+    if (!row) {
+      return;
+    }
+
+    const itemId = row.dataset.itemId || '';
+    const itemName = row.dataset.itemName || 'Bibliotheksmedium';
+    const noteInput = prompt('Schadensmeldung für dieses Bibliotheksmedium:\nNotiz zum Schaden (optional):', '');
+
+    if (noteInput === null) {
+      return;
+    }
+
+    const description = noteInput.trim() || 'Schaden erneut gemeldet';
+
+    fetch(`/report_damage/${itemId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description })
+    })
+      .then(response => response.json().then(data => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.success) {
+          throw new Error(data.message || 'Fehler beim Speichern der Schadensmeldung.');
+        }
+
+        if (confirm('Schaden gespeichert. Soll direkt eine Rechnung erstellt werden?')) {
+          openDamageInvoiceModal(row, description);
+          return;
+        }
+
+        window.location.reload();
+      })
+      .catch(error => {
+        alert(error.message || 'Fehler beim Speichern der Schadensmeldung.');
+      });
+  }
+
+  window.openDamageReportPrompt = openDamageReportPrompt;
+
+  function openDamageInvoiceModal(row, description) {
+    if (!damageInvoiceModal || !damageInvoiceForm) {
+      return;
+    }
+
+    const borrowId = row.dataset.borrowId || '';
+    const itemName = row.dataset.itemName || '';
+    const borrower = row.dataset.userName || '';
+    const itemCode = row.dataset.itemCode || '';
+    const itemCost = row.dataset.itemCost || '';
+
+    damageInvoiceForm.action = "{{ url_for('admin_create_invoice', borrow_id='__BORROW_ID__') }}".replace('__BORROW_ID__', borrowId);
+    damageInvoiceItem.value = itemName;
+    damageInvoiceBorrower.value = borrower;
+    damageInvoiceCode.value = itemCode;
+    damageInvoiceAmount.value = String(itemCost).replace(' EUR', '').trim();
+    damageInvoiceReason.value = description || `Schaden gemeldet für ${itemName}`;
+    damageInvoiceModal.style.display = 'block';
+    damageInvoiceAmount.focus();
+  }
+
+  window.openDamageInvoiceModal = openDamageInvoiceModal;
+
+  function closeDamageInvoiceModal() {
+    if (damageInvoiceModal) {
+      damageInvoiceModal.style.display = 'none';
+    }
+  }
+
+  if (damageInvoiceModal) {
+    damageInvoiceModal.addEventListener('click', function(event) {
+      if (event.target === damageInvoiceModal) {
+        closeDamageInvoiceModal();
+      }
+    });
+  }
+
+  window.closeDamageInvoiceModal = closeDamageInvoiceModal;
+
+  function applyFilters() {
+    const search = (searchInput.value || '').trim().toLowerCase();
+    const status = statusFilter.value;
+    const damage = damageFilter.value;
+
+    let visibleLoans = 0;
+    loanRows.forEach(row => {
+      const haystack = row.dataset.search || '';
+      const rowStatus = row.dataset.status || '';
+      const hasDamage = row.dataset.hasDamage === '1';
+      const searchMatch = !search || haystack.includes(search);
+      const statusMatch = !status || rowStatus === status;
+      const damageMatch = damage === 'all' || (damage === 'damage' && hasDamage) || (damage === 'clean' && !hasDamage);
+      const show = searchMatch && statusMatch && damageMatch;
+      row.style.display = show ? '' : 'none';
+      if (show) visibleLoans++;
+    });
+    if (loansEmpty) loansEmpty.style.display = visibleLoans === 0 ? 'block' : 'none';
+
+    let visibleDamaged = 0;
+    damagedRows.forEach(row => {
+      const haystack = row.dataset.search || '';
+      const rowStatus = row.dataset.status || '';
+      const hasDamage = row.dataset.hasDamage === '1';
+      const searchMatch = !search || haystack.includes(search);
+      const statusMatch = !status || rowStatus === status || status === '';
+      const damageMatch = damage === 'all' || (damage === 'damage' && hasDamage) || (damage === 'clean' && !hasDamage);
+      const show = searchMatch && statusMatch && damageMatch;
+      row.style.display = show ? '' : 'none';
+      if (show) visibleDamaged++;
+    });
+    if (damagedEmpty) damagedEmpty.style.display = visibleDamaged === 0 ? 'block' : 'none';
+  }
+
+  searchInput.addEventListener('input', applyFilters);
+  statusFilter.addEventListener('change', applyFilters);
+  damageFilter.addEventListener('change', applyFilters);
+  applyFilters();
+})();
+</script>
+{% endblock %}

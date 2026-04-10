@@ -1,0 +1,42 @@
+Inventarsystem
+Copyright © 2025-2026 AIIrondev
+
+Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+You may not use this project except in compliance with the License.
+The full license text can be found in the file Legal/LICENSE.
+
+This software is provided for private, non-commercial use only.
+Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+For commercial licensing inquiries: https://github.com/AIIrondev
+
+Third-party notices
+This project depends on, uses, or references the following third‑party
+software. Their licenses apply as noted. Where applicable, copyright
+notices are reproduced below. This NOTICE is for attribution only and
+does not modify the terms of the licenses.
+
+Python packages (runtime):
+- Flask (BSD-3-Clause) © Pallets
+- Werkzeug (BSD-3-Clause) © Pallets
+- Jinja2 (BSD-3-Clause) © Pallets (indirect via Flask)
+- Click (BSD-3-Clause) © Pallets (indirect via Flask)
+- Gunicorn (MIT) © 2009-2025 Benoit Chesneau and contributors
+- PyMongo (Apache-2.0) © MongoDB, Inc.
+- APScheduler (MIT) © 2009-2025 Alex Grönholm and contributors
+- Pillow (HPND/FreeType-style license) © 1995-2011 Fredrik Lundh and contributors; © 2010-2025 Alex Clark and contributors
+- python-dateutil (BSD-3-Clause) © 2017-2025 dateutil team; © 2003-2011 Gustavo Niemeyer
+- pytz (MIT) © 2003-2025 Stuart Bishop
+- requests (Apache-2.0) © 2011-2025 Kenneth Reitz and contributors
+- qrcode (BSD-3-Clause) © 2010-2025 Lincoln Loop and contributors
+
+Frontend/runtime assets:
+- html5-qrcode (MIT) © 2020-2025 Manoj Brahmbhatt (mebjas)
+
+System components (not distributed with this repository, may be used in deployment):
+- NGINX (2-clause BSD) © Nginx, Inc. and/or its licensors
+- FFmpeg (LGPL/GPL, depending on configuration) © 2000-2025 FFmpeg developers
+
+Your modifications
+If you create Derivative Works and distribute them, please add your own
+attribution statements here, alongside the above notices, and indicate
+any files you changed as required by the Apache License, Section 4.

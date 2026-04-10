@@ -1,0 +1,806 @@
+/*
+ * Copyright 2025-2026 AIIrondev
+ *
+ * Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+ * See Legal/LICENSE for the full license text.
+ * Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+ * For commercial licensing inquiries: https://github.com/AIIrondev
+ */
+/* Global visual system for all pages */
+:root {
+    --ui-bg: #f2f5f8;
+    --ui-bg-accent: #e7edf4;
+    --ui-surface: #ffffff;
+    --ui-surface-soft: #f8fafc;
+    --ui-border: #d8e0e8;
+    --ui-text: #1f2d3d;
+    --ui-text-muted: #5d6d7e;
+    --ui-title: #1a2e44;
+    --ui-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.08);
+    --ui-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.1);
+    --ui-radius: 12px;
+}
+
+body {
+    font-family: "Manrope", "Segoe UI", "Noto Sans", sans-serif;
+    color: var(--ui-text);
+    background: var(--ui-bg);
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    background-color: var(--ui-surface);
+    border: 0;
+    padding: 22px;
+    border-radius: var(--ui-radius);
+    box-shadow: none;
+    width: min(1200px, calc(100% - 28px));
+    margin: 16px auto;
+}
+
+.container-fluid {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: var(--ui-title);
+    letter-spacing: 0.01em;
+}
+
+h1,
+h2 {
+    text-align: center;
+}
+
+p,
+small,
+label,
+span {
+    color: var(--ui-text-muted);
+}
+
+.card,
+.content,
+.form-card,
+.modal-content,
+.list-group-item,
+.dropdown-menu,
+.table,
+.alert {
+    border-radius: var(--ui-radius);
+}
+
+.card,
+.content,
+.form-card,
+.modal-content,
+.list-group-item,
+.dropdown-menu,
+.table {
+    border: 0;
+    box-shadow: none;
+    background: var(--ui-surface);
+}
+
+.card-header,
+.modal-header,
+thead th {
+    background: linear-gradient(180deg, #f7fafd, #edf3f8) !important;
+    border-bottom: 1px solid var(--ui-border) !important;
+    color: var(--ui-title) !important;
+}
+
+.form-control,
+.form-select,
+textarea,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+input[type="date"],
+select {
+    border-radius: 10px !important;
+    border: 1px solid #cad5e0 !important;
+    min-height: 40px;
+    color: var(--ui-text) !important;
+    background-color: #fff !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea:focus,
+input:focus,
+select:focus {
+    border-color: #7ea3c8 !important;
+    box-shadow: 0 0 0 0.2rem rgba(70, 130, 180, 0.14) !important;
+    outline: 0;
+}
+
+.table {
+    overflow: hidden;
+}
+
+.table th,
+.table td {
+    vertical-align: middle;
+    border-color: #dee6ee !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: #f8fbff;
+}
+
+.alert {
+    border-width: 1px;
+    box-shadow: none;
+}
+
+.navbar {
+    border-bottom: 1px solid #273341;
+    box-shadow: none;
+}
+
+.navbar-brand {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 900px) {
+    .container {
+        width: calc(100% - 18px);
+        padding: 14px;
+        margin: 10px auto;
+        border-radius: 10px;
+    }
+}
+
+/* Edit and generate buttons with black text for better visibility */
+.edit-button {
+    color: black !important; /* Override any existing color */
+}
+
+.duplicate-button {
+    color: black !important; /* Override any existing color */
+}
+
+.generate-qr-button {
+    color: black !important; /* Override any existing color */
+}
+
+.ausleihen {
+    color: black !important; /* Override any existing color */
+}
+
+/* Modal image display fix */
+.modal-image {
+    display: none;
+    max-width: 100%;
+    max-height: 80vh;
+    margin: 0 auto;
+}
+
+.modal-image.active-image {
+    display: block;
+}
+
+/* Active image display classes */
+.item-image.active-image {
+    display: block !important;
+    opacity: 1 !important;
+    z-index: 5;
+}
+
+.item-image:not(.active-image) {
+    display: none !important;
+}
+
+/* QR Reader styling */
+#qr-reader {
+    width: 500px;
+    display: none;
+}
+
+/* Edit new location container */
+.edit-new-location-container {
+    display: none;
+    margin-top: 10px;
+}
+
+/* Modal dialog styling */
+.modal-dialog-white {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.modal-content-margin {
+    margin-top: 10px;
+}
+
+/* Unified list/card view switch styling for main and main_admin */
+.view-switch-group {
+    position: absolute;
+    right: 0;
+    top: 0;
+    display: flex;
+    gap: 8px;
+    padding: 4px;
+    border-radius: 999px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.view-toggle-btn {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #c7ced6;
+    border-radius: 50%;
+    background: #ffffff;
+    font-size: 1.15rem;
+    cursor: pointer;
+    color: #2f3e4e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.view-toggle-btn:hover {
+    transform: translateY(-1px);
+    border-color: #8fa2b7;
+    background: #f8fbff;
+    box-shadow: 0 3px 8px rgba(33, 37, 41, 0.12);
+}
+
+.view-toggle-btn:active {
+    transform: translateY(0);
+}
+
+.view-toggle-btn[aria-pressed='true'] {
+    background: #e9f2ff;
+    border-color: #7ea1c8;
+    color: #1f4f7a;
+}
+
+.table-view-header {
+    display: none;
+}
+
+body.table-view .table-view-header {
+    display: grid;
+    grid-template-columns: var(--table-columns, minmax(180px, 2fr) repeat(5, minmax(110px, 1fr)));
+    gap: 10px 14px;
+    align-items: center;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #3f4e5d;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+body.table-view .items-container {
+    display: block !important;
+    padding: 0;
+    overflow-x: visible;
+    scroll-snap-type: none;
+}
+
+body.table-view .item-card {
+    width: 100%;
+    max-width: none;
+    margin: 0 0 10px 0;
+    padding: 12px 14px;
+    border: 1px solid #e1e6ed;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: none;
+    scroll-snap-align: none;
+}
+
+body.table-view .item-card .card-content {
+    display: grid;
+    grid-template-columns: var(--table-columns, minmax(180px, 2fr) repeat(5, minmax(110px, 1fr)));
+    gap: 10px 14px;
+    align-items: center;
+}
+
+body.table-view .item-card .card-content h3,
+body.table-view .item-card .card-content p {
+    margin: 0;
+    max-height: none;
+}
+
+body.table-view .item-card .card-content p strong {
+    display: none;
+}
+
+body.table-view .item-card .card-content .item-name-cell,
+body.table-view .item-card .card-content .item-col-name {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #1f2d3d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.table-view .item-card .card-content .item-ort-cell,
+body.table-view .item-card .card-content .item-col-location,
+body.table-view .item-card .card-content .item-filter1-cell,
+body.table-view .item-card .card-content .item-col-filter1,
+body.table-view .item-card .card-content .item-filter2-cell,
+body.table-view .item-card .card-content .item-col-filter2,
+body.table-view .item-card .card-content .item-filter3-cell,
+body.table-view .item-card .card-content .item-col-filter3,
+body.table-view .item-card .card-content .item-code-cell,
+body.table-view .item-card .card-content .item-col-code,
+body.table-view .item-card .card-content .item-col-count {
+    color: #445465;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.table-view .item-card .image-container,
+body.table-view .item-card .borrower-badge,
+body.table-view .item-card .appointment-badge,
+body.table-view .item-card .damage-badge {
+    display: none !important;
+}
+
+body.table-view .item-card .actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #d9e0e8;
+}
+
+@media (max-width: 900px) {
+    .view-switch-group {
+        position: static;
+        margin: 8px auto 0;
+        width: fit-content;
+    }
+
+    body.table-view .table-view-header {
+        display: none !important;
+    }
+
+    body.table-view .item-card .card-content {
+        grid-template-columns: 1fr !important;
+        gap: 6px;
+    }
+
+    body.table-view .item-card .card-content p strong {
+        display: inline;
+    }
+}
+
+/* Unified action button styling for main and main_admin */
+:root {
+    --action-radius: 10px;
+    --action-shadow: none;
+    --action-shadow-hover: none;
+}
+
+.actions,
+.modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.actions form,
+.modal-actions form {
+    margin: 0;
+}
+
+.actions .ausleihen,
+.actions .schedule-button,
+.actions .quick-details-button,
+.actions .edit-button,
+.actions .duplicate-button,
+.actions .delete-button,
+.actions .damage-button,
+.modal-actions .ausleihen,
+.modal-actions .schedule-button,
+.modal-actions .quick-details-button,
+.modal-actions .edit-button,
+.modal-actions .duplicate-button,
+.modal-actions .delete-button,
+.modal-actions .damage-button {
+    min-height: 38px !important;
+    padding: 8px 14px !important;
+    border-radius: var(--action-radius) !important;
+    border-width: 1px !important;
+    border-style: solid !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em;
+    box-shadow: var(--action-shadow);
+    transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+.actions .ausleihen,
+.modal-actions .ausleihen {
+    background: #198754 !important;
+    border-color: #157347 !important;
+    color: #ffffff !important;
+}
+
+.actions .schedule-button,
+.modal-actions .schedule-button {
+    background: #fd7e14 !important;
+    border-color: #e46f10 !important;
+    color: #ffffff !important;
+}
+
+.actions .quick-details-button,
+.modal-actions .quick-details-button {
+    background: #6c757d !important;
+    border-color: #616971 !important;
+    color: #ffffff !important;
+}
+
+.actions .edit-button,
+.modal-actions .edit-button {
+    background: #0d6efd !important;
+    border-color: #0b5ed7 !important;
+    color: #ffffff !important;
+}
+
+.actions .duplicate-button,
+.modal-actions .duplicate-button {
+    background: #6f42c1 !important;
+    border-color: #6439af !important;
+    color: #ffffff !important;
+}
+
+.actions .delete-button,
+.modal-actions .delete-button {
+    background: #dc3545 !important;
+    border-color: #bb2d3b !important;
+    color: #ffffff !important;
+}
+
+.actions .damage-button,
+.modal-actions .damage-button {
+    background: #0dcaf0 !important;
+    border-color: #0aa5c0 !important;
+    color: #0b1f2a !important;
+}
+
+.actions .disabled-button,
+.modal-actions .disabled-button,
+.actions button:disabled,
+.modal-actions button:disabled {
+    opacity: 0.72;
+    filter: grayscale(0.28);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.actions .ausleihen:hover,
+.actions .schedule-button:hover,
+.actions .quick-details-button:hover,
+.actions .edit-button:hover,
+.actions .duplicate-button:hover,
+.actions .delete-button:hover,
+.actions .damage-button:hover,
+.modal-actions .ausleihen:hover,
+.modal-actions .schedule-button:hover,
+.modal-actions .quick-details-button:hover,
+.modal-actions .edit-button:hover,
+.modal-actions .duplicate-button:hover,
+.modal-actions .delete-button:hover,
+.modal-actions .damage-button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--action-shadow-hover);
+    filter: brightness(1.02);
+}
+
+.actions button:active,
+.modal-actions button:active {
+    transform: translateY(0);
+    box-shadow: var(--action-shadow);
+}
+
+@media (max-width: 700px) {
+    .actions,
+    .modal-actions {
+        gap: 6px;
+    }
+
+    .actions .ausleihen,
+    .actions .schedule-button,
+    .actions .quick-details-button,
+    .actions .edit-button,
+    .actions .duplicate-button,
+    .actions .delete-button,
+    .actions .damage-button,
+    .modal-actions .ausleihen,
+    .modal-actions .schedule-button,
+    .modal-actions .quick-details-button,
+    .modal-actions .edit-button,
+    .modal-actions .duplicate-button,
+    .modal-actions .delete-button,
+    .modal-actions .damage-button {
+        min-height: 36px !important;
+        padding: 7px 12px !important;
+        font-size: 0.84rem !important;
+    }
+}
+
+/* Global uniform button system for all pages */
+:root {
+    --ui-btn-radius: 10px;
+    --ui-btn-min-height: 38px;
+    --ui-btn-padding-y: 8px;
+    --ui-btn-padding-x: 14px;
+    --ui-btn-font-size: 0.9rem;
+    --ui-btn-font-weight: 700;
+    --ui-btn-shadow: none;
+    --ui-btn-shadow-hover: none;
+}
+
+.btn,
+.action-button,
+.button,
+.export-button,
+.search-button,
+.scan-button,
+.save-button,
+.cancel-button,
+.primary-button,
+.danger-button,
+.submit-button,
+.nav-back-button,
+.back-button,
+.add-new-btn,
+.fetch-isbn-button,
+.import-book-button,
+.return-button,
+.item-reset-button,
+.admin-only-button,
+.reset-cancel-btn,
+.reset-confirm-btn,
+.btn-accept,
+.btn-decline,
+.popup-close-button,
+.delete-image-button,
+.remove-book-cover-button,
+.remove-duplicate-image-button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px;
+    min-height: var(--ui-btn-min-height) !important;
+    padding: var(--ui-btn-padding-y) var(--ui-btn-padding-x) !important;
+    border-radius: var(--ui-btn-radius) !important;
+    border: 1px solid transparent !important;
+    font-size: var(--ui-btn-font-size) !important;
+    font-weight: var(--ui-btn-font-weight) !important;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    text-decoration: none !important;
+    cursor: pointer;
+    box-shadow: var(--ui-btn-shadow);
+    transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+.btn:hover,
+.action-button:hover,
+.button:hover,
+.export-button:hover,
+.search-button:hover,
+.scan-button:hover,
+.save-button:hover,
+.cancel-button:hover,
+.primary-button:hover,
+.danger-button:hover,
+.submit-button:hover,
+.nav-back-button:hover,
+.back-button:hover,
+.add-new-btn:hover,
+.fetch-isbn-button:hover,
+.import-book-button:hover,
+.return-button:hover,
+.item-reset-button:hover,
+.admin-only-button:hover,
+.reset-cancel-btn:hover,
+.reset-confirm-btn:hover,
+.btn-accept:hover,
+.btn-decline:hover,
+.popup-close-button:hover,
+.delete-image-button:hover,
+.remove-book-cover-button:hover,
+.remove-duplicate-image-button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--ui-btn-shadow-hover);
+    filter: brightness(1.02);
+}
+
+.btn:active,
+.action-button:active,
+.button:active,
+.export-button:active,
+.search-button:active,
+.scan-button:active,
+.save-button:active,
+.cancel-button:active,
+.primary-button:active,
+.danger-button:active,
+.submit-button:active,
+.nav-back-button:active,
+.back-button:active,
+.add-new-btn:active,
+.fetch-isbn-button:active,
+.import-book-button:active,
+.return-button:active,
+.item-reset-button:active,
+.admin-only-button:active,
+.reset-cancel-btn:active,
+.reset-confirm-btn:active,
+.btn-accept:active,
+.btn-decline:active,
+.popup-close-button:active,
+.delete-image-button:active,
+.remove-book-cover-button:active,
+.remove-duplicate-image-button:active {
+    transform: translateY(0);
+    box-shadow: var(--ui-btn-shadow);
+}
+
+.btn:disabled,
+.action-button:disabled,
+.button:disabled,
+.export-button:disabled,
+.search-button:disabled,
+.scan-button:disabled,
+.save-button:disabled,
+.cancel-button:disabled,
+.primary-button:disabled,
+.danger-button:disabled,
+.submit-button:disabled,
+.add-new-btn:disabled,
+.fetch-isbn-button:disabled,
+.import-book-button:disabled,
+.return-button:disabled,
+.item-reset-button:disabled,
+.admin-only-button:disabled,
+.reset-cancel-btn:disabled,
+.reset-confirm-btn:disabled,
+.btn-accept:disabled,
+.btn-decline:disabled,
+.popup-close-button:disabled,
+.delete-image-button:disabled,
+.remove-book-cover-button:disabled,
+.remove-duplicate-image-button:disabled {
+    opacity: 0.72;
+    box-shadow: none;
+    cursor: not-allowed;
+    filter: grayscale(0.25);
+}
+
+/* Preserve consistent role colors */
+.btn-primary,
+.save-button,
+.submit-button,
+.primary-button,
+.register-button {
+    background: #0d6efd !important;
+    border-color: #0b5ed7 !important;
+    color: #fff !important;
+}
+
+.btn-secondary,
+.cancel-button,
+.button,
+.nav-back-button,
+.back-button,
+.reset-cancel-btn {
+    background: #6c757d !important;
+    border-color: #616971 !important;
+    color: #fff !important;
+}
+
+.btn-success,
+.btn-accept,
+.return-button,
+.item-reset-button,
+.import-book-button,
+.fetch-isbn-button,
+.scan-button {
+    background: #198754 !important;
+    border-color: #157347 !important;
+    color: #fff !important;
+}
+
+.btn-warning,
+.export-button,
+.search-button,
+.add-new-btn {
+    background: #fd7e14 !important;
+    border-color: #e46f10 !important;
+    color: #fff !important;
+}
+
+.btn-danger,
+.danger-button,
+.btn-decline,
+.reset-confirm-btn,
+.delete-image-button,
+.remove-book-cover-button,
+.remove-duplicate-image-button {
+    background: #dc3545 !important;
+    border-color: #bb2d3b !important;
+    color: #fff !important;
+}
+
+.btn-sm {
+    min-height: 32px !important;
+    padding: 6px 10px !important;
+    font-size: 0.82rem !important;
+}
+
+.w-100.btn,
+.w-100.action-button,
+.w-100.button,
+.w-100.export-button,
+.w-100.save-button,
+.w-100.submit-button,
+.w-100.primary-button,
+.w-100.danger-button,
+.w-100.cancel-button {
+    width: 100% !important;
+}
+
+@media (max-width: 700px) {
+    .btn,
+    .action-button,
+    .button,
+    .export-button,
+    .search-button,
+    .scan-button,
+    .save-button,
+    .cancel-button,
+    .primary-button,
+    .danger-button,
+    .submit-button,
+    .nav-back-button,
+    .back-button,
+    .add-new-btn,
+    .fetch-isbn-button,
+    .import-book-button,
+    .return-button,
+    .item-reset-button,
+    .admin-only-button,
+    .reset-cancel-btn,
+    .reset-confirm-btn,
+    .btn-accept,
+    .btn-decline,
+    .popup-close-button,
+    .delete-image-button,
+    .remove-book-cover-button,
+    .remove-duplicate-image-button {
+        min-height: 36px !important;
+        padding: 7px 12px !important;
+        font-size: 0.84rem !important;
+    }
+}

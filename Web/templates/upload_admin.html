@@ -1,0 +1,1837 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}{{ page_title|default('Artikel hochladen') }} - Inventarsystem{% endblock %}
+
+{% block content %}
+{% if duplicate_data and duplicate_data.images %}
+<!-- Hidden server-side values for duplication, will be processed by JavaScript -->
+<div id="server-duplicate-data" 
+     data-name="{{ duplicate_data.name|default('') }}"
+     data-description="{{ duplicate_data.description|default('') }}"
+     data-location="{{ duplicate_data.location|default('') }}"
+     data-room="{{ duplicate_data.room|default('') }}"
+     data-year="{{ duplicate_data.year|default('') }}"
+     data-cost="{{ duplicate_data.cost|default('') }}"
+     data-images="{{ duplicate_data.images|tojson|safe }}"
+     data-filter1="{{ duplicate_data.filter1|tojson|safe if duplicate_data.filter1 else '[]' }}"
+     data-filter2="{{ duplicate_data.filter2|tojson|safe if duplicate_data.filter2 else '[]' }}"
+     data-filter3="{{ duplicate_data.filter3|tojson|safe if duplicate_data.filter3 else '[]' }}"
+     data-original-id="{{ duplicate_data.original_id|default('') }}"
+     style="display:none;">
+</div>
+<script>
+    // Pre-initialize duplicate data from server
+    var serverDuplicateData = null;
+    const dataElement = document.getElementById('server-duplicate-data');
+    if (dataElement) {
+        // Safely parse JSON arrays with error handling
+        function safeJsonParse(jsonStr, defaultValue = []) {
+            try {
+                if (!jsonStr) return defaultValue;
+                return JSON.parse(jsonStr);
+            } catch (e) {
+                console.error("Error parsing JSON:", e, "Value was:", jsonStr);
+                return defaultValue;
+            }
+        }
+        
+        // Get images data and log it for debugging
+        const imagesData = dataElement.getAttribute('data-images') || "[]";
+        console.log("Raw images data attribute:", imagesData);
+        
+        serverDuplicateData = {
+            name: dataElement.getAttribute('data-name') || "",
+            description: dataElement.getAttribute('data-description') || "",
+            location: dataElement.getAttribute('data-location') || "",
+            room: dataElement.getAttribute('data-room') || "",
+            year: dataElement.getAttribute('data-year') || "",
+            cost: dataElement.getAttribute('data-cost') || "",
+            images: safeJsonParse(imagesData),
+            filter1: safeJsonParse(dataElement.getAttribute('data-filter1')),
+            filter2: safeJsonParse(dataElement.getAttribute('data-filter2')),
+            filter3: safeJsonParse(dataElement.getAttribute('data-filter3')),
+            original_id: dataElement.getAttribute('data-original-id') || ""
+        };
+        console.log("Server-provided duplicate data:", serverDuplicateData);
+    }
+</script>
+{% endif %}
+
+<style>
+    /* Book information display styles */
+    .book-info-container {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        min-height: 40px;
+    }
+
+    .book-info {
+        padding: 15px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .book-info h4 {
+        color: #333;
+        margin: 0 0 10px 0;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+
+    .book-info p {
+        margin: 5px 0;
+        color: #666;
+        line-height: 1.4;
+    }
+
+    .book-thumbnail {
+        max-width: 120px;
+        max-height: 180px;
+        float: right;
+        margin: 0 0 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .book-description {
+        clear: both;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
+
+    .book-description h5 {
+        color: #333;
+        margin: 0 0 8px 0;
+        font-size: 1em;
+        font-weight: bold;
+    }
+
+    .book-description p {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 3px;
+        font-size: 0.9em;
+        line-height: 1.5;
+    }
+
+    /* Import button styling */
+    .import-book-button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 15px;
+        transition: background-color 0.2s ease;
+        display: block;
+        width: 100%;
+    }
+
+    .import-book-button:hover {
+        background-color: #218838;
+    }
+
+    .import-book-button:active {
+        background-color: #1e7e34;
+    }
+
+    /* ISBN input group styling */
+    .isbn-input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .isbn-input-group input {
+        flex: 1;
+    }
+
+    .fetch-isbn-button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s ease;
+    }
+
+    .fetch-isbn-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        color: #007bff;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    .loading-spinner::after {
+        content: "...";
+        animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { 
+            color: rgba(0,0,0,0);
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        40% { 
+            color: #007bff;
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        60% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 rgba(0,0,0,0);
+        }
+        80%, 100% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 #007bff;
+        }
+    }
+
+    /* Error message styling */
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    /* Success message styling */
+    .import-success-message {
+        color: #155724;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: bold;
+        animation: fadeInOut 3s ease;
+    }
+
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translateY(-10px); }
+        10%, 90% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Code validation styling */
+    .code-checking {
+        background-color: #fff3cd !important;
+        border-color: #ffc107 !important;
+        position: relative;
+    }
+
+    .code-checking::after {
+        content: "Prüfe...";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8em;
+        color: #856404;
+        font-style: italic;
+    }
+
+    .code-valid {
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+        color: #155724 !important;
+    }
+
+    .code-invalid {
+        background-color: #f8d7da !important;
+        border-color: #dc3545 !important;
+        color: #721c24 !important;
+    }
+
+    /* Duplicate code popup styling */
+    .popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: overlayFadeIn 0.3s ease;
+    }
+
+    @keyframes overlayFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .duplicate-code-popup {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        max-width: 500px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+        animation: popupSlideIn 0.3s ease;
+    }
+
+    @keyframes popupSlideIn {
+        from { 
+            opacity: 0; 
+            transform: scale(0.8) translateY(-20px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: scale(1) translateY(0); 
+        }
+    }
+
+    .popup-content h3 {
+        color: #dc3545;
+        margin: 0 0 15px 0;
+        font-size: 1.3em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .popup-content h3::before {
+        content: "⚠️";
+        font-size: 1.2em;
+    }
+
+    .popup-content p {
+        color: #333;
+        margin: 15px 0;
+        line-height: 1.5;
+        font-size: 1em;
+    }
+
+    .popup-content .duplicate-code {
+        font-weight: bold;
+        color: #dc3545;
+        background-color: #f8d7da;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 1.1em;
+    }
+
+    .popup-close-button {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .popup-close-button:hover {
+        background-color: #5a6268;
+    }
+
+    .popup-close-x {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #999;
+        cursor: pointer;
+        padding: 5px;
+        line-height: 1;
+    }
+
+    .popup-close-x:hover {
+        color: #333;
+    }
+
+    /* Upload form styles */
+    .upload-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .upload-form h1 {
+        color: #333;
+        margin-bottom: 30px;
+        text-align: center;
+        font-size: 2em;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        height: 100px;
+        resize: vertical;
+    }
+
+    .filter-inputs {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+
+    .filter-inputs h3 {
+        color: #333;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+    }
+
+    .multi-filter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .filter-dropdown-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    .add-new-btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-top: 5px;
+        font-size: 12px;
+    }
+
+    .add-new-btn:hover {
+        background-color: #0056b3;
+    }
+
+    .image-preview-container {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .image-preview {
+        position: relative;
+        display: inline-block;
+    }
+
+    .image-preview img {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .remove-image {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Video preview styles */
+    .video-preview {
+        border: 2px dashed #17a2b8;
+        background-color: #f0f8ff;
+    }
+
+    .video-placeholder {
+        width: 100px;
+        height: 100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        text-align: center;
+    }
+
+    .video-icon {
+        font-size: 30px;
+        margin-bottom: 5px;
+    }
+
+    .video-name {
+        font-size: 10px;
+        word-break: break-all;
+        max-width: 90px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Book cover preview styles */
+    .book-cover-preview {
+        margin-top: 10px;
+        padding: 10px;
+        border: 2px dashed #007bff;
+        border-radius: 5px;
+        background-color: #f8f9ff;
+    }
+
+    .book-cover-preview .preview-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .book-cover-preview img {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .image-loading {
+        padding: 10px;
+        text-align: center;
+        color: #666;
+        font-style: italic;
+    }
+
+    .submit-button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 5px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .submit-button:hover {
+        background-color: #218838;
+    }
+
+    .submit-button:active {
+        background-color: #1e7e34;
+    }
+
+    /* Navigation button */
+    .nav-back-button {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        text-decoration: none;
+        display: inline-block;
+        margin-bottom: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .nav-back-button:hover {
+        background-color: #5a6268;
+        color: white;
+        text-decoration: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .upload-container {
+            margin: 10px;
+            padding: 15px;
+        }
+
+        .multi-filter {
+            grid-template-columns: 1fr;
+        }
+
+        .isbn-input-group {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fetch-isbn-button {
+            width: 100%;
+        }
+
+        .book-thumbnail {
+            float: none;
+            display: block;
+            margin: 10px auto;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .upload-form h1 {
+            font-size: 1.5em;
+        }
+
+        .submit-button {
+            padding: 12px 20px;
+            font-size: 16px;
+        }
+    }
+
+    /* Additional styles for elements with inline styles */
+    .edit-new-location-container {
+        display: none;
+        margin-top: 10px;
+    }
+
+    .book-cover-thumbnail {
+        max-width: 100px;
+        max-height: 150px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+    }
+    
+    /* Standardized button styles across the application */
+    .import-book-button, .fetch-isbn-button, .add-new-btn, .popup-close-button, .nav-back-button,
+    .submit-button, button[type="submit"], button[type="button"] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-width: 120px;
+        height: 40px;
+        padding: 8px 16px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        border-radius: 5px;
+        cursor: pointer;
+        white-space: nowrap;
+        box-sizing: border-box;
+    }
+
+    .book-cover-caption {
+        font-size: 0.8em;
+        color: #666;
+        margin: 5px 0;
+    }
+
+    .remove-book-cover-button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 2px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8em;
+    }
+
+    .duplicate-image-preview {
+        max-width: 150px;
+        max-height: 150px;
+        object-fit: cover;
+    }
+
+    .remove-duplicate-image-button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-left: 10px;
+    }
+</style>
+
+<div class="upload-container">
+    <a href="{{ url_for(back_target|default('home_admin')) }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
+    
+    <div class="upload-form">
+        <h1>{{ page_title|default('Artikel hochladen') }}</h1>
+        <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <input type="hidden" name="upload_mode" value="{{ upload_mode|default('item') }}">
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="ort">Ort:</label>
+                <select id="ort" name="ort" required>
+                    <option value="">-- Bitte Ort auswählen --</option>
+                    <!-- Options will be loaded by JavaScript -->
+                </select>
+                <button type="button" class="add-new-btn" id="add-new-location-btn">
+                    Neuen Ort hinzufügen
+                </button>
+                <div id="new-location-container" class="edit-new-location-container">
+                    <input type="text" id="new-location-input" placeholder="Neuen Ort eingeben">
+                    <button type="button" onclick="addNewLocation()">Hinzufügen</button>
+                    <button type="button" onclick="cancelAddLocation()">Abbrechen</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="beschreibung">Beschreibung:</label>
+                <textarea id="beschreibung" name="beschreibung" required></textarea>
+            </div>
+            
+            {% if show_library_features %}
+            <!-- Library Mode: Single Customizable Filter -->
+            <div class="filter-inputs">
+                <h3>Kategorie/Typ (customisierbar):</h3>
+                <div class="form-group">
+                    <input type="text" name="library_category" id="library_category" placeholder="z.B. Belletristik, Sachbücher, Nachschlagewerke, etc.">
+                    <small style="display:block; color:#666;">Geben Sie hier eine beliebige Kategorie ein zur freien Klassifizierung.</small>
+                </div>
+            </div>
+            {% else %}
+            <!-- Normal Item Mode: Standard Filters -->
+            <div class="filter-inputs">
+                <h3>Unterrichtsfach:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter1-1">Wert 1:</label>
+                        <select id="filter1-1" name="filter" class="filter-dropdown-select" required>
+                            <option value="">-- Bitte auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-2">Wert 2:</label>
+                        <select id="filter1-2" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-3">Wert 3:</label>
+                        <select id="filter1-3" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-4">Wert 4:</label>
+                        <select id="filter1-4" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Jahrgangsstufe:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter2-1">Wert 1:</label>
+                        <select id="filter2-1" name="filter2" class="filter-dropdown-select" required>
+                            <option value="">-- Bitte auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-2">Wert 2:</label>
+                        <select id="filter2-2" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-3">Wert 3:</label>
+                        <select id="filter2-3" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-4">Wert 4:</label>
+                        <select id="filter2-4" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Thema:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter3-1">Wert 1:</label>
+                        <input type="text" id="filter3-1" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-2">Wert 2:</label>
+                        <input type="text" id="filter3-2" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-3">Wert 3:</label>
+                        <input type="text" id="filter3-3" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-4">Wert 4:</label>
+                        <input type="text" id="filter3-4" name="filter3">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="form-group">
+                <label for="anschaffungsjahr">Anschaffungsjahr</label>
+                <input type="date" id="anschaffungsjahr" name="anschaffungsjahr">
+            </div>
+            <div class="form-group">
+                <label for="anschaffungskosten">Anschaffungskosten</label>
+                <input id="anschaffungskosten" name="anschaffungskosten">
+            </div>
+            <div class="form-group">
+                <label for="code_4">Code</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <input id="code_4" name="code_4">
+                    <button type="button" id="scan-code4-btn" class="fetch-isbn-button">Barcode scannen</button>
+                </div>
+                <small style="display:block; color:#666;">Einzelcode manuell setzen oder per Scanner erfassen.</small>
+                <div id="code4-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
+                <small id="code4-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
+            </div>
+            <div class="form-group">
+                <label for="item_count">Anzahl dieser Sorte</label>
+                <input type="number" id="item_count" name="item_count" min="1" max="100" value="1">
+                <small style="display:block; color:#666;">Es werden eigene Items erstellt, aber in der Übersicht als ein Artikel gebündelt angezeigt.</small>
+            </div>
+            <div class="form-group">
+                <label for="individual_codes">Einzelcodes (optional, je Zeile ein Code)</label>
+                <textarea id="individual_codes" name="individual_codes" rows="4" placeholder="z.B.\nABC-001\nABC-002"></textarea>
+                <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Scanner-Eingaben werden bei Mehrfachanzahl automatisch hier angefügt.</small>
+            </div>
+            <!-- Image upload (hidden for library mode) -->
+            <div class="form-group" {% if show_library_features %}style="display:none;"{% endif %}>
+                <label for="images">Bilder/Videos:</label>
+                <input type="file" id="images" name="images" accept=".jpg, .jpeg, .png, .gif, .mp4, .mov, .avi, .mkv, .webm, .flv, .m4v, .3gp" multiple>
+                <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>
+                <!-- Add image preview area -->
+                <div class="image-preview-container" id="image-preview-container"></div>
+            </div>
+            
+            <!-- ISBN fields (library page only) -->
+            {% if show_library_features %}
+            <div class="form-group">
+                <label for="isbn">ISBN/Barcode (für Bild-Suche):</label>
+                <div class="isbn-input-group">
+                    <input type="text" id="isbn" name="isbn" placeholder="ISBN oder Barcode eingeben..." required>
+                    <button type="button" id="scan-isbn-btn" class="fetch-isbn-button">Barcode scannen</button>
+                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Bild abrufen</button>
+                </div>
+                <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
+                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;">Scannen oder manuell eingeben. Das Buchcover wird automatisch heruntergeladen.</small>
+                <div id="book-info-container" class="book-info-container"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="reservierbar" style="display:inline-block; width:auto; margin-right:10px;">Reservierbar:</label>
+                <input type="checkbox" id="reservierbar" name="reservierbar" style="width:auto;">
+                <small style="display:block; color:#666;">Wenn deaktiviert, kann der Artikel nicht im Voraus reserviert werden (Sofort-Ausleihe bleibt möglich).</small>
+            </div>
+            {% endif %}
+
+            <button type="submit" class="submit-button">{{ 'Bücher hochladen' if show_library_features else 'Artikel hochladen' }}</button>
+        </form>
+    </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script>
+    const libraryModuleEnabled = {{ 'true' if library_module_enabled else 'false' }};
+
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
+    // Global variable to store fetched book data
+    let currentBookData = null;
+    let code4ScannerInstance = null;
+    let code4ScannerRunning = false;
+    let code4LastScanned = '';
+    let code4LastScannedAt = 0;
+    let isbnScannerInstance = null;
+    let isbnScannerRunning = false;
+
+    function setCode4ScanStatus(message, isError = false) {
+        const statusEl = document.getElementById('code4-scan-status');
+        if (!statusEl) return;
+        statusEl.textContent = message || '';
+        statusEl.style.color = isError ? '#b00020' : '#666';
+    }
+
+    function setIsbnScanStatus(message, isError = false) {
+        const statusEl = document.getElementById('isbn-scan-status');
+        if (!statusEl) return;
+        statusEl.textContent = message || '';
+        statusEl.style.color = isError ? '#b00020' : '#666';
+    }
+
+    function normalizeIsbnClient(value) {
+        const normalized = String(value || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+        if (normalized.length === 13 && /^\d{13}$/.test(normalized)) {
+            return normalized;
+        }
+        if (normalized.length === 10 && /^\d{9}[\dX]$/.test(normalized)) {
+            return normalized;
+        }
+        return '';
+    }
+
+    function appendIndividualCode(scannedCode) {
+        const textarea = document.getElementById('individual_codes');
+        const itemCountInput = document.getElementById('item_count');
+        if (!textarea || !itemCountInput) return false;
+
+        const itemCount = Math.max(1, parseInt(itemCountInput.value || '1', 10));
+        if (itemCount <= 1) return false;
+
+        const existing = textarea.value
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        if (existing.includes(scannedCode)) {
+            setCode4ScanStatus(`Code ${scannedCode} ist bereits eingetragen.`, true);
+            return true;
+        }
+
+        if (existing.length >= itemCount) {
+            setCode4ScanStatus('Es sind bereits genug Einzelcodes für die gewählte Anzahl eingetragen.', true);
+            return true;
+        }
+
+        existing.push(scannedCode);
+        textarea.value = existing.join('\n');
+        setCode4ScanStatus(`Code ${scannedCode} hinzugefügt (${existing.length}/${itemCount}).`);
+        return true;
+    }
+
+    function startCode4Scanner() {
+        const scannerBox = document.getElementById('code4-scanner');
+        const scanButton = document.getElementById('scan-code4-btn');
+        const codeField = document.getElementById('code_4');
+        if (!scannerBox || !scanButton || !codeField) return;
+
+        // Stop ISBN scanner if currently running to avoid camera conflicts.
+        if (isbnScannerRunning && isbnScannerInstance) {
+            isbnScannerInstance.clear().catch(() => {});
+            const isbnScannerBox = document.getElementById('isbn-scanner');
+            const isbnScanButton = document.getElementById('scan-isbn-btn');
+            if (isbnScannerBox) isbnScannerBox.style.display = 'none';
+            if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+        }
+
+        if (code4ScannerRunning && code4ScannerInstance) {
+            code4ScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'Barcode scannen';
+            code4ScannerRunning = false;
+            setCode4ScanStatus('Scanner gestoppt.');
+            return;
+        }
+
+        scannerBox.style.display = 'block';
+        scanButton.textContent = 'Scanner stoppen';
+        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { 
+            fps: 10, 
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        code4ScannerRunning = true;
+        setCode4ScanStatus('Scanner läuft. Mehrere Codes nacheinander möglich.');
+
+        code4ScannerInstance.render((decodedText) => {
+            const scannedCode = String(decodedText || '').trim();
+            if (!scannedCode) return;
+
+            const now = Date.now();
+            if (scannedCode === code4LastScanned && (now - code4LastScannedAt) < 1500) {
+                return;
+            }
+            code4LastScanned = scannedCode;
+            code4LastScannedAt = now;
+
+            const usedForIndividual = appendIndividualCode(scannedCode);
+            if (!usedForIndividual) {
+                codeField.value = scannedCode;
+                validateCodeField(codeField);
+                setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
+            }
+        }, () => {});
+    }
+
+    function startIsbnScanner() {
+        if (!libraryModuleEnabled) {
+            setIsbnScanStatus('Bibliotheks-Modul ist deaktiviert.', true);
+            return;
+        }
+        const scannerBox = document.getElementById('isbn-scanner');
+        const scanButton = document.getElementById('scan-isbn-btn');
+        const isbnField = document.getElementById('isbn');
+        if (!scannerBox || !scanButton || !isbnField) return;
+
+        // Stop Code_4 scanner if currently running to avoid camera conflicts.
+        if (code4ScannerRunning && code4ScannerInstance) {
+            code4ScannerInstance.clear().catch(() => {});
+            const codeScannerBox = document.getElementById('code4-scanner');
+            const codeScanButton = document.getElementById('scan-code4-btn');
+            if (codeScannerBox) codeScannerBox.style.display = 'none';
+            if (codeScanButton) codeScanButton.textContent = 'Barcode scannen';
+            code4ScannerRunning = false;
+            setCode4ScanStatus('Scanner gestoppt.');
+        }
+
+        if (isbnScannerRunning && isbnScannerInstance) {
+            isbnScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+            setIsbnScanStatus('Scanner gestoppt.');
+            return;
+        }
+
+        scannerBox.style.display = 'block';
+        scanButton.textContent = 'Scanner stoppen';
+        isbnScannerInstance = new Html5QrcodeScanner('isbn-scanner', {
+            fps: 10,
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        isbnScannerRunning = true;
+        setIsbnScanStatus('Scanner läuft. Bitte ISBN-Code erfassen.');
+
+        isbnScannerInstance.render((decodedText) => {
+            const scannedCode = String(decodedText || '').trim();
+            if (!scannedCode) return;
+
+            const normalizedIsbn = normalizeIsbnClient(scannedCode);
+            if (!normalizedIsbn) {
+                setIsbnScanStatus('Kein gültiger ISBN-Barcode erkannt. Bitte erneut scannen.', true);
+                return;
+            }
+
+            isbnField.value = normalizedIsbn;
+            setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
+
+            isbnScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+
+            // Automatically load book metadata after scan.
+            fetchBookInfo('upload');
+        }, () => {});
+    }
+
+    // Load predefined filter values for dropdowns
+    function loadPredefinedFilterValues(filterNumber) {
+        fetch(`/get_predefined_filter_values/${filterNumber}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const filterSelects = [
+                    document.getElementById(`filter${filterNumber}-1`),
+                    document.getElementById(`filter${filterNumber}-2`),
+                    document.getElementById(`filter${filterNumber}-3`),
+                    document.getElementById(`filter${filterNumber}-4`)
+                ];
+                
+                filterSelects.forEach(select => {
+                    if (select) {
+                        // Clear existing options except the first one
+                        while (select.children.length > 1) {
+                            select.removeChild(select.lastChild);
+                        }
+                        
+                        // Add new options - data.values contains the array
+                        data.values.forEach(value => {
+                            const option = document.createElement('option');
+                            option.value = value;
+                            option.textContent = value;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error(`Error loading predefined filter ${filterNumber} values:`, error);
+            });
+    }
+
+    // Load location options
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('ort');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        ortSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
+    // Function to add new location
+    function addNewLocation() {
+        const newLocationInput = document.getElementById('new-location-input');
+        const newLocation = newLocationInput.value.trim();
+        
+        if (!newLocation) {
+            alert('Bitte geben Sie einen Ort ein.');
+            return;
+        }
+        
+        // Add to dropdown
+        const ortSelect = document.getElementById('ort');
+        const option = document.createElement('option');
+        option.value = newLocation;
+        option.textContent = newLocation;
+        option.selected = true;
+        ortSelect.appendChild(option);
+        
+        // Hide the input container
+        document.getElementById('new-location-container').style.display = 'none';
+        newLocationInput.value = '';
+    }
+
+    // Function to cancel adding new location
+    function cancelAddLocation() {
+        document.getElementById('new-location-container').style.display = 'none';
+        document.getElementById('new-location-input').value = '';
+    }
+
+    // Function to fetch book information from ISBN
+    function fetchBookInfo(formType) {
+        if (!libraryModuleEnabled) {
+            alert('Bibliotheks-Modul ist deaktiviert.');
+            return;
+        }
+        const isbnField = document.getElementById('isbn');
+        const infoContainer = document.getElementById('book-info-container');
+        
+        if (!isbnField || !infoContainer) {
+            alert('Fehler: Erforderliche Formularelemente nicht gefunden.');
+            return;
+        }
+        
+        const isbn = normalizeIsbnClient(isbnField.value);
+        
+        if (!isbn) {
+            alert('Bitte eine gültige ISBN-10 oder ISBN-13 eingeben.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Buch nicht gefunden. Überprüfen Sie die ISBN.');
+                    } else {
+                        throw new Error('Fehler beim Abrufen der Buchinformationen');
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Store book data globally for import functionality
+                currentBookData = data;
+                
+                // Display book information with import button
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.price ? `<p><strong>Preis:</strong> ${data.price}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                        <button type="button" class="import-book-button" onclick="importBookInfo('${formType}')">
+                            Buchdaten in Formular übernehmen
+                        </button>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                infoContainer.innerHTML = `<div class="error-message">${error.message}</div>`;
+                currentBookData = null;
+            });
+    }
+
+    // Function to import book information into form
+    function importBookInfo(formType) {
+        if (!currentBookData) {
+            alert('Keine Buchdaten verfügbar zum Import.');
+            return;
+        }
+        
+        // Get form fields
+        const nameField = document.getElementById('name');
+        const descriptionField = document.getElementById('beschreibung');
+        
+        if (!nameField || !descriptionField) {
+            alert('Fehler: Formularfelder nicht gefunden.');
+            return;
+        }
+        
+        // Generate book title
+        let bookTitle = currentBookData.title || '';
+        if (currentBookData.authors && currentBookData.authors !== 'Unknown Author') {
+            bookTitle += ` - ${currentBookData.authors}`;
+        }
+        
+        // Generate description
+        let description = '';
+        if (currentBookData.description && currentBookData.description !== 'No description available') {
+            description = currentBookData.description;
+        } else {
+            // Fallback description with available info
+            description = `Buch: ${currentBookData.title}`;
+            if (currentBookData.authors && currentBookData.authors !== 'Unknown Author') {
+                description += `\nAutor(en): ${currentBookData.authors}`;
+            }
+            if (currentBookData.publisher && currentBookData.publisher !== 'Unknown Publisher') {
+                description += `\nVerlag: ${currentBookData.publisher}`;
+            }
+            if (currentBookData.publishedDate && currentBookData.publishedDate !== 'Unknown Date') {
+                description += `\nErscheinungsdatum: ${currentBookData.publishedDate}`;
+            }
+            if (currentBookData.pageCount && currentBookData.pageCount !== 'Unknown') {
+                description += `\nSeiten: ${currentBookData.pageCount}`;
+            }
+        }
+        
+        // Import the data into form fields
+        nameField.value = bookTitle;
+        descriptionField.value = description;
+        
+        // Download and import book cover image if available
+        if (currentBookData.thumbnail) {
+            downloadBookCover(currentBookData.thumbnail);
+        }
+        
+        // Show success message
+        const infoContainer = document.getElementById('book-info-container');
+        const successMessage = document.createElement('div');
+        successMessage.className = 'import-success-message';
+        successMessage.textContent = 'Buchdaten erfolgreich in das Formular übernommen!';
+        infoContainer.appendChild(successMessage);
+        
+        // Remove success message after 3 seconds
+        setTimeout(() => {
+            if (successMessage.parentNode) {
+                successMessage.parentNode.removeChild(successMessage);
+            }
+        }, 3000);
+    }
+
+    // Function to download book cover image
+    function downloadBookCover(imageUrl) {
+        if (!imageUrl) {
+            console.log('No image URL provided');
+            return;
+        }
+        
+        // Show loading indicator for image download
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        if (imagePreviewContainer) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'image-loading';
+            loadingDiv.innerHTML = '<div class="loading-spinner">Buchcover wird heruntergeladen...</div>';
+            imagePreviewContainer.appendChild(loadingDiv);
+        }
+        
+        // Download the image via backend
+        fetch('/download_book_cover', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: imageUrl })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove loading indicator
+            const loadingDiv = imagePreviewContainer?.querySelector('.image-loading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            
+            if (data.success) {
+                // Create a preview of the downloaded image
+                const imagePreview = document.createElement('div');
+                imagePreview.className = 'book-cover-preview';
+                imagePreview.innerHTML = `
+                    <div class="preview-item">
+                        <img src="{{ url_for('uploaded_file', filename='') }}${data.filename}" 
+                             alt="Buchcover" class="book-cover-thumbnail">
+                        <p class="book-cover-caption">Buchcover automatisch heruntergeladen</p>
+                        <input type="hidden" name="book_cover_image" value="${data.filename}">
+                        <button type="button" onclick="removeBookCover(this)" 
+                                class="remove-book-cover-button">
+                            Entfernen
+                        </button>
+                    </div>
+                `;
+                
+                if (imagePreviewContainer) {
+                    imagePreviewContainer.appendChild(imagePreview);
+                }
+                
+                console.log('Book cover downloaded successfully:', data.filename);
+            } else {
+                console.error('Failed to download book cover:', data.error);
+                // Show error message to user
+                if (imagePreviewContainer) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-message';
+                    errorDiv.textContent = 'Fehler beim Herunterladen des Buchcovers: ' + data.error;
+                    errorDiv.style.fontSize = '0.8em';
+                    errorDiv.style.padding = '5px';
+                    errorDiv.style.marginTop = '5px';
+                    imagePreviewContainer.appendChild(errorDiv);
+                    
+                    // Remove error message after 5 seconds
+                    setTimeout(() => errorDiv.remove(), 5000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error downloading book cover:', error);
+            // Remove loading indicator
+            const loadingDiv = imagePreviewContainer?.querySelector('.image-loading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            
+            // Show error message
+            if (imagePreviewContainer) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = 'Netzwerkfehler beim Herunterladen des Buchcovers';
+                errorDiv.style.fontSize = '0.8em';
+                errorDiv.style.padding = '5px';
+                errorDiv.style.marginTop = '5px';
+                imagePreviewContainer.appendChild(errorDiv);
+                
+                // Remove error message after 5 seconds
+                setTimeout(() => errorDiv.remove(), 5000);
+            }
+        });
+    }
+    
+    // Function to remove downloaded book cover
+    function removeBookCover(button) {
+        const previewItem = button.closest('.preview-item');
+        if (previewItem) {
+            previewItem.remove();
+        }
+    }
+
+    // Code validation functions
+    function checkCodeUnique(code, excludeId, callback) {
+        if (!code || code.trim() === '') {
+            callback(true);
+            return;
+        }
+        
+        const url = excludeId ? `/check_code_unique/${encodeURIComponent(code)}?exclude_id=${excludeId}` : `/check_code_unique/${encodeURIComponent(code)}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                callback(data.is_unique);
+            })
+            .catch(error => {
+                console.error('Error checking code uniqueness:', error);
+                callback(true); // Assume unique if there's an error
+            });
+    }
+
+    function showDuplicateCodeWarning(code) {
+        // Remove any existing popup
+        const existingPopup = document.querySelector('.popup-overlay');
+        if (existingPopup) {
+            existingPopup.remove();
+        }
+        
+        // Create popup overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'popup-overlay';
+        
+        // Create popup content
+        overlay.innerHTML = `
+            <div class="duplicate-code-popup">
+                <button class="popup-close-x" onclick="this.closest('.popup-overlay').remove()">×</button>
+                <div class="popup-content">
+                    <h3>Code bereits vorhanden</h3>
+                    <p>Der Code <span class="duplicate-code">${code}</span> wird bereits von einem anderen Artikel verwendet.</p>
+                    <p>Bitte wählen Sie einen anderen Code oder lassen Sie das Feld leer, um automatisch einen Code zu generieren.</p>
+                </div>
+                <button class="popup-close-button" onclick="this.closest('.popup-overlay').remove()">Verstanden</button>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.remove();
+            }
+        }, 10000);
+    }
+
+    function validateCodeField(input, excludeId = null) {
+        const code = input.value.trim();
+        
+        if (!code) {
+            // Clear any existing validation styling
+            input.classList.remove('code-invalid', 'code-valid');
+            return;
+        }
+        
+        // Show loading state
+        input.classList.add('code-checking');
+        
+        checkCodeUnique(code, excludeId, (isUnique) => {
+            input.classList.remove('code-checking');
+            
+            if (isUnique) {
+                input.classList.remove('code-invalid');
+                input.classList.add('code-valid');
+            } else {
+                input.classList.remove('code-valid');
+                input.classList.add('code-invalid');
+                showDuplicateCodeWarning(code);
+            }
+        });
+    }
+
+    // Image preview functionality
+    function setupImagePreview() {
+        const imageInput = document.getElementById('images');
+        const previewContainer = document.getElementById('image-preview-container');
+        
+        if (imageInput && previewContainer) {
+            imageInput.addEventListener('change', function(e) {
+                previewContainer.innerHTML = '';
+                
+                const files = e.target.files;
+                
+                // Validate file types before preview
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
+                                    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 
+                                    'video/webm', 'video/x-flv', 'video/mp4', 'video/3gpp'];
+                let hasInvalidFile = false;
+                
+                for (let i = 0; i < files.length; i++) {
+                    if (!allowedTypes.includes(files[i].type)) {
+                        hasInvalidFile = true;
+                        // Clear the file input to prevent submission
+                        imageInput.value = '';
+                        previewContainer.innerHTML = '<div class="error-message">Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>';
+                        return; // Stop processing
+                    }
+                }
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const preview = document.createElement('div');
+                            preview.className = 'image-preview';
+                            preview.innerHTML = `
+                                <img src="${e.target.result}" alt="Preview">
+                                <button type="button" class="remove-image" onclick="removeImagePreview(this, ${i})">×</button>
+                            `;
+                            previewContainer.appendChild(preview);
+                        };
+                        reader.readAsDataURL(file);
+                    } else if (file.type.startsWith('video/')) {
+                        const preview = document.createElement('div');
+                        preview.className = 'image-preview video-preview';
+                        preview.innerHTML = `
+                            <div class="video-placeholder">
+                                <div class="video-icon">🎥</div>
+                                <div class="video-name">${file.name}</div>
+                            </div>
+                            <button type="button" class="remove-image" onclick="removeImagePreview(this, ${i})">×</button>
+                        `;
+                        previewContainer.appendChild(preview);
+                    }
+                }
+            });
+        }
+    }
+
+    function removeImagePreview(button, index) {
+        const preview = button.closest('.image-preview');
+        if (preview) {
+            preview.remove();
+        }
+        
+        // Remove the file from the input
+        const imageInput = document.getElementById('images');
+        if (imageInput) {
+            const dt = new DataTransfer();
+            const files = imageInput.files;
+            
+            for (let i = 0; i < files.length; i++) {
+                if (i !== index) {
+                    dt.items.add(files[i]);
+                }
+            }
+            
+            imageInput.files = dt.files;
+        }
+    }
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load predefined filter values for dropdowns
+        loadPredefinedFilterValues(1);
+        loadPredefinedFilterValues(2);
+        
+        // Load location options
+        loadLocationOptions();
+        
+        // Setup image preview
+        setupImagePreview();
+        
+        // Setup code validation
+        const codeField = document.getElementById('code_4');
+        if (codeField) {
+            codeField.addEventListener('blur', function() {
+                validateCodeField(this);
+            });
+        }
+
+        const scanCodeBtn = document.getElementById('scan-code4-btn');
+        if (scanCodeBtn) {
+            scanCodeBtn.addEventListener('click', startCode4Scanner);
+        }
+
+        const scanIsbnBtn = document.getElementById('scan-isbn-btn');
+        if (scanIsbnBtn) {
+            scanIsbnBtn.addEventListener('click', startIsbnScanner);
+        }
+        
+        // Setup add new location button
+        const addLocationBtn = document.getElementById('add-new-location-btn');
+        if (addLocationBtn) {
+            addLocationBtn.addEventListener('click', function() {
+                const container = document.getElementById('new-location-container');
+                if (container) {
+                    container.style.display = container.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+        }
+        
+        // Handle duplication data if available (from sessionStorage or server)
+        if (typeof prefillFormWithDuplicateData === 'function') {
+            setTimeout(() => {
+                prefillFormWithDuplicateData();
+            }, 500); // Wait for all dropdowns to load
+        }
+    });
+
+    // Initialize duplication data - handle both server-side and sessionStorage data
+    let duplicateData = null;
+    
+    // First check if serverDuplicateData is defined by the script above
+    if (typeof serverDuplicateData !== 'undefined' && serverDuplicateData) {
+        console.log("Using server-provided duplicateData:", serverDuplicateData);
+        duplicateData = serverDuplicateData;
+        
+        // Ensure images is properly handled as an array
+        if (duplicateData.images) {
+            if (typeof duplicateData.images === 'string') {
+                try {
+                    duplicateData.images = JSON.parse(duplicateData.images);
+                    console.log("Parsed images from string:", duplicateData.images);
+                } catch (e) {
+                    console.warn("Failed to parse images string, using as single item:", duplicateData.images);
+                    duplicateData.images = [duplicateData.images];
+                }
+            }
+            console.log(`Final duplicateData.images (${Array.isArray(duplicateData.images) ? 'array' : typeof duplicateData.images}):`, duplicateData.images);
+        }
+    }
+    
+    // Then check for sessionStorage data (takes priority)
+    const sessionData = sessionStorage.getItem('duplicateItemData');
+    if (sessionData) {
+        try {
+            duplicateData = JSON.parse(sessionData);
+            sessionStorage.removeItem('duplicateItemData'); // Clean up
+            console.log("Session storage duplicate data:", duplicateData);
+        } catch (e) {
+            console.error('Error parsing session duplicate data:', e);
+        }
+    }
+    
+    // Function to prefill form with duplicate data
+    function prefillFormWithDuplicateData() {
+        if (!duplicateData) return;
+        
+        // Fill basic fields
+        const nameField = document.getElementById('name');
+        if (nameField && duplicateData.name) nameField.value = duplicateData.name;
+        
+        const descField = document.getElementById('beschreibung');
+        if (descField && duplicateData.description) descField.value = duplicateData.description;
+        
+        const yearField = document.getElementById('anschaffungsjahr');
+        if (yearField && duplicateData.year) yearField.value = duplicateData.year;
+        
+        const costField = document.getElementById('anschaffungskosten');
+        if (costField && duplicateData.cost) costField.value = duplicateData.cost;
+        
+        // Fill location dropdown
+        const locationField = document.getElementById('ort');
+        if (locationField && duplicateData.location) {
+            // Wait for locations to load, then set value
+            setTimeout(() => {
+                locationField.value = duplicateData.location;
+            }, 100);
+        }
+        
+        // Fill filter arrays - handle up to 4 values per filter type
+        setTimeout(() => {
+            // Filter 1 (Unterrichtsfach)
+            if (duplicateData.filter1 && Array.isArray(duplicateData.filter1)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter1.length); j++) {
+                    const filterField = document.getElementById(`filter1-${j}`);
+                    if (filterField && duplicateData.filter1[j-1]) {
+                        filterField.value = duplicateData.filter1[j-1];
+                    }
+                }
+            }
+            
+            // Filter 2 (Jahrgangsstufe)
+            if (duplicateData.filter2 && Array.isArray(duplicateData.filter2)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter2.length); j++) {
+                    const filterField = document.getElementById(`filter2-${j}`);
+                    if (filterField && duplicateData.filter2[j-1]) {
+                        filterField.value = duplicateData.filter2[j-1];
+                    }
+                }
+            }
+            
+            // Filter 3 (Thema) - text inputs
+            if (duplicateData.filter3 && Array.isArray(duplicateData.filter3)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter3.length); j++) {
+                    const filterField = document.getElementById(`filter3-${j}`);
+                    if (filterField && duplicateData.filter3[j-1]) {
+                        filterField.value = duplicateData.filter3[j-1];
+                    }
+                }
+            }
+        }, 200); // Wait for filter options to load
+        
+        // Handle images - add hidden inputs for duplicate images
+        if (duplicateData.images && duplicateData.images.length > 0) {
+            console.log("Duplicate images data:", duplicateData.images);
+            const form = document.querySelector('form[action*="upload_item"]');
+            if (form) {
+                // Add hidden field to indicate duplication
+                const isDuplicatingField = document.createElement('input');
+                isDuplicatingField.type = 'hidden';
+                isDuplicatingField.name = 'is_duplicating';
+                isDuplicatingField.value = 'true';
+                form.appendChild(isDuplicatingField);
+                
+                // Add each image as a duplicate image
+                const images = duplicateData.images || [];
+                console.log(`Adding ${images.length} images as hidden fields`);
+                
+                if (Array.isArray(images)) {
+                    images.forEach((imageName, index) => {
+                        if (imageName) {
+                            console.log(`Adding duplicate image ${index}: ${imageName}`);
+                            const imageField = document.createElement('input');
+                            imageField.type = 'hidden';
+                            imageField.name = 'duplicate_images';
+                            imageField.value = imageName;
+                            form.appendChild(imageField);
+                        }
+                    });
+                } else {
+                    console.warn("Images is not an array:", images);
+                    // Try to handle as single item if it's a string
+                    if (typeof images === 'string' && images) {
+                        console.log("Adding single image:", images);
+                        const imageField = document.createElement('input');
+                        imageField.type = 'hidden';
+                        imageField.name = 'duplicate_images';
+                        imageField.value = images;
+                        form.appendChild(imageField);
+                    }
+                }
+                
+                // Show image preview
+                showDuplicateImagePreview(duplicateData.images);
+            }
+        }
+    }
+    
+    // Function to show preview of duplicate images
+    function showDuplicateImagePreview(images) {
+        const previewContainer = document.getElementById('image-preview-container');
+        if (!previewContainer) return;
+        
+        console.log("showDuplicateImagePreview called with:", images);
+        
+        // Make sure images is treated as an array
+        if (!Array.isArray(images)) {
+            if (typeof images === 'string') {
+                // Try to parse if it's a JSON string
+                try {
+                    images = JSON.parse(images);
+                } catch (e) {
+                    // If parsing fails, wrap the single string in an array
+                    images = [images];
+                }
+            } else {
+                console.error("Invalid images data:", images);
+                return;
+            }
+        }
+        
+        previewContainer.innerHTML = '';
+        console.log(`Processing ${images.length} images for preview`);
+        
+        images.forEach((imageName, index) => {
+            console.log(`Processing image ${index}:`, imageName);
+            const preview = document.createElement('div');
+            preview.className = 'image-preview-item';
+            preview.innerHTML = `
+                <img src="/uploads/${imageName}" alt="Duplicate Image ${index + 1}" class="duplicate-image-preview">
+                <div class="image-controls">
+                    <span>Von Original übernommen</span>
+                    <button type="button" onclick="removeDuplicateImage('${imageName}', this)" class="remove-duplicate-image-button">Entfernen</button>
+                </div>
+            `;
+            previewContainer.appendChild(preview);
+        });
+    }
+    
+    // Function to remove a duplicate image
+    function removeDuplicateImage(imageName, button) {
+        // Remove the hidden input
+        const hiddenInputs = document.querySelectorAll('input[name="duplicate_images"]');
+        hiddenInputs.forEach(input => {
+            if (input.value === imageName) {
+                input.remove();
+            }
+        });
+        
+        // Remove the preview
+        const previewItem = button.closest('.image-preview-item');
+        if (previewItem) {
+            previewItem.remove();
+        }
+    }
+</script>
+{% endblock %}

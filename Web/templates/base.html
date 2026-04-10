@@ -1,0 +1,915 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+<!DOCTYPE html>
+<html lang="en" data-module="inventory">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>{% block title %}Inventarsystem{% endblock %}</title>
+    {% block head %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/planned_appointments.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        /* ===== MODULE DETECTION & SETUP ===== */
+        :root {
+            --module-primary-color: #2c3e50;
+            --module-primary-light: #34495e;
+            --module-accent-color: #3498db;
+            --module-accent-light: rgba(52, 152, 219, 0.1);
+            --module-brand-icon: "📦";
+        }
+
+        html[data-module="library"] {
+            --module-primary-color: #6c4e71;
+            --module-primary-light: #7d5a8a;
+            --module-accent-color: #9b59b6;
+            --module-accent-light: rgba(155, 89, 182, 0.1);
+            --module-brand-icon: "📚";
+        }
+
+        /* Global styles */
+        body {
+            font-family: "Manrope", "Segoe UI", "Noto Sans", sans-serif;
+            background:
+                radial-gradient(1200px 500px at 10% -10%, rgba(86, 145, 200, 0.08), transparent 55%),
+                radial-gradient(900px 420px at 95% 0%, rgba(52, 98, 150, 0.09), transparent 52%),
+                linear-gradient(180deg, #f2f5f8, #e7edf4);
+            margin: 0;
+            padding: 0;
+            padding-bottom: 30px;
+            color: #1f2d3d;
+        }
+        
+        .container {
+            padding-top: 20px;
+        }
+        
+        /* Navigation styles */
+        .navbar {
+            box-shadow: 0 4px 14px rgba(2, 6, 23, 0.24);
+            background-color: var(--module-primary-color) !important;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.4rem;
+        }
+        
+        .navbar-brand::before {
+            content: attr(data-icon);
+            margin-right: 8px;
+        }
+
+        .navbar-nav .nav-link {
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.6rem 0.85rem;
+            border-radius: 8px;
+        }
+
+        .navbar-nav .nav-link:hover,
+        .navbar-nav .nav-link:focus {
+            background-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .nav-priority-link {
+            background: var(--module-accent-light);
+            border: 1px solid var(--module-accent-color);
+        }
+        
+        .admin-nav-section {
+            margin-left: auto;
+            display: flex;
+            gap: 15px;
+        }
+
+        .admin-nav-section .nav-item {
+            background-color: var(--module-accent-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .admin-nav-section .nav-item:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Admin dropdown styling */
+        .nav-item.dropdown .nav-link.dropdown-toggle {
+            color: #ffffff;
+            font-weight: 500;
+            position: relative;
+        }
+        
+        .nav-item.dropdown .nav-link.dropdown-toggle:hover {
+            color: #ffffff;
+        }
+        
+        /* Consistent spacing for admin nav items */
+        .navbar-nav .nav-item {
+            margin-right: 5px;
+        }
+
+        .navbar-nav {
+           align-items: center;
+        }
+       
+        .navbar-nav .nav-item:last-child {
+            margin-right: 0;
+        }
+        
+        /* Flash messages */
+        .flashes {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .flash {
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .flash.success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        
+        .flash.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        
+        .flash.info {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border-left: 5px solid #6c757d;
+        }
+        
+        /* Dropdown menus - consistent with system design */
+        .dropdown-menu {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 8px 0;
+            min-width: 200px;
+            margin-top: 5px;
+        }
+        
+        .dropdown-item {
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            color: #495057;
+            transition: all 0.2s ease;
+            border: none;
+            background: none;
+        }
+        
+        .dropdown-item:hover,
+        .dropdown-item:focus {
+            background-color: #f8f9fa;
+            color: #007bff;
+            transform: translateX(2px);
+        }
+        
+        /* Navigation dropdown specific styles */
+        .nav-item.dropdown .dropdown-toggle {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        
+        .nav-item.dropdown .dropdown-toggle:hover {
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+        
+        .nav-item.dropdown .dropdown-toggle::after {
+            transition: transform 0.2s ease;
+        }
+        
+        .nav-item.dropdown.show .dropdown-toggle::after {
+            transform: rotate(180deg);
+        }
+        
+        /* User account dropdown specific styles */
+        .dropdown-menu-end {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .dropdown-divider {
+            margin: 6px 0;
+            border-color: #dee2e6;
+        }
+        
+        /* Version display */
+        .text-info {
+            opacity: 0.8;
+        }
+        
+        /* Mobile responsive navigation styles */
+        @media screen and (max-width: 768px) {
+            .navbar-nav .dropdown-menu {
+                border: none;
+                box-shadow: none;
+                background-color: rgba(52, 58, 64, 0.95);
+                margin-left: 15px;
+                margin-top: 5px;
+                border-radius: 6px;
+            }
+            
+            .navbar-nav .dropdown-item {
+                color: #ffffff;
+                padding: 12px 20px;
+                font-size: 0.9rem;
+            }
+            
+            .navbar-nav .dropdown-item:hover,
+            .navbar-nav .dropdown-item:focus {
+                background-color: rgba(255,255,255,0.1);
+                color: #ffffff;
+                transform: none;
+            }
+            
+            .nav-item.dropdown .dropdown-toggle {
+                padding: 8px 12px;
+            }
+            
+            /* Better touch targets for mobile */
+            .dropdown-toggle::after {
+                margin-left: 8px;
+            }
+            
+            /* Account dropdown stays light theme on mobile */
+            .dropdown-menu-end {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+            }
+            
+            .dropdown-menu-end .dropdown-item {
+                color: #495057;
+            }
+            
+            .dropdown-menu-end .dropdown-item:hover {
+                background-color: #f8f9fa;
+                color: #007bff;
+            }
+        }
+
+        /* Module Selector Bar Styles */
+        .module-selector-bar {
+            background: linear-gradient(90deg, var(--module-primary-color) 0%, var(--module-primary-light) 100%);
+            border-bottom: 3px solid var(--module-accent-color);
+            padding: 10px 16px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 12px;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .module-selector-bar .module-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 800;
+            margin-right: 8px;
+        }
+
+        .module-selector-bar .module-tabs {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex: 1;
+        }
+
+        .module-selector-bar .module-tab {
+            padding: 7px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .module-selector-bar .module-tab:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+            color: #fff;
+            transform: translateY(-2px);
+        }
+
+        .module-selector-bar .module-tab.active {
+            background: var(--module-accent-color);
+            border-color: rgba(255, 255, 255, 0.8);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .module-separator {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.25);
+            margin: 0 4px;
+        }
+
+        @media (max-width: 768px) {
+            .module-selector-bar {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+
+            .module-selector-bar .module-label {
+                display: none;
+            }
+
+            .module-selector-bar .module-tab {
+                padding: 5px 12px;
+                font-size: 0.9rem;
+            }
+
+            .module-separator {
+                height: 18px;
+            }
+        }
+    </style>
+    {% endblock %}
+</head>
+<body>
+    <!-- Module Selector Bar -->
+    {% if 'username' in session %}
+    <div class="module-selector-bar" id="moduleBar">
+        <span class="module-label">Module:</span>
+        <div class="module-tabs">
+            <a href="{{ url_for('home') }}" 
+               class="module-tab" 
+               id="inventoryModule" 
+               data-module="inventory">
+               📦 Inventarsystem
+            </a>
+            {% if library_module_enabled %}
+            <div class="module-separator"></div>
+            <a href="{{ url_for('library_view') }}" 
+               class="module-tab" 
+               id="libraryModule" 
+               data-module="library">
+               📚 Bibliothek
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        (function() {
+            // Detect current module based on URL and update data-module attribute
+            const currentPath = window.location.pathname;
+            const htmlTag = document.documentElement;
+            
+            // Detect module and pages
+            const isLibraryModule = currentPath.includes('/library') || 
+                                   currentPath.includes('/library_admin') ||
+                                   currentPath.includes('/library_loans') ||
+                                   currentPath.includes('/student_cards');
+            
+            const currentModule = isLibraryModule ? 'library' : 'inventory';
+            htmlTag.setAttribute('data-module', currentModule);
+            
+            // Update module selector tabs
+            const invModule = document.getElementById('inventoryModule');
+            const libModule = document.getElementById('libraryModule');
+
+            if (currentModule === 'library') {
+                if (libModule) libModule.classList.add('active');
+                if (invModule) invModule.classList.remove('active');
+            } else {
+                if (invModule) invModule.classList.add('active');
+                if (libModule) libModule.classList.remove('active');
+            }
+            
+            // Show/hide appropriate navbar based on current module
+            const invNavbar = document.getElementById('inventoryNavbar');
+            const libNavbar = document.getElementById('libraryNavbar');
+
+            if (currentModule === 'library') {
+                if (invNavbar) invNavbar.style.display = 'none';
+                if (libNavbar) libNavbar.style.display = '';
+            } else {
+                if (invNavbar) invNavbar.style.display = '';
+                if (libNavbar) libNavbar.style.display = 'none';
+            }
+        })();
+    </script>
+
+    <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryNavContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="inventoryNavContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="inventoryNavList">
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link" href="{{ url_for('home') }}">Artikel</a>
+                    </li>
+                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-priority-link" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown ms-lg-auto">
+                        <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            ⋯ Mehr
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
+                            {% if 'username' in session %}
+                            <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                            <li><h6 class="dropdown-header">Verwaltung</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">System</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item d-none" id="inv-nav-overflow-anchor" aria-hidden="true"></li>
+                </ul>
+                <div class="d-flex">
+                    {% if 'username' in session %}
+                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                        <div class="dropdown me-2">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                👤
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    {% if library_module_enabled %}
+    <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar" style="display: none;">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('library_view') }}" data-icon="📚">Bibliothek</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#libraryNavContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="libraryNavContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="libraryNavList">
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link" href="{{ url_for('library_view') }}">Medien</a>
+                    </li>
+                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-priority-link" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown ms-lg-auto">
+                        <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            ⋯ Mehr
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
+                            {% if 'username' in session %}
+                            <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Medien</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                            <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
+                            {% if student_cards_module_enabled %}
+                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">System</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item d-none" id="lib-nav-overflow-anchor" aria-hidden="true"></li>
+                </ul>
+                <div class="d-flex">
+                    {% if 'username' in session %}
+                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                        <div class="dropdown me-2">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                👤
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libUserMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <script>
+        (function() {
+            // Show/hide appropriate navbar based on current module
+            const currentPath = window.location.pathname;
+            const invNavbar = document.getElementById('inventoryNavbar');
+            const libNavbar = document.getElementById('libraryNavbar');
+
+            if (currentPath.includes('/library')) {
+                if (invNavbar) invNavbar.style.display = 'none';
+                if (libNavbar) libNavbar.style.display = '';
+            } else {
+                if (invNavbar) invNavbar.style.display = '';
+                if (libNavbar) libNavbar.style.display = 'none';
+            }
+        })();
+    </script>
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flashes">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+    <!-- Cookie consent banner -->
+    <style>
+        #cookie-banner { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(33,37,41,.98); color: #fff; padding: 14px 16px; display: none; z-index: 2000; box-shadow: 0 -2px 8px rgba(0,0,0,.25); }
+        #cookie-banner .cb-inner { max-width: 1100px; margin: 0 auto; display:flex; gap:12px; align-items:center; justify-content:space-between; }
+        #cookie-banner .cb-text { font-size: .95rem; line-height:1.35; margin-right: 12px; }
+        #cookie-banner .cb-actions { display:flex; gap:8px; flex-shrink:0; }
+        #cookie-banner .btn-accept { background:#28a745; border:2px solid #28a745; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; }
+        #cookie-banner .btn-decline { background:transparent; border:2px solid #ffc107; color:#ffc107; padding:6px 12px; border-radius:4px; cursor:pointer; }
+        #cookie-banner .btn-accept:hover { background:#218838; border-color:#218838; }
+        #cookie-banner .btn-decline:hover { background:#ffc107; color:#212529; }
+
+        #onboarding-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2100;
+            padding: 16px;
+        }
+
+        #onboarding-modal {
+            width: min(680px, 100%);
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #dbe3ee;
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
+            padding: 20px;
+        }
+
+        #onboarding-modal h3 {
+            margin: 0 0 8px;
+            color: #0f172a;
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+
+        #onboarding-modal p {
+            margin: 0;
+            color: #334155;
+            line-height: 1.45;
+        }
+
+        .onboarding-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .onboarding-actions .btn {
+            border-radius: 10px;
+        }
+
+        .dynamic-overflow-control .dropdown-menu {
+            min-width: 240px;
+            max-width: min(420px, 85vw);
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .dynamic-overflow-control .dropdown-header {
+            font-weight: 800;
+            color: var(--module-accent-color);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+    </style>
+    <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">
+        <div class="cb-inner">
+            <div class="cb-text">
+                Wir verwenden technisch notwendige Cookies, um Ihre Sitzung zu verwalten und die Anwendung bereitzustellen. Bitte akzeptieren Sie Cookies, um fortzufahren.
+            </div>
+            <div class="cb-actions">
+                <button class="btn-decline" id="cookie-decline">Ablehnen</button>
+                <button class="btn-accept" id="cookie-accept">Akzeptieren</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Tutorial Vorschlag">
+        <div id="onboarding-modal">
+            <h3>Wollen Sie eine Vorstellung des Produkts?</h3>
+            <p>
+                Wir empfehlen ein kurzes Tutorial (2-5 Minuten), damit Sie die Kernfunktionen anhand einer vorgefertigten Seite kennenlernen und gut auf den Schulalltagsbetrieb vorbereitet sind.
+            </p>
+            <div class="onboarding-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="onboarding-start">Ja, Tutorial starten</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="onboarding-later">Später erinnern</button>
+                <button type="button" class="btn btn-outline-dark btn-sm" id="onboarding-dismiss">Nicht mehr anzeigen</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            function getCookie(name){
+                const v = document.cookie.split(';').map(s=>s.trim());
+                for(const c of v){ if(c.startsWith(name+'=')) return decodeURIComponent(c.split('=')[1]); }
+                return null;
+            }
+            function setCookie(name, value, days){
+                const d = new Date(); d.setTime(d.getTime() + (days*24*60*60*1000));
+                document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+            }
+            function showBanner(){ var el = document.getElementById('cookie-banner'); if(el) el.style.display = 'block'; }
+            function hideBanner(){ var el = document.getElementById('cookie-banner'); if(el) el.style.display = 'none'; }
+
+            // If not decided yet, show banner and block app until decision
+            const consent = getCookie('cookie_consent');
+            if(!consent){
+                showBanner();
+                // Optionally blur content until consent
+                document.body.style.filter = 'none';
+            }
+            document.getElementById('cookie-accept')?.addEventListener('click', function(){
+                setCookie('cookie_consent','accepted',365);
+                hideBanner();
+            });
+            document.getElementById('cookie-decline')?.addEventListener('click', function(){
+                setCookie('cookie_consent','declined',365);
+                window.location.href = 'https://www.ecosia.org/';
+            });
+
+            const username = {{ (session['username'] if 'username' in session else '')|tojson }};
+            const isTutorialPage = window.location.pathname === {{ url_for('tutorial_page')|tojson }};
+            const isLoginPage = window.location.pathname === {{ url_for('login')|tojson }};
+            const onboardingKey = username ? ('inventarsystem_tutorial_prompt_v1_' + username) : null;
+            const onboardingOverlay = document.getElementById('onboarding-overlay');
+
+            function showOnboarding(){
+                if (onboardingOverlay) {
+                    onboardingOverlay.style.display = 'flex';
+                }
+            }
+
+            function hideOnboarding(){
+                if (onboardingOverlay) {
+                    onboardingOverlay.style.display = 'none';
+                }
+            }
+
+            if (onboardingKey && !isTutorialPage && !isLoginPage) {
+                const decision = localStorage.getItem(onboardingKey);
+                if (!decision || decision === 'later') {
+                    showOnboarding();
+                }
+            }
+
+            document.getElementById('onboarding-start')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'started');
+                }
+                window.location.href = {{ url_for('tutorial_page')|tojson }};
+            });
+
+            document.getElementById('onboarding-later')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'later');
+                }
+                hideOnboarding();
+            });
+
+            document.getElementById('onboarding-dismiss')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'dismissed');
+                }
+                hideOnboarding();
+            });
+
+            const navList = document.getElementById('inventoryNavList');
+            const navOverflowAnchor = document.getElementById('inv-nav-overflow-anchor');
+            const libraryNavList = document.getElementById('libraryNavList');
+            const libNavOverflowAnchor = document.getElementById('lib-nav-overflow-anchor');
+
+            function initNavbarOverflow(navList, navOverflowAnchor) {
+                if (!navList || !navOverflowAnchor) return;
+
+                function collectTopLevelNavSources() {
+                    if (!navList) return [];
+                    return Array.from(navList.children).filter(function(li){
+                        if (!(li instanceof HTMLElement)) return false;
+                        if (!li.classList.contains('nav-item')) return false;
+                        if (li.id === navOverflowAnchor.id) return false;
+                        if (li.dataset.overflowControl === 'true') return false;
+                        if (li.dataset.navFixed === 'true') return false;
+                        return li.style.display !== 'none';
+                    });
+                }
+
+                function clearOverflowControls() {
+                    if (!navList) return;
+                    navList.querySelectorAll('[data-overflow-control="true"]').forEach(function(node){
+                        node.remove();
+                    });
+                }
+
+                function restoreAllNavItems() {
+                    if (!navList) return;
+                    navList.querySelectorAll('li.nav-item').forEach(function(li){
+                        if (li.id === navOverflowAnchor.id) return;
+                        if (li.dataset.overflowControl === 'true') return;
+                        li.style.display = '';
+                    });
+                    clearOverflowControls();
+                }
+
+                function createOverflowControl() {
+                    const li = document.createElement('li');
+                    li.className = 'nav-item dropdown';
+                    li.dataset.overflowControl = 'true';
+
+                    li.innerHTML =
+                        '<a class="nav-link dropdown-toggle" href="#" id="overflowMenuToggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">⋮ Weitere</a>' +
+                        '<ul class="dropdown-menu" aria-labelledby="overflowMenuToggle" id="overflowMenu"></ul>';
+
+                    return li;
+                }
+
+                function appendSourceToOverflowMenu(sourceItem, menu) {
+                    const topLink = sourceItem.querySelector(':scope > a.nav-link');
+                    if (!topLink) return;
+
+                    const childMenu = sourceItem.querySelector(':scope > ul.dropdown-menu');
+                    const sourceLabel = topLink.textContent.trim();
+
+                    if (!childMenu) {
+                        const entry = document.createElement('li');
+                        entry.innerHTML = '<a class="dropdown-item" href="' + topLink.getAttribute('href') + '">' + sourceLabel + '</a>';
+                        menu.appendChild(entry);
+                        return;
+                    }
+
+                    const header = document.createElement('li');
+                    header.innerHTML = '<h6 class="dropdown-header">' + sourceLabel + '</h6>';
+                    menu.appendChild(header);
+
+                    childMenu.querySelectorAll(':scope > li > a.dropdown-item').forEach(function(subLink){
+                        const subEntry = document.createElement('li');
+                        subEntry.innerHTML = '<a class="dropdown-item" style="padding-left: 2.5rem;" href="' + subLink.getAttribute('href') + '">' + subLink.textContent.trim() + '</a>';
+                        menu.appendChild(subEntry);
+                    });
+
+                    const divider = document.createElement('li');
+                    divider.innerHTML = '<hr class="dropdown-divider">';
+                    menu.appendChild(divider);
+                }
+
+                function rebuildOverflowControl(hiddenSources) {
+                    clearOverflowControls();
+                    if (!navList || !navOverflowAnchor || hiddenSources.length === 0) return;
+
+                    const control = createOverflowControl();
+                    const menu = control.querySelector('ul.dropdown-menu');
+
+                    hiddenSources.forEach(function(source){
+                        appendSourceToOverflowMenu(source, menu);
+                    });
+
+                    const trailingDivider = menu.querySelector('li:last-child .dropdown-divider');
+                    if (trailingDivider) {
+                        trailingDivider.parentElement.remove();
+                    }
+
+                    navList.insertBefore(control, navOverflowAnchor);
+                }
+
+                function adaptNavbarByWidth() {
+                    if (!navList || !navOverflowAnchor) return;
+
+                    if (window.innerWidth < 992) {
+                        restoreAllNavItems();
+                        return;
+                    }
+
+                    restoreAllNavItems();
+
+                    const hiddenSources = [];
+                    let candidates = collectTopLevelNavSources();
+
+                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                        const toHide = candidates[candidates.length - 1];
+                        toHide.style.display = 'none';
+                        hiddenSources.unshift(toHide);
+                        candidates = collectTopLevelNavSources();
+                    }
+
+                    rebuildOverflowControl(hiddenSources);
+
+                    candidates = collectTopLevelNavSources();
+                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                        const toHide = candidates[candidates.length - 1];
+                        toHide.style.display = 'none';
+                        hiddenSources.unshift(toHide);
+                        rebuildOverflowControl(hiddenSources);
+                        candidates = collectTopLevelNavSources();
+                    }
+                }
+
+                let resizeTimer = null;
+                function debounceAdapt() {
+                    if (resizeTimer) {
+                        window.clearTimeout(resizeTimer);
+                    }
+                    resizeTimer = window.setTimeout(adaptNavbarByWidth, 120);
+                }
+
+                adaptNavbarByWidth();
+                window.addEventListener('resize', debounceAdapt);
+            }
+
+            // Initialize overflow control for inventory navbar
+            if (navList && navOverflowAnchor) {
+                initNavbarOverflow(navList, navOverflowAnchor);
+            }
+
+            // Initialize overflow control for library navbar
+            if (libraryNavList && libNavOverflowAnchor) {
+                initNavbarOverflow(libraryNavList, libNavOverflowAnchor);
+            }
+        })();
+    </script>
+    <!-- Mobile compatibility scripts -->
+    <script src="{{ url_for('static', filename='js/mobile_compatibility.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ios_fixes.js') }}"></script>
+</body>
+</html>

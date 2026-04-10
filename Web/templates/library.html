@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+
+{% block title %}Bibliothek - {{ APP_VERSION }}{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <!-- Header Section -->
+    <div class="header-section">
+        <div class="header-title-group">
+            <h1>📚 Bibliothek</h1>
+            <p class="subtitle">Bücher, CDs und weitere Medien</p>
+        </div>
+        
+        <div class="header-controls">
+            <!-- Favorites Toggle -->
+            <div class="view-switch">
+                <button id="favoriteToggle" class="toggle-btn" aria-label="Favoriten anzeigen/verbergen">
+                    <span class="toggle-icon">⭐</span>
+                    <span class="toggle-label">Favoriten</span>
+                </button>
+            </div>
+
+            <!-- View Mode Toggle -->
+            <div class="view-switch">
+                <button id="viewModeToggle" class="toggle-btn" aria-label="Ansichtsmodus wechseln">
+                    <span class="toggle-icon">ㄷ</span>
+                    <span class="toggle-label">Tabelle</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Section -->
+    <div class="search-filter-section">
+        <input type="text" id="searchInput" placeholder="Nach Titel, Autor, ISBN suchen..." class="search-input">
+        
+        <div class="filter-group" id="filterGroup">
+            <button class="filter-btn" id="filterBtn" aria-expanded="false" aria-label="Filter öffnen">
+                🔍 Filter <span class="filter-arrow">▼</span>
+            </button>
+            <div class="filter-dropdown" id="filterDropdown" style="display: none;">
+                <div class="filter-section">
+                    <h4>Medientyp</h4>
+                    <div class="filter-options">
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="type" value="book"> Buch</label>
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="type" value="cd"> CD/DVD</label>
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="type" value="other"> Sonstige</label>
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <h4>Status</h4>
+                    <div class="filter-options">
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="status" value="available"> Verfügbar</label>
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="status" value="borrowed"> Ausgeliehen</label>
+                        <label><input type="checkbox" class="filter-checkbox" data-filter="status" value="reserved"> Reserviert</label>
+                    </div>
+                </div>
+                <button id="clearFiltersBtn" class="button">Filter zurücksetzen</button>
+            </div>
+        </div>
+
+        <!-- Barcode Scanner -->
+        <button id="scannerBtn" class="scan-button" aria-expanded="false" aria-label="Scanner öffnen">
+            📱 Scanner <span class="scanner-arrow">▼</span>
+        </button>
+    </div>
+
+    <!-- Scanner Panel -->
+    <div id="qrContainer" class="qr-container" style="display: none;">
+        <div id="qr-reader" style="width: auto; height: 300px;"></div>
+        <span id="qr-result" style="display: none;"></span>
+    </div>
+
+    <!-- Table Header (only in table mode) -->
+    <div class="table-header" id="tableHeader" style="display: none;">
+        <div class="table-row">
+            <div class="table-cell title-cell">Titel</div>
+            <div class="table-cell author-cell">Autor/Künstler</div>
+            <div class="table-cell isbn-cell">ISBN/Code</div>
+            <div class="table-cell type-cell">Typ</div>
+            <div class="table-cell status-cell">Status</div>
+            <div class="table-cell actions-cell">Aktionen</div>
+        </div>
+    </div>
+
+    <!-- Items Container -->
+    <div id="itemsContainer" class="items-container">
+        {% if library_items %}
+            {% for item in library_items %}
+                <div class="item-card library-item" data-item-id="{{ item._id }}" data-type="{{ item.get('ItemType', 'book') }}" data-status="{{ 'borrowed' if item.get('Verfuegbar') == False else 'available' }}">
+                    <!-- Card Mode View -->
+                    <div class="item-content card-mode">
+                        <div class="item-image-wrapper">
+                            {% if item.get('Image') %}
+                                <img src="/uploads/{{ item.Image }}" alt="{{ item.Name }}" class="item-image">
+                            {% else %}
+                                <div class="placeholder-image">📚</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="item-details">
+                            <h3 class="item-name">{{ item.Name }}</h3>
+                            
+                            {% if item.get('Author') %}
+                                <p class="item-author">Von: {{ item.Author }}</p>
+                            {% endif %}
+                            
+                            {% if item.get('ISBN') %}
+                                <p class="item-isbn">ISBN: {{ item.ISBN }}</p>
+                            {% endif %}
+                            
+                            <div class="item-meta">
+                                <span class="item-type">{{ item.get('ItemType', 'Medium') }}</span>
+                                <span class="item-status {% if item.get('Verfuegbar') == False %}borrowed{% else %}available{% endif %}">
+                                    {% if item.get('Verfuegbar') == False %}Ausgeliehen{% else %}Verfügbar{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table Mode View -->
+                    <div class="item-content table-mode" style="display: none;">
+                        <div class="table-row">
+                            <div class="table-cell title-cell">
+                                <span class="descriptor">Titel:</span>
+                                <span class="value">{{ item.Name }}</span>
+                            </div>
+                            <div class="table-cell author-cell">
+                                <span class="descriptor">Autor:</span>
+                                <span class="value">{{ item.get('Author', '—') }}</span>
+                            </div>
+                            <div class="table-cell isbn-cell">
+                                <span class="descriptor">ISBN:</span>
+                                <span class="value">{{ item.get('ISBN', '—') }}</span>
+                            </div>
+                            <div class="table-cell type-cell">
+                                <span class="descriptor">Typ:</span>
+                                <span class="value">{{ item.get('ItemType', 'Medium') }}</span>
+                            </div>
+                            <div class="table-cell status-cell">
+                                <span class="descriptor">Status:</span>
+                                <span class="value {% if item.get('Verfuegbar') == False %}borrowed{% else %}available{% endif %}">
+                                    {% if item.get('Verfuegbar') == False %}Ausgeliehen{% else %}Verfügbar{% endif %}
+                                </span>
+                            </div>
+                            <div class="table-cell actions-cell">
+                                <button class="action-button details-btn" data-item-id="{{ item._id }}">Details</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons (Card Mode) -->
+                    <div class="item-actions card-mode" style="display: flex;">
+                        <button class="action-button details-btn" data-item-id="{{ item._id }}">Details</button>
+                        {% if item.get('Verfuegbar') == True %}
+                            <button class="action-button borrow-btn" data-item-id="{{ item._id }}">Ausleihen</button>
+                        {% else %}
+                            <button class="action-button return-btn" data-item-id="{{ item._id }}" disabled>Ausgeliehen</button>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>Keine Bibliotheks-Medien gefunden</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div id="detailModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <button class="modal-close" aria-label="Schließen">✕</button>
+        
+        <div class="modal-body" id="modalBody">
+            <!-- Filled by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Borrow Modal -->
+<div id="borrowModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2>Ausleihen</h2>
+        <form id="borrowForm">
+            <input type="hidden" id="borrowItemId" name="item_id">
+            
+            <div class="form-group">
+                <label for="studentIdInput">Schülerausweis-ID (optional):</label>
+                <input type="text" id="studentIdInput" name="student_id" placeholder="Ausweis scannen oder eingeben" class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label for="borrowDaysInput">Ausleih-Dauer (Tage):</label>
+                <input type="number" id="borrowDaysInput" name="borrow_days" min="1" max="365" class="form-input" value="14">
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="button primary-button">Ausleihen</button>
+                <button type="button" class="button cancel-button" onclick="document.getElementById('borrowModal').style.display='none'">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script>
+// View mode persistence
+const LIBRARY_VIEW_MODE_KEY = 'inventarLibraryViewMode';
+
+function setViewMode(mode) {
+    localStorage.setItem(LIBRARY_VIEW_MODE_KEY, mode);
+    const container = document.getElementById('itemsContainer');
+    const tableHeader = document.getElementById('tableHeader');
+    const items = container.querySelectorAll('.item-card');
+    
+    items.forEach(item => {
+        const cardContent = item.querySelector('.item-content.card-mode');
+        const cardActions = item.querySelector('.item-actions.card-mode');
+        const tableContent = item.querySelector('.item-content.table-mode');
+        
+        if (mode === 'table') {
+            if (cardContent) cardContent.style.display = 'none';
+            if (cardActions) cardActions.style.display = 'none';
+            if (tableContent) tableContent.style.display = 'block';
+        } else {
+            if (cardContent) cardContent.style.display = 'flex';
+            if (cardActions) cardActions.style.display = 'flex';
+            if (tableContent) tableContent.style.display = 'none';
+        }
+    });
+    
+    tableHeader.style.display = mode === 'table' ? 'block' : 'none';
+    
+    document.getElementById('viewModeToggle').classList.toggle('open', mode === 'table');
+}
+
+// Initialize view mode
+document.addEventListener('DOMContentLoaded', function() {
+    const savedMode = localStorage.getItem(LIBRARY_VIEW_MODE_KEY) || 'card';
+    setViewMode(savedMode);
+    
+    document.getElementById('viewModeToggle').addEventListener('click', function() {
+        const currentMode = localStorage.getItem(LIBRARY_VIEW_MODE_KEY) || 'card';
+        const newMode = currentMode === 'card' ? 'table' : 'card';
+        setViewMode(newMode);
+    });
+    
+    // Details button handlers
+    document.querySelectorAll('.details-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const itemId = this.dataset.itemId;
+            fetch(`/get_item_details/${itemId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        displayLibraryItemDetail(data.item);
+                        document.getElementById('detailModal').style.display = 'flex';
+                    }
+                });
+        });
+    });
+    
+    // Borrow button handlers
+    document.querySelectorAll('.borrow-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('borrowItemId').value = this.dataset.itemId;
+            document.getElementById('borrowModal').style.display = 'flex';
+        });
+    });
+    
+    // Borrow form submit
+    document.getElementById('borrowForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const itemId = document.getElementById('borrowItemId').value;
+        const studentId = document.getElementById('studentIdInput').value || null;
+        const borrowDays = document.getElementById('borrowDaysInput').value || 14;
+        
+        fetch('/borrow_item', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                item_id: itemId,
+                student_id: studentId,
+                borrow_days: borrowDays
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Erfolgreich ausgeliehen!');
+                location.reload();
+            } else {
+                alert('Fehler: ' + data.message);
+            }
+        });
+    });
+    
+    // Modal close handlers
+    document.querySelectorAll('.modal-close').forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.closest('.modal').style.display = 'none';
+        });
+    });
+    
+    // Close modals on outside click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) this.style.display = 'none';
+        });
+    });
+});
+
+function displayLibraryItemDetail(item) {
+    const modalBody = document.getElementById('modalBody');
+    const returnBtn = item.Verfuegbar === false ? `<button class="action-button return-btn" onclick="returnItem('${item._id}')">Zurückgeben</button>` : '';
+    const borrowBtn = item.Verfuegbar === true ? `<button class="action-button borrow-btn" onclick="openBorrowModal('${item._id}')">Ausleihen</button>` : '';
+    
+    modalBody.innerHTML = `
+        <h2>${item.Name}</h2>
+        <div class="detail-content">
+            ${item.Image ? `<img src="/uploads/${item.Image}" alt="${item.Name}" style="max-width: 200px; margin-bottom: 20px;">` : ''}
+            <p><strong>Autor:</strong> ${item.Author || '—'}</p>
+            <p><strong>ISBN:</strong> ${item.ISBN || '—'}</p>
+            <p><strong>Typ:</strong> ${item.ItemType || 'Medium'}</p>
+            <p><strong>Status:</strong> ${item.Verfuegbar === false ? 'Ausgeliehen' : 'Verfügbar'}</p>
+            ${item.User ? `<p><strong>Ausgeliehen von:</strong> ${item.User}</p>` : ''}
+            ${item.Beschreibung ? `<p><strong>Beschreibung:</strong> ${item.Beschreibung}</p>` : ''}
+            <div class="modal-actions">
+                ${borrowBtn}
+                ${returnBtn}
+            </div>
+        </div>
+    `;
+}
+
+function openBorrowModal(itemId) {
+    document.getElementById('borrowItemId').value = itemId;
+    document.getElementById('borrowModal').style.display = 'flex';
+    document.getElementById('detailModal').style.display = 'none';
+}
+
+function returnItem(itemId) {
+    if (confirm('Wirklich zurückgeben?')) {
+        fetch('/return_item', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_id: itemId})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Erfolgreich zurückgegeben!');
+                location.reload();
+            }
+        });
+    }
+}
+
+// Filter dropdown toggle with auto-close
+function closeAllFilters() {
+    document.querySelectorAll('.filter-dropdown').forEach(d => d.style.display = 'none');
+    document.getElementById('filterBtn').setAttribute('aria-expanded', 'false');
+    document.getElementById('filterBtn').classList.remove('open');
+}
+
+document.getElementById('filterBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('filterDropdown');
+    const isOpen = dropdown.style.display !== 'none';
+    closeAllFilters();
+    if (!isOpen) {
+        dropdown.style.display = 'block';
+        this.setAttribute('aria-expanded', 'true');
+        this.classList.add('open');
+    }
+});
+
+document.addEventListener('click', closeAllFilters);
+document.getElementById('filterDropdown').addEventListener('click', e => e.stopPropagation());
+
+// Clear filters
+document.getElementById('clearFiltersBtn').addEventListener('click', function() {
+    document.querySelectorAll('.filter-checkbox').forEach(c => c.checked = false);
+    closeAllFilters();
+});
+
+// Favorites toggle
+document.getElementById('favoriteToggle').addEventListener('click', function() {
+    this.classList.toggle('open');
+    // TODO: Implement favorites filtering
+});
+
+// Scanner toggle
+let scanner = null;
+document.getElementById('scannerBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    const container = document.getElementById('qrContainer');
+    const isOpen = container.style.display !== 'none';
+    
+    if (isOpen) {
+        container.style.display = 'none';
+        if (scanner) scanner.clear();
+        this.classList.remove('open');
+        this.setAttribute('aria-expanded', 'false');
+    } else {
+        container.style.display = 'block';
+        this.classList.add('open');
+        this.setAttribute('aria-expanded', 'true');
+        
+        if (!scanner) {
+            scanner = new Html5Qrcode('qr-reader');
+            scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 250 },
+                onScanSuccess,
+                onScanError
+            );
+        }
+    }
+});
+
+function onScanSuccess(decodedText, decodedResult) {
+    const studentId = decodedText.trim();
+    document.getElementById('studentIdInput').value = studentId;
+    alert('Ausweis gescannt: ' + studentId);
+}
+
+function onScanError(error) {
+    // Silently ignore scan errors
+}
+</script>
+
+<style>
+.library-item .item-image-wrapper {
+    width: 120px;
+    height: 160px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.library-item .placeholder-image {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    color: white;
+}
+
+.library-item .item-author {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 4px 0;
+}
+
+.library-item .item-isbn {
+    font-size: 0.85rem;
+    color: #999;
+    font-family: monospace;
+    margin: 4px 0;
+}
+
+.library-item .item-type {
+    display: inline-block;
+    background: #e8f0fe;
+    color: #1967d2;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.library-item .item-status.available {
+    background: #e6f4ea;
+    color: #137333;
+}
+
+.library-item .item-status.borrowed {
+    background: #fce8e6;
+    color: #b3261e;
+}
+</style>
+{% endblock %}

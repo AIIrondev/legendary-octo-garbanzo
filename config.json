@@ -1,0 +1,73 @@
+{
+    "dbg": false,
+    "key": "InventarsystemSecureKey2026XYZ789abcdef012",
+    "ver": "3.2.1",
+    "host": "0.0.0.0",
+    "port": 443,
+
+    "mongodb": {
+        "host": "localhost",
+        "port": 27017,
+        "db": "Inventarsystem"
+    },
+
+    "scheduler": {
+        "enabled": true,
+        "interval_minutes": 1,
+        "backup_interval_hours": 24
+    },
+
+    "ssl": {
+        "enabled": true,
+        "cert": "Web/certs/cert.pem",
+        "key": "Web/certs/key.pem"
+    },
+
+    "images": {
+        "thumbnail_size": [150, 150],
+        "preview_size": [400, 400]
+    },
+
+    "upload": {
+        "max_size_mb": 10,
+        "image_max_size_mb": 15,
+        "video_max_size_mb": 100
+    },
+
+    "paths": {
+        "backups": "backups",
+        "logs": "logs"
+    },
+
+    "modules": {
+        "library": {
+            "enabled": true
+        },
+        "student_cards": {
+            "enabled": true,
+            "default_borrow_days": 14,
+            "max_borrow_days": 365
+        }
+    },
+
+    "allowed_extensions": [
+        "png", "jpg", "jpeg", "gif",
+        "hevc", "heif",
+        "mp4", "mov", "avi", "mkv", "webm",
+        "mp3", "wav", "ogg", "flac", "aac", "m4a", "opus",
+        "pdf", "docx", "xlsx", "pptx", "txt"
+    ],
+
+    "schoolPeriods": {
+        "1":  { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
+        "2":  { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
+        "3":  { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
+        "4":  { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
+        "5":  { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
+        "6":  { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
+        "7":  { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
+        "8":  { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
+        "9":  { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
+        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
+    }
+}

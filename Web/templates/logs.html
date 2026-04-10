@@ -1,0 +1,378 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}System Logs{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>System-Protokoll</h1>
+
+    {% set conflicts = items | selectattr('ConflictDetected') | list %}
+    {% if conflicts %}
+    <div class="conflict-summary-banner" id="conflictSummaryBanner">
+        <strong>⚠ {{ conflicts | length }} Buchungskonflikt{{ 's' if conflicts | length > 1 else '' }} erkannt</strong> –
+        Geplante Reservierungen wurden aktiv, obwohl der Gegenstand bereits ausgeliehen war.
+        <button onclick="document.getElementById('conflictSummaryBanner').style.display='none'" class="banner-close">✕</button>
+    </div>
+    {% endif %}
+    
+    <div class="filter-controls">
+        <input type="text" id="searchInput" placeholder="Suchen..." onkeyup="filterTable()">
+        
+        <div class="date-range">
+            <label for="startDate">Von:</label>
+            <input type="date" id="startDate" onchange="filterTable()">
+            
+            <label for="endDate">Bis:</label>
+            <input type="date" id="endDate" onchange="filterTable()">
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <table id="logsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Typ ↕</th>
+                    <th onclick="sortTable(1)">Item Name ↕</th>
+                    <th onclick="sortTable(2)">Benutzer ↕</th>
+                    <th onclick="sortTable(3)">Status ↕</th>
+                    <th onclick="sortTable(4)">Ausgeliehen am ↕</th>
+                    <th onclick="sortTable(5)">Zurückgegeben am ↕</th>
+                    <th>Dauer</th>
+                    <th>Hinweis</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.EventType or 'Ausleihe' }}</td>
+                    <td>{{ item.Item }}</td>
+                    <td>{{ item.User }}</td>
+                    <td>
+                        <span class="status-badge status-{{ item.Status }}">{{ item.Status }}</span>
+                    </td>
+                    <td>{{ item.Start }}</td>
+                    <td>{{ item.End }}</td>
+                    <td>{{ item.Duration }}</td>
+                    <td>
+                        {% if item.ConflictNote %}
+                        <span title="{{ item.ConflictNote }}">{{ item.ConflictNote }}</span>
+                        {% endif %}
+                        {% if item.ConflictDetected %}
+                        <span class="conflict-badge" title="{{ item.ConflictNote }}">⚠ Konflikt</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="navigation-buttons">
+        <a href="{{ url_for('home') }}" class="button">Zurück zum Dashboard</a>
+        <button onclick="exportToCSV()" class="export-button">Als CSV exportieren</button>
+    </div>
+</div>
+
+<script>
+    function filterTable() {
+        const input = document.getElementById('searchInput').value.toLowerCase();
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const table = document.getElementById('logsTable');
+        const rows = table.getElementsByTagName('tr');
+        
+        for (let i = 1; i < rows.length; i++) {
+            let show = true;
+            const cells = rows[i].getElementsByTagName('td');
+            
+            // Text search
+            if (input) {
+                let textMatch = false;
+                for (let j = 0; j < cells.length; j++) {
+                    if (cells[j].textContent.toLowerCase().indexOf(input) > -1) {
+                        textMatch = true;
+                        break;
+                    }
+                }
+                show = textMatch;
+            }
+            
+            // Date range filtering (uses Start in column 4 and End in column 5)
+            if (show && startDate) {
+                const rowDate = new Date(cells[4].textContent);
+                show = rowDate >= new Date(startDate);
+            }
+            
+            if (show && endDate) {
+                const rowDate = new Date(cells[5].textContent);
+                show = rowDate <= new Date(endDate);
+            }
+            
+            rows[i].style.display = show ? '' : 'none';
+        }
+    }
+    
+    function sortTable(n) {
+        const table = document.getElementById('logsTable');
+        let switching = true;
+        let dir = 'asc';
+        let switchcount = 0;
+        
+        while (switching) {
+            switching = false;
+            const rows = table.rows;
+            
+            for (let i = 1; i < rows.length - 1; i++) {
+                let shouldSwitch = false;
+                const x = rows[i].getElementsByTagName('td')[n];
+                const y = rows[i + 1].getElementsByTagName('td')[n];
+                
+                // Check if date column for proper date comparison (Start=4, End=5)
+                if (n === 4 || n === 5) {
+                    const dateX = new Date(x.innerHTML);
+                    const dateY = new Date(y.innerHTML);
+                    
+                    if (dir === 'asc') {
+                        if (dateX > dateY) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === 'desc') {
+                        if (dateX < dateY) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                } else {
+                    if (dir === 'asc') {
+                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === 'desc') {
+                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;
+            } else {
+                if (switchcount === 0 && dir === 'asc') {
+                    dir = 'desc';
+                    switching = true;
+                }
+            }
+        }
+    }
+    
+    function exportToCSV() {
+        const table = document.getElementById('logsTable');
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll('td, th');
+            
+            for (let j = 0; j < cols.length; j++) {
+                // Escape double-quotes with double-quotes
+                let data = cols[j].innerText.replace(/"/g, '""');
+                // Add quotes if the content contains comma or newline
+                row.push('"' + data + '"');
+            }
+            csv.push(row.join(','));
+        }
+        
+        // Download CSV file
+        const csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
+        const downloadLink = document.createElement('a');
+        downloadLink.download = 'ausleihungen_' + new Date().toISOString().slice(0,10) + '.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+    }
+</script>
+
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    h1 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #333;
+    }
+    
+    .filter-controls {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    
+    #searchInput {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 200px;
+    }
+    
+    .date-range {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .date-range input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+        color: #fff;
+    }
+    .status-planned { background-color: #6c757d; }
+    .status-active { background-color: #17a2b8; }
+    .status-completed { background-color: #28a745; }
+    .status-cancelled { background-color: #dc3545; }
+    .status-gemeldet { background-color: #fd7e14; }
+    .status-repariert { background-color: #20c997; }
+
+    .conflict-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+        cursor: help;
+        white-space: nowrap;
+    }
+
+    .conflict-summary-banner {
+        background-color: #fff3cd;
+        border: 1px solid #ffc107;
+        border-left: 4px solid #fd7e14;
+        color: #856404;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .banner-close {
+        background: none;
+        border: none;
+        font-size: 1rem;
+        cursor: pointer;
+        color: #856404;
+        flex-shrink: 0;
+        padding: 0 4px;
+    }
+
+    .banner-close:hover { color: #533f03; }
+    
+    .table-container {
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    th, td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    th {
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+    
+    th:hover {
+        background-color: #0056b3;
+    }
+    
+    tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .navigation-buttons {
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .button, .export-button {
+        padding: 10px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .button:hover, .export-button:hover {
+        background-color: #0056b3;
+    }
+    
+    .export-button {
+        background-color: #28a745;
+    }
+    
+    .export-button:hover {
+        background-color: #218838;
+    }
+    
+    @media (max-width: 768px) {
+        .filter-controls {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        #searchInput {
+            width: 100%;
+        }
+        
+        .date-range {
+            width: 100%;
+            justify-content: space-between;
+        }
+    }
+</style>
+{% endblock %}

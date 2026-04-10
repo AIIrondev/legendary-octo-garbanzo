@@ -1,0 +1,100 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Filter verwalten{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Filterwerte verwalten</h1>
+    
+    <div class="row">
+        <!-- Filter 1: Unterrichtsfach -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title h5 mb-0">Unterrichtsfach (Filter 1)</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('add_filter_value', filter_num=1) }}" class="mb-4">
+                        <div class="input-group">
+                            <input type="text" name="value" class="form-control" placeholder="Neues Unterrichtsfach..." required>
+                            <button type="submit" class="btn btn-primary">Hinzufügen</button>
+                        </div>
+                    </form>
+                    
+                    <h5 class="mb-3">Vorhandene Werte</h5>
+                    {% if filter1_values %}
+                    <div class="list-group">
+                        {% for value in filter1_values %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ value }}
+                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=1, value=value) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger" 
+                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                    Entfernen
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">Keine Werte definiert.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filter 2: Jahrgangsstufe -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title h5 mb-0">Jahrgangsstufe (Filter 2)</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('add_filter_value', filter_num=2) }}" class="mb-4">
+                        <div class="input-group">
+                            <input type="text" name="value" class="form-control" placeholder="Neue Jahrgangsstufe..." required>
+                            <button type="submit" class="btn btn-primary">Hinzufügen</button>
+                        </div>
+                    </form>
+                    
+                    <h5 class="mb-3">Vorhandene Werte</h5>
+                    {% if filter2_values %}
+                    <div class="list-group">
+                        {% for value in filter2_values %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ value }}
+                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=2, value=value) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                    Entfernen
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">Keine Werte definiert.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="alert alert-warning">
+        <strong>Hinweis:</strong> Beim Entfernen eines Filterwertes wird dieser nicht aus bestehenden Objekten entfernt.
+        Bereits verwendete Werte bleiben in den Objekten erhalten.
+    </div>
+    
+    <div class="mt-4">
+        <a href="{{ url_for('home_admin') }}" class="btn btn-secondary">Zurück zur Admin-Übersicht</a>
+    </div>
+</div>
+{% endblock %}

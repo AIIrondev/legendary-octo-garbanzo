@@ -1,0 +1,307 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+<!--
+   Reset Item Functions
+   ====================
+   
+   This template contains JavaScript functions for resetting item borrowing status.
+   It handles cleaning up inconsistent states between items and their borrowing records.
+-->
+
+<script>
+/**
+ * Reset an item's borrowing status completely
+ */
+function resetItemBorrowingStatus(itemId) {
+    // Show confirmation dialog
+    const confirmMessage = `Sind Sie sicher, dass Sie den Ausleihstatus dieses Items zurücksetzen möchten?\n\n` +
+                          `Dies wird:\n` +
+                          `- Das Item als verfügbar markieren\n` +
+                          `- Alle aktiven Ausleihungen beenden\n` +
+                          `- Den Ausleihstatus vollständig zurücksetzen\n\n` +
+                          `Diese Aktion kann nicht rückgängig gemacht werden.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Show loading indicator
+    const loadingDiv = createLoadingIndicator('Item wird zurückgesetzt...');
+    document.body.appendChild(loadingDiv);
+    
+    // Send reset request to server
+    fetch(`/reset_item/${itemId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            'reset_type': 'complete',
+            'timestamp': new Date().toISOString()
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        document.body.removeChild(loadingDiv);
+        
+        if (data.success) {
+            showSuccessMessage('Item-Status wurde erfolgreich zurückgesetzt!');
+            
+            // Reload the page to reflect changes
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            throw new Error(data.message || 'Unbekannter Fehler beim Zurücksetzen');
+        }
+    })
+    .catch(error => {
+        if (loadingDiv.parentNode) {
+            document.body.removeChild(loadingDiv);
+        }
+        console.error('Error resetting item:', error);
+        showErrorMessage(`Fehler beim Zurücksetzen des Items: ${error.message}`);
+    });
+}
+
+/**
+ * Create a loading indicator element
+ */
+function createLoadingIndicator(message) {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'reset-loading-overlay';
+    loadingDiv.innerHTML = `
+        <div class="reset-loading-content">
+            <div class="reset-loading-spinner"></div>
+            <div class="reset-loading-message">${message}</div>
+        </div>
+    `;
+    
+    // Add styles if not already present
+    if (!document.getElementById('reset-styles')) {
+        const style = document.createElement('style');
+        style.id = 'reset-styles';
+        style.textContent = `
+            .reset-loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .reset-loading-content {
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                max-width: 400px;
+                width: 90%;
+            }
+            
+            .reset-loading-spinner {
+                width: 40px;
+                height: 40px;
+                margin: 0 auto 20px;
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #dc3545;
+                border-radius: 50%;
+                animation: reset-spin 1s linear infinite;
+            }
+            
+            .reset-loading-message {
+                color: #333;
+                font-size: 16px;
+                font-weight: 500;
+            }
+            
+            @keyframes reset-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .reset-success-message {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background-color: #d4edda;
+                color: #155724;
+                border: 1px solid #c3e6cb;
+                border-radius: 5px;
+                padding: 15px 20px;
+                z-index: 10002;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                font-weight: 500;
+                max-width: 400px;
+                animation: reset-slide-in 0.3s ease, reset-fade-out 0.5s ease 2.5s forwards;
+            }
+            
+            .reset-error-message {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background-color: #f8d7da;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+                border-radius: 5px;
+                padding: 15px 40px 15px 20px;
+                z-index: 10002;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                max-width: 400px;
+                animation: reset-slide-in 0.3s ease;
+                position: relative;
+            }
+            
+            .reset-error-content {
+                font-weight: 500;
+                line-height: 1.4;
+            }
+            
+            .reset-error-close {
+                position: absolute;
+                top: 10px;
+                right: 15px;
+                background: none;
+                border: none;
+                font-size: 24px;
+                color: #721c24;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            }
+            
+            .reset-error-close:hover {
+                color: #491217;
+            }
+            
+            @keyframes reset-slide-in {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes reset-fade-out {
+                to {
+                    opacity: 0;
+                    transform: translateX(100%);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    return loadingDiv;
+}
+
+/**
+ * Show a success message to the user
+ */
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'reset-success-message';
+    successDiv.textContent = message;
+    
+    document.body.appendChild(successDiv);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        if (successDiv.parentNode) {
+            successDiv.parentNode.removeChild(successDiv);
+        }
+    }, 3000);
+}
+
+/**
+ * Show an error message to the user
+ */
+function showErrorMessage(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'reset-error-message';
+    errorDiv.innerHTML = `
+        <div class="reset-error-content">
+            <strong>⚠️ Fehler</strong><br>
+            ${message}
+        </div>
+        <button class="reset-error-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    document.body.appendChild(errorDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
+}
+
+/**
+ * Check if an item has borrowing issues that would warrant a reset
+ */
+function checkForBorrowingIssues(item) {
+    // Check for inconsistent availability status
+    if (!item.Verfuegbar && !item.User) {
+        return true; // Item marked as unavailable but no user assigned
+    }
+    
+    // Check for exemplar status issues
+    if (item.ExemplareStatus && Array.isArray(item.ExemplareStatus)) {
+        const totalExemplare = item.Exemplare || 1;
+        const borrowedCount = item.ExemplareStatus.length;
+        
+        if (borrowedCount > totalExemplare) {
+            return true; // More exemplars borrowed than exist
+        }
+        
+        if (borrowedCount > 0 && item.Verfuegbar) {
+            return true; // Has borrowed exemplars but marked as available
+        }
+    }
+    
+    // Check for stale borrower information
+    if (!item.Verfuegbar && item.BorrowerInfo) {
+        const borrowTime = item.BorrowerInfo.borrowTime;
+        if (borrowTime) {
+            try {
+                const borrowDate = new Date(borrowTime);
+                const now = new Date();
+                const daysDiff = (now - borrowDate) / (1000 * 60 * 60 * 24);
+                
+                // If borrowed for more than 30 days, might be stale
+                if (daysDiff > 30) {
+                    return true;
+                }
+            } catch (e) {
+                // Invalid date format
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+</script>

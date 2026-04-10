@@ -1,0 +1,445 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Tutorial - {{ APP_VERSION }}{% endblock %}
+
+{% block content %}
+<style>
+  .tutorial-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 24px 0 14px;
+  }
+
+  .tutorial-shell,
+  .tutorial-shell p,
+  .tutorial-shell li,
+  .tutorial-shell button,
+  .tutorial-shell a {
+    font-size: 1.03rem;
+    line-height: 1.55;
+  }
+
+  .tutorial-hero {
+    background: linear-gradient(135deg, #16324f 0%, #27455f 55%, #3c5a73 100%);
+    color: #f8fafc;
+    border-radius: 18px;
+    padding: 30px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+    margin-bottom: 18px;
+  }
+
+  .tutorial-hero h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 900;
+  }
+
+  .tutorial-hero p {
+    margin: 0;
+    opacity: 0.98;
+    font-size: 1.08rem;
+  }
+
+  .tutorial-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  .tutorial-pill {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .tutorial-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .tutorial-side {
+    grid-column: span 12;
+    background: #ffffff;
+    border: 1px solid #cfdbe8;
+    border-radius: 16px;
+    padding: 16px;
+    position: sticky;
+    top: 14px;
+    height: fit-content;
+  }
+
+  .tutorial-side h2 {
+    margin: 0 0 8px;
+    font-size: 1.08rem;
+    color: #0f172a;
+    font-weight: 800;
+  }
+
+  .tutorial-side p {
+    margin: 0 0 14px;
+    color: #334155;
+    font-size: 1rem;
+  }
+
+  .workflow-nav {
+    display: grid;
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .workflow-nav button {
+    border: 1px solid #dbe3ee;
+    background: #f8fafc;
+    color: #0f172a;
+    border-radius: 12px;
+    padding: 11px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 180ms ease;
+  }
+
+  .workflow-nav button:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    transform: translateX(2px);
+  }
+
+  .workflow-nav button.active {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+  }
+
+  .workflow-main {
+    grid-column: span 12;
+    display: grid;
+    gap: 12px;
+  }
+
+  .workflow-step {
+    grid-column: span 12;
+    background: #ffffff;
+    border: 1px solid #cfdbe8;
+    border-radius: 16px;
+    padding: 18px;
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 220ms ease, transform 220ms ease;
+  }
+
+  .workflow-step.active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    max-height: 1300px;
+  }
+
+  .workflow-step h3 {
+    margin: 0 0 8px;
+    font-size: 1.35rem;
+    color: #0f172a;
+  }
+
+  .workflow-step p {
+    margin: 0 0 10px;
+    color: #334155;
+    font-size: 1.03rem;
+  }
+
+  .workflow-step ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #334155;
+    font-size: 1.02rem;
+  }
+
+  .workflow-step li {
+    margin-bottom: 5px;
+  }
+
+  .tutorial-actions {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tutorial-actions .btn,
+  .workflow-controls .btn {
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 1rem;
+  }
+
+  .workflow-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  .workflow-controls .btn {
+    min-width: 120px;
+  }
+
+  .tutorial-note {
+    margin-top: 14px;
+    background: #ecfeff;
+    border: 1px solid #bae6fd;
+    color: #0c4a6e;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 1rem;
+  }
+
+  @media (min-width: 960px) {
+    .tutorial-side {
+      grid-column: span 4;
+    }
+
+    .workflow-main {
+      grid-column: span 8;
+    }
+  }
+</style>
+
+<div class="tutorial-shell">
+  <section class="tutorial-hero">
+    <h1>Kurzer Rundgang in 2-5 Minuten</h1>
+    <p>Die Seite ist bewusst einfach gehalten. Sie begleitet Sie Schritt für Schritt, ohne viel Lesen und ohne komplizierte Fachbegriffe.</p>
+    <div class="tutorial-meta">
+      <span class="tutorial-pill">Dauer: ca. 4 Minuten</span>
+      <span class="tutorial-pill">Format: Ruhig und geführt</span>
+      <span class="tutorial-pill">Benutzer: {{ username }}</span>
+    </div>
+  </section>
+
+  <div class="tutorial-grid">
+    <aside class="tutorial-side">
+      <h2>Schritte</h2>
+      <p>Folgen Sie einfach jedem Schritt. Sie können jederzeit vor- oder zurückgehen.</p>
+
+      <div class="workflow-nav" id="workflowNav">
+        <button type="button" data-target-step="0">1. Startseite</button>
+        <button type="button" data-target-step="1">2. {{ 'Artikel erfassen' if is_admin else 'Artikel finden' }}</button>
+        {% if library_module_enabled %}
+        <button type="button" data-target-step="2">3. Bibliotek</button>
+        {% endif %}
+        <button type="button" data-target-step="{{ '3' if library_module_enabled else '2' }}">4. Alltag</button>
+      </div>
+
+      <div class="workflow-controls">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="prevStepBtn">Zurück</button>
+        <button type="button" class="btn btn-primary btn-sm" id="nextStepBtn">Nächster Schritt</button>
+      </div>
+    </aside>
+
+    <section class="workflow-main" id="workflowMain">
+
+      <article class="workflow-step" data-step-index="0" data-step-key="dashboard">
+        <h3>Startbereich</h3>
+        <p>Hier starten Sie. Das ist der sichere Ausgangspunkt für alle weiteren Schritte.</p>
+        <ul>
+          <li>Sie sehen den Überblick.</li>
+          <li>Oben liegen die wichtigsten Wege.</li>
+          <li>Alles ist gross und einfach lesbar.</li>
+        </ul>
+
+        <div class="tutorial-actions">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Startseite öffnen</a>
+        </div>
+      </article>
+
+      <article class="workflow-step" data-step-index="1" data-step-key="items">
+        {% if is_admin %}
+        <h3>Artikel anlegen</h3>
+        <p>Hier legen Sie einen neuen Artikel an. Es sind nur wenige Felder erforderlich.</p>
+        <ul>
+          <li><strong>Name:</strong> Wie heisst der Artikel?</li>
+          <li><strong>Ort:</strong> Wo soll er gelagert werden?</li>
+          <li><strong>Beschreibung:</strong> Was ist daran interessant?</li>
+          <li><strong>Code:</strong> Eine Nummer zum schnellen Finden.</li>
+        </ul>
+
+        <div class="tutorial-actions">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('upload_admin') }}">Neuen Artikel anlegen</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home_admin') }}">Zurück</a>
+        </div>
+        {% else %}
+        <h3>Artikel finden und ausleihen</h3>
+        <p>Als Nutzerin/Nutzer arbeiten Sie hauptsaechlich mit vorhandenen Artikeln und Ausleihen.</p>
+        <ul>
+          <li>Nutzen Sie Filter und Suche, um Material schnell zu finden.</li>
+          <li>Öffnen Sie <strong>Details</strong>, um Ort, Beschreibung und Verfügbarkeit zu sehen.</li>
+          <li>Mit <strong>Ausleihen</strong> buchen Sie den Artikel direkt.</li>
+          <li>In <strong>Meine Ausleihen</strong> sehen Sie, was aktuell auf Ihren Namen laeuft.</li>
+        </ul>
+
+        <div class="tutorial-actions">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Zur Startseite</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a>
+        </div>
+        {% endif %}
+      </article>
+
+      {% if library_module_enabled %}
+      <article class="workflow-step" data-step-index="2" data-step-key="library">
+        <h3>Bibliotek-Bereich</h3>
+        <p>Dieser Bereich ist speziell für Bücher und Medienausleihe.</p>
+        <ul>
+          {% if is_admin %}
+          <li><strong>Bücher hochladen:</strong> Neue Bücher in die Sammlung aufnehmen.</li>
+          <li><strong>Ausleihen ansehen:</strong> Wer hat welches Buch ausgeliehen?</li>
+          <li><strong>Defekte bearbeiten:</strong> Defekte Bücher markieren oder reparieren.</li>
+          <li><strong>Rechnungen:</strong> Kosten und Rechnungen verwalten.</li>
+          {% else %}
+          <li><strong>Medium suchen:</strong> Titel, Autor oder Barcode direkt finden.</li>
+          <li><strong>Verfuegbarkeit pruefen:</strong> Schnell sehen, was aktuell ausleihbar ist.</li>
+          <li><strong>Ausleihen:</strong> In der Bibliothek direkt auf Ihren Namen buchen.</li>
+          <li><strong>Rückgabe-Status:</strong> Über "Meine Ausleihen" Fristen im Blick behalten.</li>
+          {% endif %}
+        </ul>
+
+        <div class="tutorial-actions">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('library_view') }}">Zur Bibliotek</a>
+          {% if is_admin %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('library_loans_admin') }}">Ausleihen ansehen</a>
+          {% endif %}
+        </div>
+      </article>
+      {% endif %}
+
+      <article class="workflow-step" data-step-index="{{ '3' if library_module_enabled else '2' }}" data-step-key="daily">
+        <h3>Tägliche Aufgaben</h3>
+        <p>Das ist der gewöhnliche Arbeitsablauf während eines Schultages.</p>
+        
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Morgens:</p>
+          <p style="margin: 0; color: #334155;">Öffnen Sie die Startseite und prüfen Sie offene Reservierungen oder Rückgabefristen.</p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Mittags:</p>
+          <p style="margin: 0; color: #334155;">Neue Artikel oder Bücher hinzufügen oder Ausleihungen begründen.</p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Nachmittags:</p>
+          <p style="margin: 0; color: #334155;">Rückgaben buchen und kurz prüfen, ob alles in Ordnung ist.</p>
+        </div>
+
+        <div class="tutorial-actions">
+          {% if is_admin %}
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_borrowings') }}">Admin-Bereich</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('logs') }}">Protokolle</a>
+          {% else %}
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a>
+          {% endif %}
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <div class="tutorial-note">
+    Tipp: Sie können das Training jederzeit wieder öffnen und in Ruhe weiterklicken.
+  </div>
+</div>
+
+<script>
+  (function () {
+    const stepEls = Array.from(document.querySelectorAll('.workflow-step'));
+    const navBtns = Array.from(document.querySelectorAll('#workflowNav button[data-target-step]'));
+    const nextBtn = document.getElementById('nextStepBtn');
+    const prevBtn = document.getElementById('prevStepBtn');
+    const tutorialStateKey = 'inventarsystem_tutorial_state_v3_{{ username }}';
+
+    if (!stepEls.length) return;
+
+    let currentStep = 0;
+    let prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(tutorialStateKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        currentStep = Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0;
+      } catch (e) {
+        currentStep = 0;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(tutorialStateKey, JSON.stringify({
+        currentStep: currentStep
+      }));
+    }
+
+    function clampStep() {
+      if (currentStep < 0) currentStep = 0;
+      if (currentStep >= stepEls.length) currentStep = stepEls.length - 1;
+    }
+
+    function renderStep() {
+      clampStep();
+
+      stepEls.forEach(function (stepEl, idx) {
+        stepEl.classList.toggle('active', idx === currentStep);
+        if (idx === currentStep && !prefersReducedMotion) {
+          stepEl.animate(
+            [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
+            { duration: 260, easing: 'ease-out' }
+          );
+        }
+      });
+
+      navBtns.forEach(function (btn) {
+        const target = Number(btn.dataset.targetStep);
+        btn.classList.toggle('active', target === currentStep);
+      });
+
+      prevBtn.disabled = currentStep <= 0;
+      nextBtn.textContent = currentStep >= stepEls.length - 1 ? 'Fertig' : 'Nächster Schritt';
+      saveState();
+    }
+
+    navBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        currentStep = Number(btn.dataset.targetStep) || 0;
+        renderStep();
+      });
+    });
+
+    prevBtn.addEventListener('click', function () {
+      currentStep -= 1;
+      renderStep();
+    });
+
+    nextBtn.addEventListener('click', function () {
+      currentStep += 1;
+      renderStep();
+    });
+
+    loadState();
+    renderStep();
+  })();
+</script>
+{% endblock %}

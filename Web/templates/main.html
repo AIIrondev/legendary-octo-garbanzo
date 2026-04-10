@@ -1,0 +1,4170 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+    /* Calendar styles for detailed view */
+    .calendar-wrapper {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid #e7edf5;
+        background: #f8fafc;
+    }
+
+    .calendar-header button {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #dbe3ee;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .calendar-header button:hover {
+        background: #f1f5f9;
+    }
+
+    .calendar-header span {
+        font-weight: 700;
+        font-size: 1rem;
+        color: #0f172a;
+        text-align: center;
+        flex: 1;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        padding: 8px;
+        gap: 4px;
+    }
+
+    .cal-cell {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: #334155;
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .cal-cell.header {
+        aspect-ratio: auto;
+        height: 28px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #64748b;
+        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .cal-cell:not(.header):not(.empty):hover {
+        background: #f1f5f9;
+    }
+
+    .cal-cell.empty {
+        cursor: default;
+    }
+
+    .cal-cell.today {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+    }
+
+    .cal-cell.selected {
+        background: #2563eb !important;
+        color: #fff !important;
+    }
+
+    .cal-cell.has-booking::after {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #ef4444;
+        position: absolute;
+        bottom: 5px;
+    }
+
+    .cal-cell.selected.has-booking::after {
+        background: #fff;
+    }
+
+    .calendar-day-details {
+        border-top: 1px solid #e7edf5;
+        padding: 12px;
+        background: #f8fafc;
+        display: none;
+    }
+
+    .calendar-day-details h5 {
+        margin: 0 0 10px;
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    #cal-details-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .cal-empty-state {
+        font-size: 0.9rem;
+        color: #64748b;
+        padding: 8px 2px;
+    }
+
+    .cal-booking-item {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-left: 3px solid #2563eb;
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 6px;
+    }
+
+    .cal-booking-label {
+        display: inline-block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-right: 6px;
+        font-weight: 700;
+    }
+
+    .cal-booking-time,
+    .cal-booking-user,
+    .cal-booking-note {
+        font-size: 0.9rem;
+        color: #1f2937;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+
+    .cal-booking-time strong {
+        font-size: 0.94rem;
+        color: #0f172a;
+    }
+
+    .cal-booking-period {
+        margin-left: 8px;
+        color: #475569;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    @media (max-width: 480px) {
+        .calendar-grid {
+            gap: 3px;
+            padding: 6px;
+        }
+
+        .cal-cell {
+            font-size: 0.86rem;
+            border-radius: 7px;
+        }
+
+        .calendar-header {
+            padding: 10px;
+        }
+
+        .calendar-header span {
+            font-size: 0.95rem;
+        }
+
+        .calendar-day-details {
+            padding: 10px;
+        }
+    }
+    .filter-option {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+    }
+
+    .filter-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        cursor: pointer;
+    }
+
+    .filter-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .filter-option label {
+        margin-left: 5px;
+        cursor: pointer;
+    }
+
+    .filter-option-group {
+        margin-bottom: 12px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+
+    .filter-group-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .selected-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 30px;
+    }
+
+    .filter-tag {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e9ecef;
+        border-radius: 15px;
+        padding: 3px 10px;
+        font-size: 0.8rem;
+    }
+
+    .filter-tag-group {
+        color: #6c757d;
+        font-size: 0.8em;
+        font-style: italic;
+        margin-right: 2px;
+    }
+
+    .filter-tag-remove {
+        background: none;
+        border: none;
+        color: #6c757d;
+        margin-left: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    /* Compact appointment badge on cards */
+    .appointment-badge {
+        margin-top: 10px;
+        padding: 10px 12px;
+        background-color: #e1f5fe;
+        border-left: 4px solid #03a9f4;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+    .appointment-badge .appointment-time {
+        display: inline-block;
+        margin-top: 4px;
+        color: #01579b;
+        font-weight: 600;
+    }
+
+    /* Search styles */
+    .search-container {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+
+    #code-search {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-button {
+        padding: 8px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .search-button:hover {
+        background-color: #0056b3;
+    }
+
+    .search-field {
+        min-width: 250px;
+    }
+
+    #codesearch {
+    border: 1px solid #dc3545 !important;
+    }
+</style>
+<div class="container">
+    <!-- Conflict warning banner (populated by JS) -->
+    <div id="conflict-banner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-left:4px solid #fd7e14; color:#856404; padding:12px 16px; border-radius:4px; margin-bottom:16px; position:relative;">
+        <strong>⚠ Reservierungskonflikt</strong>
+        <span id="conflict-banner-text"></span>
+        <button onclick="document.getElementById('conflict-banner').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:1rem;cursor:pointer;color:#856404;">✕</button>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/booking_conflicts')
+            .then(r => r.json())
+            .then(data => {
+                if (data.conflicts && data.conflicts.length > 0) {
+                    const banner = document.getElementById('conflict-banner');
+                    const text = document.getElementById('conflict-banner-text');
+                    const c = data.conflicts[0];
+                    if (data.conflicts.length === 1) {
+                        text.textContent = ' Ihre Reservierung für "' + c.Item + '" ist aktiv, aber der Gegenstand ist bereits von jemand anderem ausgeliehen. Bitte wenden Sie sich an einen Administrator.';
+                    } else {
+                        text.textContent = ' ' + data.conflicts.length + ' Ihrer Reservierungen sind aktiv, aber die Gegenstände sind bereits ausgeliehen. Bitte wenden Sie sich an einen Administrator.';
+                    }
+                    banner.style.display = 'block';
+                }
+            })
+            .catch(() => {});
+    });
+    </script>
+    <div class="content">
+        <h1 style="position:relative;">Inventar Objekte
+            <div class="view-switch-group">
+                <button id="toggle-view-mode" class="view-toggle-btn" title="In Tabellenansicht wechseln">
+                    <span id="view-mode-icon">🗂</span>
+                </button>
+                <button id="toggle-favorites-view" class="view-toggle-btn" title="Nur Merkliste anzeigen">
+                    <span id="favorites-view-icon">🔖</span>
+                </button>
+            </div>
+        </h1>
+        <div class="filter-container">
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Unterrichtsfach:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter1-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(1)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter1"></div>
+                <div class="filter-dropdown" id="filter1-dropdown">
+                    <div class="filter-options" id="filter1-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Jahrgangsstufe:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter2-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(2)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter2"></div>
+                <div class="filter-dropdown" id="filter2-dropdown">
+                    <div class="filter-options" id="filter2-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Thema:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter3"></div>
+                <div class="filter-dropdown" id="filter3-dropdown">
+                    <div class="filter-options" id="filter3-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group search-field" id="codesearch">
+                <div class="filter-header">
+                    <label for="code-search">Code suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearCodeSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="code-search" placeholder="Code eingeben..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByCode()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
+
+            <div class="filter-group search-field">
+                <div class="filter-header">
+                    <label for="desc-search">Titel/Beschreibung suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearDescSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="desc-search" placeholder="Begriff in Beschreibung..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByDescription()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="qr-container">
+            <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
+            <div id="qr-reader"></div>
+        </div>
+        <div id="table-view-header" class="table-view-header" aria-hidden="true">
+            <span>Name</span>
+            <span>Ort</span>
+            <span>Unterrichtsfach</span>
+            <span>Jahrgangsstufe</span>
+            <span>Thema</span>
+            <span>Barcode</span>
+        </div>
+        <div id="items-container" class="items-container">
+            <!-- Items will be dynamically loaded here -->
+        </div>
+        
+    </div>
+    </div>
+    <div id="item-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="modal-content-wrapper">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Appointment Modal -->
+    <div id="schedule-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeScheduleModal()">&times;</span>
+            <h2>Termin planen</h2>
+            <form id="schedule-form">
+                <input type="hidden" id="schedule-item-id" name="item_id">
+
+                <div class="form-group" id="schedule-specific-item-group" style="display:none;">
+                    <label for="schedule-specific-item">Unterartikel (optional):</label>
+                    <select id="schedule-specific-item" name="specific_item_id">
+                        <option value="">Automatisch wählen</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-date">Startdatum:</label>
+                    <input type="date" id="schedule-date" name="schedule_date" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="schedule-multi-day" style="display:inline-block; width:auto; margin-right:10px;">Mehrtägig:</label>
+                    <input type="checkbox" id="schedule-multi-day" name="is_multi_day" style="width:auto;">
+                </div>
+
+                <div class="form-group" id="schedule-end-date-group" style="display:none;">
+                    <label for="schedule-end-date">Enddatum:</label>
+                    <input type="date" id="schedule-end-date" name="schedule_end_date">
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-start-period">Von Schulstunde:</label>
+                    <select id="schedule-start-period" name="start_period" required>
+                        <option value="">-- Bitte wählen --</option>
+                        <option value="1">1. Stunde (08:00 - 08:45)</option>
+                        <option value="2">2. Stunde (08:45 - 09:30)</option>
+                        <option value="3">3. Stunde (09:45 - 10:30)</option>
+                        <option value="4">4. Stunde (10:30 - 11:15)</option>
+                        <option value="5">5. Stunde (11:30 - 12:15)</option>
+                        <option value="6">6. Stunde (12:15 - 13:00)</option>
+                        <option value="7">7. Stunde (13:30 - 14:15)</option>
+                        <option value="8">8. Stunde (14:15 - 15:00)</option>
+                        <option value="9">9. Stunde (15:15 - 16:00)</option>
+                        <option value="10">10. Stunde (16:00 - 16:45)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-end-period">Bis Schulstunde:</label>
+                    <select id="schedule-end-period" name="end_period" required>
+                        <option value="">-- Bitte wählen --</option>
+                        <option value="1">1. Stunde (08:00 - 08:45)</option>
+                        <option value="2">2. Stunde (08:45 - 09:30)</option>
+                        <option value="3">3. Stunde (09:45 - 10:30)</option>
+                        <option value="4">4. Stunde (10:30 - 11:15)</option>
+                        <option value="5">5. Stunde (11:30 - 12:15)</option>
+                        <option value="6">6. Stunde (12:15 - 13:00)</option>
+                        <option value="7">7. Stunde (13:30 - 14:15)</option>
+                        <option value="8">8. Stunde (14:15 - 15:00)</option>
+                        <option value="9">9. Stunde (15:15 - 16:00)</option>
+                        <option value="10">10. Stunde (16:00 - 16:45)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-notes">Notizen:</label>
+                    <textarea id="schedule-notes" name="notes" placeholder="Optionale Notizen..."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="save-button">Termin speichern</button>
+                    <button type="button" class="cancel-button" onclick="closeScheduleModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Initialize template variables before any JavaScript code -->
+<script>
+    // Create a global object to hold server-side template values
+    window.serverVars = {
+        highlightItemId: "{% if highlight_item is defined and highlight_item %}{{ highlight_item }}{% else %}null{% endif %}"
+    };
+    
+    window.isDebug = false; // Set to true only for development environment
+</script>
+
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script>
+    // Global state
+    const highlightItemId = (window.serverVars && window.serverVars.highlightItemId && window.serverVars.highlightItemId !== 'null')
+        ? window.serverVars.highlightItemId
+        : null;
+    let codeSearchTerm = '';
+    let descSearchIds = null; // Set of matching IDs or null when disabled
+
+    // QR scanner toggle setup
+    document.addEventListener('DOMContentLoaded', function() {
+        const scanButton = document.getElementById('scanButton');
+        const qrReader = document.getElementById('qr-reader');
+        let html5QrcodeScanner = null;
+
+        if (!scanButton || !qrReader) return;
+
+        const setScannerUi = (isOpen) => {
+            scanButton.classList.toggle('is-active', isOpen);
+            scanButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            scanButton.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
+        };
+
+        scanButton.addEventListener('click', function() {
+            if (qrReader.style.display !== 'block') {
+                qrReader.style.display = 'block';
+                
+                html5QrcodeScanner = new Html5QrcodeScanner(
+                    'qr-reader', { fps: 10, qrbox: 250 }
+                );
+                
+                html5QrcodeScanner.render((decodedText) => {
+                    html5QrcodeScanner.clear();
+                    qrReader.style.display = 'none';
+                    
+                    // Put scanned code into the search box and trigger search
+                    const searchInput = document.getElementById('code-search');
+                    if (searchInput) {
+                        searchInput.value = decodedText;
+                        searchByCode();
+                    }
+
+                    setScannerUi(false);
+                });
+
+                setScannerUi(true);
+            } else {
+                if (html5QrcodeScanner) {
+                    html5QrcodeScanner.clear();
+                }
+                qrReader.style.display = 'none';
+                setScannerUi(false);
+            }
+        });
+    });
+
+    // Return preferred primary and fallback image URLs based on extension
+    // Simplified to trust the URL provided by the backend
+    function getImageSrc(url) {
+        try {
+            if (!url || typeof url !== 'string') {
+                return { primary: url, fallback: url };
+            }
+            return { primary: url, fallback: url };
+        } catch (e) {
+            console.warn('getImageSrc failed for', url, e);
+            return { primary: url, fallback: url };
+        }
+    }
+
+    function saveFilterState() {
+        localStorage.setItem('inventarSystemFilters', JSON.stringify(activeFilters));
+    }
+    
+    function loadFilterState() {
+        const savedFilters = localStorage.getItem('inventarSystemFilters');
+        if (savedFilters) {
+            try {
+                // Parse saved filters
+                const parsedFilters = JSON.parse(savedFilters);
+                
+                // Restore to active filters
+                if (parsedFilters.filter1) activeFilters.filter1 = parsedFilters.filter1;
+                if (parsedFilters.filter2) activeFilters.filter2 = parsedFilters.filter2;
+                if (parsedFilters.filter3) activeFilters.filter3 = parsedFilters.filter3;
+                
+                // Update UI to show selected filters
+                updateSelectedFilters(1);
+                updateSelectedFilters(2);
+                updateSelectedFilters(3);
+            } catch (e) {
+                console.error("Error loading saved filters:", e);
+            }
+        }
+    }
+    
+    // Function to clear filter state from localStorage
+    function clearFilterState() {
+        localStorage.removeItem('inventarSystemFilters');
+        // Reset active filters
+        activeFilters = {
+            filter1: [],
+            filter2: [],
+            filter3: []
+        };
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load saved filters
+        loadFilterState();
+        
+        // Find and attach event listener to all logout links
+        const logoutLinks = document.querySelectorAll('a[href*="logout"]');
+        logoutLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                clearFilterState(); // Clear filters when logging out
+            });
+        });
+        
+        // Set up schedule form submission
+        setupScheduleFormSubmission();
+        
+        // Fetch user status to get current username
+        fetch('/user_status')
+            .then(response => response.json())
+            .then(data => {
+                currentUsername = data.username;
+                // Now load items with username information
+                loadItems();
+                // Setup card images display after a short delay to ensure items are loaded
+                setTimeout(setupCardImagesDisplay, 500);
+            })
+            .catch(error => {
+                console.error('Error fetching user status:', error);
+                loadItems(); // Load items anyway in case of error
+            });
+
+        // Add event listener for code search input
+        const codeSearchInput = document.getElementById('code-search');
+        if (codeSearchInput) {
+            codeSearchInput.addEventListener('input', function() {
+                // Use a small delay to avoid excessive filtering while typing
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    searchByCode();
+                }, 300);
+            });
+        }
+        // Add event listener for description search input
+        const descInput = document.getElementById('desc-search');
+        if (descInput) {
+            descInput.addEventListener('input', function(){
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    searchByDescription();
+                }, 400);
+            });
+            descInput.addEventListener('keydown', function(e){
+                if (e.key === 'Enter') { e.preventDefault(); searchByDescription(); }
+            });
+        }
+        
+        // After items are loaded, make sure filters are updated if there are active selections
+        if (activeFilters.filter1.length > 0) {
+            rebuildFilter2Options();
+        }
+        if (activeFilters.filter1.length > 0 || activeFilters.filter2.length > 0) {
+            rebuildFilter3Options();
+        }
+    });
+
+    // Global variables to store active filters
+    let activeFilters = {
+        filter1: [],
+        filter2: [],
+        filter3: []
+    };
+
+    // Add this line to define allItems globally
+    let allItems = [];
+
+    function loadItems() {
+        fetch("{{ url_for('get_items') }}")
+            .then(response => response.json())
+            .then(data => {
+                const itemsContainer = document.querySelector('#items-container');
+                // Creating a Set to store unique filter values
+                const filter1Values = new Set();
+                const filter2Values = new Set();
+                const filter3Values = new Set();
+                
+                // Store all items data globally for filter rebuilding
+                allItems = data.items || [];
+                
+                // Clear the container first
+                itemsContainer.innerHTML = '';
+                
+                if (!data.items || data.items.length === 0) {
+                    itemsContainer.innerHTML = '<div class="no-items-message">Keine Objekte gefunden</div>';
+                    return;
+                }
+
+                // Sort items by name in ascending order (A-Z)
+                data.items.sort((a, b) => {
+                    const nameA = a.Name ? a.Name.toLowerCase() : '';
+                    const nameB = b.Name ? b.Name.toLowerCase() : '';
+                    return nameA.localeCompare(nameB); // Ascending order
+                });
+                
+                const favoriteIds = new Set(data.favorites || []);
+                window.currentFavorites = favoriteIds;
+                try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(favoriteIds))); } catch(e){}
+                data.items.forEach(item => {
+                    try {
+                        const card = document.createElement('div');
+                        card.classList.add('item-card');
+                        
+                        // Add class to make card clickable 
+                        card.classList.add('clickable-card');
+                        
+                        // Add highlight class if this is the item we're looking for
+                        if (highlightItemId && item._id === highlightItemId) {
+                            card.classList.add('highlight-item');
+                            setTimeout(() => {
+                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 500);
+                        }
+                        
+                        // Determine favorite state early
+                        const favActive = favoriteIds.has(item._id);
+
+                        // Process and store filter values with consistent handling
+                        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+                        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+                        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+                        
+                        // Store arrays on the card as data attributes
+                        card.dataset.filter1 = JSON.stringify(filter1Array);
+                        card.dataset.filter2 = JSON.stringify(filter2Array);
+                        card.dataset.filter3 = JSON.stringify(filter3Array);
+                        card.dataset.code = (item.Code_4 !== undefined && item.Code_4 !== null) ? 
+                          String(item.Code_4).trim() : '';
+        
+                        // Add filter values to their respective sets - all values should be strings
+                        filter1Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter1Values.add(value);
+                            }
+                        });
+        
+                        filter2Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter2Values.add(value);
+                            }
+                        });
+        
+                        filter3Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter3Values.add(value);
+                            }
+                        });
+
+                        // Display first filter value or dash if none exist
+                        const filter1Display = filter1Array.length > 0 ? filter1Array[0] : '-';
+                        const filter2Display = filter2Array.length > 0 ? filter2Array[0] : '-';
+                        const filter3Display = filter3Array.length > 0 ? filter3Array[0] : '-';
+                        
+                        // Additional filter values indicator
+                        const filter1More = filter1Array.length > 1 ? ` (+${filter1Array.length - 1} mehr)` : '';
+                        const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
+                        const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
+
+                        const imagesHtml = item.Images ? item.Images.map((file, index) => {
+                            // Get file with correct case handling
+                            const image = file;
+                            
+                            // Make sure we have a proper URL for the image
+                            const baseImageSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                            image : 
+                                            `{{ url_for('uploaded_file', filename='') }}${image}`;
+                            
+                            // Use thumbnail info if available
+                            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                            
+                            if (isVideoFile(image)) {
+                                // For videos, use thumbnail if available, otherwise original video
+                                const videoSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : baseImageSrc;
+                                
+                                if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
+                                    // Show thumbnail image with video overlay for card view - using classes instead of inline styles
+                                    return `<div class="video-container" data-index="${index}">
+                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${image}">
+                                            <div class="video-preview-overlay">
+                                                <div class="video-play-button">▶</div>
+                                            </div>
+                                            </div>`;
+                                } else {
+                                    // Fallback to video element - using classes instead of inline styles
+                                    return `<div class="video-container" data-index="${index}">
+                                            <video src="${videoSrc}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${image}">
+                                            <source src="${videoSrc}" type="video/mp4">
+                                            Ihr Browser unterstützt keine Videos.
+                                            </video>
+                                            <div class="video-preview-overlay">
+                                                <div class="video-play-button">▶</div>
+                                            </div>
+                                            </div>`;
+                                }
+                            } else {
+                                // For images, use thumbnail if available
+                                // Always ensure consistent URL construction for all image types, including PNG
+                                let baseSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : (image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                        image : 
+                                        `{{ url_for('uploaded_file', filename='') }}${image}`);
+                                
+                                // Use our PNG to JPG conversion helper function
+                                const imageSrc = getImageSrc(baseSrc);
+                                    
+                                return `<img src="${imageSrc.primary}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${image}" onerror="if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
+                            }
+                        }).join('') : '';
+                        
+                        const groupedCount = Number(item.GroupedDisplayCount || 1);
+                        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+                        const isGroupedItem = groupedCount > 1;
+                        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+                        const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
+                        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
+
+                        // Check if item is borrowed by current user (single items only)
+                        const isBorrowedByMe = !isGroupedItem && !item.Verfuegbar && item.User === currentUsername;
+                        
+                        // Add borrower info badge if item is borrowed
+                        let borrowerBadge = '';
+                        if (!item.Verfuegbar && item.BorrowerInfo) {
+                            borrowerBadge = `
+                                <div class="borrower-badge">
+                                    Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
+                                    ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
+                                </div>`;
+                        }
+                        
+                        // Add appointment badge if item has upcoming appointments
+                        let appointmentBadge = '';
+                        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+                            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+                            if (upcomingAppointment) {
+                                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                                
+                                appointmentBadge = `
+                                    <div class="appointment-badge">
+                                        <strong>Geplant für:</strong> ${formattedDate}<br>
+                                        <span class="appointment-time">${startPeriod}${endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : ''}</span>
+                                    </div>`;
+                            }
+                        }
+
+                        card.innerHTML = `
+                            <div class="card-content" data-item-id="${item._id}">
+                                <h3 class="item-name-cell">${item.Name}</h3>
+                                <p class="item-ort-cell"><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                                <p class="item-filter1-cell"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
+                                <p class="item-filter2-cell"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
+                                <p class="item-filter3-cell"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-code-cell"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <p class="item-count-cell"><strong>Anzahl:</strong> ${groupedCount}</p>
+                                ${isGroupedItem ? `<p class="item-count-cell"><strong>Verfügbar:</strong> ${availableGroupedCount}</p>` : ''}
+                                <div class="image-container">
+                                    ${imagesHtml}
+                                </div>
+                                ${borrowerBadge}
+                                ${appointmentBadge}
+                            </div>
+                            <div class="actions">
+                                ${isAvailableForBorrow && !item.BlockedNow ? 
+                                    `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}" class="inline-action-form">
+                                        ${isGroupedItem ? `
+                                        <div class="grouped-borrow-controls" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
+                                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                                            <select id="specific-item-card-${item._id}" name="specific_item_id" style="max-width:190px; padding:4px;">
+                                                <option value="">Automatisch wählen</option>
+                                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('')}
+                                            </select>
+                                        </div>` : ''}
+                                        <button class="ausleihen" type="submit">Ausleihen</button>
+                                    </form>` 
+                                : isBorrowedByMe ?
+                                    `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}" class="inline-action-form">
+                                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                                    </form>`
+                                :
+                                    `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
+                                }
+                                ${canScheduleItem ? `<button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                                <button class="quick-details-button" type="button" onclick="openItemQuick('${item._id}')">Details</button>
+                            </div>
+                        `;
+                        if (favActive) card.classList.add('favorite-item');
+                        itemsContainer.appendChild(card);
+                        // Attach favorite action button handler
+                        const favBtn = document.createElement('button');
+                        favBtn.className = 'bookmark-btn' + (favActive? ' active':'');
+                        favBtn.type = 'button';
+                        favBtn.dataset.favId = item._id;
+                        favBtn.textContent = favActive? '★':'☆';
+                        favBtn.setAttribute('aria-label','Merken');
+                        favBtn.addEventListener('click',(ev)=>{ev.stopPropagation();toggleFavorite(item._id, favBtn, card);});
+                        card.appendChild(favBtn);
+                        
+                        // Add direct click event listeners to the card content area
+                        const cardContent = card.querySelector('.card-content');
+                        if (cardContent) {
+                            cardContent.addEventListener('click', function(e) {
+                                // Don't trigger if clicking on buttons or form elements
+                                if (e.target.tagName === 'BUTTON' || 
+                                    e.target.tagName === 'A' || 
+                                    e.target.tagName === 'INPUT' ||
+                                    e.target.closest('button') || 
+                                    e.target.closest('a') || 
+                                    e.target.closest('.image-container')) {
+                                    return;
+                                }
+                                
+                                // Stop event from bubbling up
+                                e.stopPropagation();
+                                
+                                // Get full item data with correct image paths
+                                const modalItemData = {...item};
+                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
+                                
+                                openItemModal(modalItemData);
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Error processing item:', err, item);
+                    }
+                });
+                
+                // Populate filter options
+                populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
+                populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
+                populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
+                
+                // Start display from leftmost position (first card, which is now Z)
+                itemsContainer.scrollLeft = 0;
+                
+                // Apply filters
+                applyFilters();
+                
+                // Setup proper image display for all cards
+                setupCardImagesDisplay();
+
+                // After the data is loaded, rebuild filters if needed
+                if (activeFilters.filter1.length > 0) {
+                    rebuildFilter2Options();
+                }
+                if (activeFilters.filter1.length > 0 || activeFilters.filter2.length > 0) {
+                    rebuildFilter3Options();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching items:', error);
+                const itemsContainer = document.querySelector('#items-container');
+                itemsContainer.innerHTML = 
+                    '<div class="error-message">Fehler beim Laden der Objekte. Bitte versuchen Sie es später erneut.</div>';
+            });
+    }
+
+    function searchByCode() {
+        const searchInput = document.getElementById('code-search');
+        const rawSearchTerm = searchInput.value;
+        codeSearchTerm = rawSearchTerm.trim().toLowerCase();
+        
+        // Add visual feedback when searching
+        searchInput.classList.add('searching');
+        
+        // Reset highlighting before applying filters
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
+        });
+        
+        // Apply filters which will handle highlighting
+        applyFilters(true); // Pass true to indicate this is a direct search
+        
+        // Remove visual feedback after a delay
+        setTimeout(() => {
+            searchInput.classList.remove('searching');
+        }, 500);
+    }
+
+    function applyFilters(isDirectSearch = false) {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
+        let codeMatchCount = 0;
+        let exactMatchCount = 0;
+        let firstMatchedCard = null;
+        let firstDescMatchedCard = null;
+        let exactMatchCard = null;
+        
+        // Process search term
+        const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
+    const isCodeSearch = searchTerm.length > 0;
+        
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            const rawCode = item.dataset.code || '';
+            const itemCode = rawCode.trim().toLowerCase();
+            const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
+            
+            // Check if item matches all active filters
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
+            const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
+            
+            // Check for code match (special logic for exact matches)
+            let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
+            let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
+            
+            const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
+            if (passesAllFilters && matchesCodeSearch && matchesDesc) {
+                // Show item if it matches all filters and code search
+                item.style.display = 'block';
+                visibleCount++;
+                
+                // Add appropriate highlight classes for code matches
+                if (exactCodeMatch) {
+                    item.classList.add('highlight-item', 'exact-code-match');
+                    exactMatchCount++;
+                    if (!exactMatchCard) {
+                        exactMatchCard = item;
+                    }
+                } else if (isCodeSearch && itemCode.includes(searchTerm)) {
+                    item.classList.add('code-match');
+                    codeMatchCount++;
+                    if (!firstMatchedCard) {
+                        firstMatchedCard = item;
+                    }
+                }
+
+                // Add description match highlight
+                if (descSearchIds && itemId && descSearchIds.has(String(itemId))) {
+                    item.classList.add('desc-match');
+                    if (!firstDescMatchedCard) firstDescMatchedCard = item;
+                } else {
+                    item.classList.remove('desc-match');
+                }
+            } else {
+                // Hide non-matching items
+                item.style.display = 'none';
+            }
+        });
+        
+        // Handle scrolling and highlighting for code searches
+        if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
+            setTimeout(() => {
+                // Prefer exact match, fallback to partial match
+                const cardToHighlight = exactMatchCard || firstMatchedCard;
+                
+                if (cardToHighlight) {
+                    // Fixed scrolling logic to center the card properly
+                    centerCardInView(cardToHighlight, itemsContainer);
+                    
+                    // Add stronger attention-grabbing animation
+                    applyAttentionAnimation(cardToHighlight);
+                }
+            }, 300);
+        } else if (isDirectSearch && isCodeSearch && visibleCount === 0) {
+            debugLog(`No matches found for search term "${searchTerm}"`, {
+                allCodes: Array.from(items).map(item => item.dataset.code?.trim() || 'empty')
+            });
+        }
+
+        // If description search active, scroll to first desc match
+        if (descSearchIds && firstDescMatchedCard) {
+            setTimeout(() => {
+                centerCardInView(firstDescMatchedCard, itemsContainer);
+                applyAttentionAnimation(firstDescMatchedCard);
+            }, 250);
+        }
+    }
+
+    // Description search using backend substring match (Beschreibung)
+    function searchByDescription() {
+        const input = document.getElementById('desc-search');
+        const term = (input?.value || '').trim();
+        if (!term) {
+            descSearchIds = null;
+            applyFilters(true);
+            return;
+        }
+        input?.classList.add('searching');
+        fetch(`/search_word/${encodeURIComponent(term)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success && Array.isArray(data.response)) {
+                    descSearchIds = new Set(data.response.map(String));
+                } else {
+                    descSearchIds = new Set();
+                }
+                applyFilters(true);
+            })
+            .catch(() => { descSearchIds = new Set(); applyFilters(true); })
+            .finally(() => { setTimeout(() => input?.classList.remove('searching'), 250); });
+    }
+
+    function clearDescSearch() {
+        const input = document.getElementById('desc-search');
+        if (input) input.value = '';
+        descSearchIds = null;
+        applyFilters();
+    }
+
+    // Helper function to center a card in the container view
+    function centerCardInView(card, container) {
+        // Make sure the card is visible first
+        card.style.display = 'block';
+        
+        // Get positions and dimensions
+        const containerRect = container.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        
+        // Calculate scroll position to center the card
+        const scrollPosition = card.offsetLeft - (containerRect.width/2) + (cardRect.width/2);
+        
+        // Debug the centering calculation if in debug mode
+        if (window.isDebug) {
+            console.log('Card positioning details:', {
+                cardName: card.querySelector('h3')?.textContent,
+                containerWidth: containerRect.width,
+                cardWidth: cardRect.width,
+                cardLeft: card.offsetLeft,
+                calculatedScrollPosition: scrollPosition
+            });
+        }
+        
+        // Smooth scroll to position
+        container.scrollTo({
+            left: scrollPosition,
+            behavior: 'smooth'
+        });
+    }
+
+    // Helper function to apply attention animation to a card
+    function applyAttentionAnimation(card) {
+        // Simply apply green border without animation
+        card.style.border = '3px solid #28a745';
+        card.style.boxShadow = '0 0 20px rgba(40, 167, 69, 0.7)';
+    }
+
+    function clearCodeSearch() {
+        const searchInput = document.getElementById('code-search');
+        searchInput.value = '';
+        codeSearchTerm = '';
+        
+        // Reset highlighting
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
+        });
+        
+        // Apply filters to show all matching items
+        applyFilters();
+    }
+
+    // Add video file detection function
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
+    function openItemModal(item) {
+        // Get modal elements
+        const modal = document.getElementById('item-modal');
+        const modalContent = document.getElementById('modal-content-wrapper');
+        
+        // Format filter values for display
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+        
+        // Build image/video HTML with proper tags - use full size for modal
+        const imagesHtml = item.Images ? item.Images.map((file, index) => {
+            // Check if the file already has a full URL path or just the filename
+            const imageSrc = file.startsWith('/uploads/') || file.startsWith('http') ? 
+                            file : 
+                            `{{ url_for('uploaded_file', filename='') }}${file}`;
+            
+            if (isVideoFile(file)) {
+                return `<video src="${imageSrc}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata">
+                         Your browser does not support the video tag.
+                         </video>`;
+            } else {
+                // For images, ensure URL construction is consistent for all image types, including PNG
+                const baseSrc = file.startsWith('/uploads/') || file.startsWith('http') ? 
+                               file : 
+                               `{{ url_for('uploaded_file', filename='') }}${file}`;
+                
+                // Use our PNG to JPG conversion helper function
+                const imageSrc = getImageSrc(baseSrc);
+                
+                return `<img src="${imageSrc.primary}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" 
+                         onerror="if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
+            }
+        }).join('') : '';
+        
+        const groupedCount = Number(item.GroupedDisplayCount || 1);
+        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+        const isGroupedItem = groupedCount > 1;
+        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
+        // Check if item is borrowed
+        const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
+        
+        // Build borrower info panel if applicable
+        let borrowerInfoHtml = '';
+        if (isBorrowed && item.BorrowerInfo) {
+            borrowerInfoHtml = `
+                <div class="borrower-info-panel">
+                    <h4>Ausleihstatus</h4>
+                    <p class="borrower-name">Ausgeliehen von: ${item.BorrowerInfo.username}</p>
+                    <p class="borrow-time">Seit: ${item.BorrowerInfo.borrowTime || 'Unbekannt'}</p>
+                </div>
+            `;
+        }
+        
+        // Add appointment info panel if item has appointments
+        let appointmentInfoHtml = '';
+        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+            if (upcomingAppointment) {
+                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                const timeDisplay = startPeriod + (endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : '');
+                
+                appointmentInfoHtml = `
+                    <div class="appointment-info-panel">
+                        <h4>Geplanter Termin</h4>
+                        <p class="appointment-date">Datum: ${formattedDate}</p>
+                        <p class="appointment-time">Zeit: ${timeDisplay}</p>
+                        ${upcomingAppointment.notes ? `<p class="appointment-notes">Notizen: ${upcomingAppointment.notes}</p>` : ''}
+                    </div>
+                `;
+            }
+        }
+        
+        // Build modal content HTML
+        modalContent.innerHTML = `
+            <h2>${item.Name}</h2>
+            <div class="modal-action-bar" style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
+                <button type="button" class="bookmark-btn" id="modal-bookmark-btn" title="Merken">${(window.currentFavorites||new Set()).has(item._id) ? '★' : '☆'}</button>
+            </div>
+            ${borrowerInfoHtml}
+            ${appointmentInfoHtml}
+            
+            <div class="modal-image-container">
+                ${imagesHtml}
+                ${item.Images && item.Images.length > 1 ? `
+                    <button class="modal-image-nav modal-prev-image" onclick="changeModalImage(-1)">&#10094;</button>
+                    <button class="modal-image-nav modal-next-image" onclick="changeModalImage(1)">&#10095;</button>
+                    <div class="image-counter">1/${item.Images.length}</div>
+                ` : ''}
+            </div>
+            
+            <div class="modal-details">
+                <div class="detail-group">
+                    <div class="detail-label">Ort:</div>
+                    <div class="detail-value">${item.Ort || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value ${isBorrowed ? 'status-borrowed' : ''}">
+                        ${isBorrowed ? 'Ausgeliehen' : 'Verfügbar'}
+                    </div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Unterrichtsfach:</div>
+                    <div class="detail-value">${filter1Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Jahrgangsstufe:</div>
+                    <div class="detail-value">${filter2Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Thema:</div>
+                    <div class="detail-value">${filter3Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Code:</div>
+                    <div class="detail-value">${item.Code_4 || '-'}</div>
+                </div>
+
+                <div class="detail-group">
+                    <div class="detail-label">Anzahl:</div>
+                    <div class="detail-value">${groupedCount}</div>
+                </div>
+
+                ${isGroupedItem ? `
+                <div class="detail-group">
+                    <div class="detail-label">Verfügbar:</div>
+                    <div class="detail-value">${availableGroupedCount}</div>
+                </div>` : ''}
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungsjahr:</div>
+                    <div class="detail-value">${item.Anschaffungsjahr || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungskosten:</div>
+                    <div class="detail-value">${item.Anschaffungskosten || '-'}</div>
+                </div>
+                
+                <div class="detail-group full-width">
+                    <div class="detail-label">Beschreibung:</div>
+                    <div class="detail-value">${item.Beschreibung || '-'}</div>
+                </div>
+
+                <div class="detail-group full-width" style="margin-top:14px; padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fbfbfd; box-shadow: 0 1px 1px rgba(0,0,0,0.03);">
+                    <div class="detail-label" style="font-weight:600; color:#374151;">Verfügbarkeit prüfen</div>
+                    <div class="detail-value">
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                            <input type="date" id="avail-date" style="padding:8px 10px; border:1px solid #d1d5db; border-radius:8px;">
+                            <select id="avail-start" style="padding:8px 10px; border:1px solid #d1d5db; border-radius:8px;">
+                                <option value="">Von Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <select id="avail-end" style="padding:8px 10px; border:1px solid #d1d5db; border-radius:8px;">
+                                <option value="">Bis Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <button id="avail-check" class="filter-toggle" style="padding:8px 12px; border-radius:8px;">Prüfen</button>
+                            <span id="avail-result" style="margin-left:8px; font-weight:600;"></span>
+                        </div>
+                        <div id="avail-conflicts" style="margin-top:8px; color:#b91c1c; font-size:0.95em;"></div>
+                    </div>
+                </div>
+
+                <div class="detail-group full-width" style="margin-top:12px;">
+                    <div class="detail-label" style="font-weight:600; color:#374151;">Geplante Ausleihen</div>
+                    <div class="detail-value">
+                        <button id="toggle-bookings" class="calendar-toggle-btn" style="margin-bottom:12px; padding:10px 16px; border-radius:6px; background:#f3f4f6; border:1px solid #d1d5db; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s ease;">
+                            <span>📅</span>
+                            <span id="toggle-bookings-text">Kalender anzeigen</span>
+                        </button>
+                        <div id="bookings-panel" style="display:none; margin-top:10px;">
+                            <div class="calendar-wrapper">
+                                <div class="calendar-header">
+                                    <button id="cal-prev">&lt;</button>
+                                    <span id="cal-month-year"></span>
+                                    <button id="cal-next">&gt;</button>
+                                </div>
+                                <div id="calendar-grid" class="calendar-grid"></div>
+                            </div>
+                            <div id="calendar-day-details" class="calendar-day-details">
+                                <h5 id="cal-details-date"></h5>
+                                <div id="cal-details-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                ${(!isBorrowed) && !item.BlockedNow ? 
+                    `<form method="POST" action="/ausleihen/${item._id}">
+                        ${isGroupedItem ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:78px; padding:4px;">
+                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                            <select id="specific-item-modal-${item._id}" name="specific_item_id" style="max-width:220px; padding:4px;">
+                                <option value="">Automatisch wählen</option>
+                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('')}
+                            </select>
+                        </div>` : ''}
+                        <button class="ausleihen" type="submit">Ausleihen</button>
+                    </form>` 
+                    : (!isGroupedItem && item.User === currentUsername) ?
+                    `<form method="POST" action="/zurueckgeben/${item._id}">
+                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                    </form>`
+                    : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
+                }
+                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                <button type="button" class="close-modal secondary-close" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
+            </div>
+        `;
+        
+        // Show the modal
+        modal.style.display = 'block';
+        
+        // Set up close button
+        const closeButton = modal.querySelector('.close-modal');
+        closeButton.onclick = function() {
+            modal.style.display = 'none';
+        };
+        // Bookmark button in modal
+        const modalBookmark = document.getElementById('modal-bookmark-btn');
+        if(modalBookmark){
+            modalBookmark.addEventListener('click', ()=>{
+                // Find corresponding card elements if present
+                const card = document.querySelector(`.item-card .card-content[data-item-id="${item._id}"]`)?.parentElement;
+                toggleFavorite(item._id, modalBookmark, card || modalBookmark);
+            });
+        }
+        
+        // Store current image index for navigation
+        window.currentModalImageIndex = 0;
+        window.totalModalImages = item.Images ? item.Images.length : 0;
+        
+        // Set up click outside to close
+        window.onclick = function(event) {
+            const itemModal = document.getElementById('item-modal');
+            const scheduleModal = document.getElementById('schedule-modal');
+            
+            if (event.target === itemModal) {
+                itemModal.style.display = 'none';
+            }
+            if (scheduleModal && event.target === scheduleModal) {
+                scheduleModal.style.display = 'none';
+            }
+        };
+
+        // Planned bookings panel (Calendar Logic)
+        const toggleBtn = document.getElementById('toggle-bookings');
+        const panel = document.getElementById('bookings-panel');
+        const calGrid = document.getElementById('calendar-grid');
+        const calMonthYear = document.getElementById('cal-month-year');
+        const calPrev = document.getElementById('cal-prev');
+        const calNext = document.getElementById('cal-next');
+        const detailsPanel = document.getElementById('calendar-day-details');
+        const detailsDate = document.getElementById('cal-details-date');
+        const detailsList = document.getElementById('cal-details-list');
+
+        let bookings = [];
+        let currentDate = new Date();
+        let displayedMonth = currentDate.getMonth();
+        let displayedYear = currentDate.getFullYear();
+
+        function renderCalendar() {
+            calGrid.innerHTML = '';
+            const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            calMonthYear.textContent = `${monthNames[displayedMonth]} ${displayedYear}`;
+
+            // Headers
+            const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'cal-cell header';
+                div.textContent = day;
+                calGrid.appendChild(div);
+            });
+
+            const firstDay = new Date(displayedYear, displayedMonth, 1);
+            const lastDay = new Date(displayedYear, displayedMonth + 1, 0);
+            
+            // Adjust for Monday start (0 = Sunday, 1 = Monday)
+            let startDayIndex = firstDay.getDay() - 1;
+            if (startDayIndex === -1) startDayIndex = 6;
+
+            // Empty cells before first day
+            for (let i = 0; i < startDayIndex; i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell empty';
+                calGrid.appendChild(div);
+            }
+
+            // Days
+            for (let i = 1; i <= lastDay.getDate(); i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell';
+                div.dataset.day = String(i);
+                div.textContent = i;
+                
+                const currentDayDate = new Date(displayedYear, displayedMonth, i);
+                const today = new Date();
+                if (currentDayDate.toDateString() === today.toDateString()) {
+                    div.classList.add('today');
+                }
+
+                // Check for bookings
+                const dayBookings = bookings.filter(b => {
+                    const checkDate = new Date(displayedYear, displayedMonth, i);
+                    checkDate.setHours(0,0,0,0);
+                    
+                    const bStart = new Date(b.start);
+                    bStart.setHours(0,0,0,0);
+                    
+                    // If end is present use it, otherwise assume single day
+                    let bEnd = b.end ? new Date(b.end) : new Date(bStart);
+                    bEnd.setHours(0,0,0,0);
+
+                    return checkDate >= bStart && checkDate <= bEnd;
+                });
+
+                if (dayBookings.length > 0) {
+                    div.classList.add('has-booking');
+                    div.onclick = () => showDayDetails(i, dayBookings);
+                }
+
+                calGrid.appendChild(div);
+            }
+        }
+
+        function showDayDetails(day, dayBookings) {
+            // Remove selected class from others
+            document.querySelectorAll('.cal-cell').forEach(c => c.classList.remove('selected'));
+            const selectedDay = calGrid.querySelector(`.cal-cell[data-day="${day}"]`);
+            if (selectedDay) {
+                selectedDay.classList.add('selected');
+            }
+
+            const esc = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            
+            detailsPanel.style.display = 'block';
+            detailsDate.textContent = `Termine am ${day}.${displayedMonth + 1}.${displayedYear}`;
+            
+            if (dayBookings.length === 0) {
+                detailsList.innerHTML = '<div class="cal-empty-state">Keine Termine für diesen Tag.</div>';
+                return;
+            }
+
+            detailsList.innerHTML = dayBookings.map(b => {
+                const startStr = new Date(b.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const endStr = b.end ? new Date(b.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                const timeRange = `${startStr}${endStr ? ' - ' + endStr : ''}`;
+                const periodStr = b.period ? `${b.period}. Stunde` : '';
+                const userStr = b.user ? esc(b.user) : 'Nicht angegeben';
+                const notesStr = b.notes ? esc(b.notes) : '';
+                return `<div class="cal-booking-item">
+                    <div class="cal-booking-time"><span class="cal-booking-label">Zeit</span><strong>${esc(timeRange)}</strong>${periodStr ? `<span class="cal-booking-period">${esc(periodStr)}</span>` : ''}</div>
+                    <div class="cal-booking-user"><span class="cal-booking-label">Nutzer</span>${userStr}</div>
+                    ${notesStr ? `<div class="cal-booking-note"><span class="cal-booking-label">Notiz</span>${notesStr}</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        toggleBtn?.addEventListener('click', ()=>{
+            const btnText = document.getElementById('toggle-bookings-text');
+            if(panel.style.display === 'none'){
+                panel.style.display = 'block';
+                if(btnText) btnText.textContent = 'Kalender verbergen';
+                toggleBtn.style.background = '#e0e7ff';
+                toggleBtn.style.borderColor = '#818cf8';
+                if(bookings.length === 0){
+                    fetch(`/get_planned_bookings_public/${item._id}`)
+                        .then(r=>r.json())
+                        .then(d=>{ 
+                            if(d && d.ok && Array.isArray(d.bookings)){ 
+                                bookings = d.bookings; 
+                                renderCalendar(); 
+                            } else { 
+                                calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; 
+                            } 
+                        })
+                        .catch(()=>{ calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; });
+                } else {
+                    renderCalendar();
+                }
+            } else {
+                panel.style.display = 'none';
+                detailsPanel.style.display = 'none';
+                if(btnText) btnText.textContent = 'Kalender anzeigen';
+                toggleBtn.style.background = '#f3f4f6';
+                toggleBtn.style.borderColor = '#d1d5db';
+            }
+        });
+
+        calPrev?.addEventListener('click', () => {
+            displayedMonth--;
+            if (displayedMonth < 0) {
+                displayedMonth = 11;
+                displayedYear--;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
+
+        calNext?.addEventListener('click', () => {
+            displayedMonth++;
+            if (displayedMonth > 11) {
+                displayedMonth = 0;
+                displayedYear++;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
+
+        // Availability checker (user)
+        const availDate = document.getElementById('avail-date');
+        const availStart = document.getElementById('avail-start');
+        const availEnd = document.getElementById('avail-end');
+        const availBtn = document.getElementById('avail-check');
+        const availRes = document.getElementById('avail-result');
+        const availConf = document.getElementById('avail-conflicts');
+        availBtn?.addEventListener('click', ()=>{
+            const d = availDate?.value;
+            const s = availStart?.value;
+            const e = availEnd?.value || s;
+            if(!d || !s){
+                availRes.textContent = 'Bitte Datum und Startstunde wählen.';
+                return;
+            }
+            availRes.textContent = 'Prüfe…';
+            availConf.innerHTML = '';
+            fetch(`/check_availability?item_id=${encodeURIComponent(item._id)}&date=${encodeURIComponent(d)}&start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`)
+                .then(r=>r.json())
+                .then(ans=>{
+                    if(ans && ans.ok){
+                        if(ans.available){
+                            availRes.textContent = 'Verfügbar ✅';
+                        } else {
+                            availRes.textContent = 'Nicht verfügbar ❌';
+                            if(Array.isArray(ans.conflicts)){
+                                availConf.innerHTML = ans.conflicts.map(c=>{
+                                    const start = c.start ? new Date(c.start).toLocaleString() : '';
+                                    const end = c.end ? new Date(c.end).toLocaleString() : '';
+                                    const who = c.user ? ` (${c.user})` : '';
+                                    const status = c.status || '';
+                                    return `<div>- ${status}${who}: ${start}${end? ' - '+end: ''}</div>`;
+                                }).join('');
+                            }
+                        }
+                    } else {
+                        availRes.textContent = 'Fehler bei der Prüfung.';
+                    }
+                })
+                .catch(()=>{ availRes.textContent = 'Fehler bei der Prüfung.'; });
+        });
+    }
+
+    // Modal image navigation for detailed view
+    function changeModalImage(direction) {
+        const total = window.totalModalImages || 0;
+        if (total <= 1) return;
+
+        const currentIndex = window.currentModalImageIndex || 0;
+        // Remove active class from current image
+        const currentImage = document.getElementById(`modal-image-${currentIndex}`);
+        if (currentImage) {
+            currentImage.classList.remove('active-image');
+            if (currentImage.tagName === 'VIDEO') {
+                try { currentImage.pause(); } catch (e) {}
+            }
+        }
+
+        // Compute new index with wrap-around
+        let newIndex = (currentIndex + direction) % total;
+        if (newIndex < 0) newIndex = total - 1;
+
+        // Activate new image
+        const newImage = document.getElementById(`modal-image-${newIndex}`);
+        if (newImage) newImage.classList.add('active-image');
+
+        // Update counter
+        const counter = document.querySelector('.image-counter');
+        if (counter) counter.textContent = `${newIndex + 1}/${total}`;
+
+        window.currentModalImageIndex = newIndex;
+    }
+
+    // Add this function to ensure proper image display on mobile and desktop
+    function setupCardImagesDisplay() {
+        // Wait for DOM to be fully loaded
+        setTimeout(() => {
+            const cards = document.querySelectorAll('.item-card');
+            cards.forEach(card => {
+                const images = card.querySelectorAll('.item-image');
+                
+                // Add active class to first image
+                if (images.length > 0) {
+                    images[0].classList.add('active-image');
+                    
+                    // Also handle video containers if present
+                    const videoContainers = card.querySelectorAll('.video-container');
+                    if (videoContainers.length > 0) {
+                        videoContainers[0].classList.add('active-container');
+                    }
+                }
+            });
+        }, 200);
+    }
+
+    function closeAllFilterDropdowns(exceptId = null) {
+        document.querySelectorAll('.filter-dropdown').forEach(dd => {
+            if (!exceptId || dd.id !== exceptId) {
+                dd.style.display = 'none';
+            }
+        });
+        document.querySelectorAll('.filter-toggle').forEach(btn => {
+            btn.classList.remove('is-open');
+            btn.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) {
+            return;
+        }
+
+        const shouldOpen = dropdown.style.display !== 'block';
+        closeAllFilterDropdowns(dropdownId);
+        dropdown.style.display = shouldOpen ? 'block' : 'none';
+        const group = dropdown.closest('.filter-group');
+        const toggle = group ? group.querySelector('.filter-toggle') : null;
+        if (toggle) {
+            toggle.classList.toggle('is-open', shouldOpen);
+            toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.filter-group')) {
+            closeAllFilterDropdowns();
+        }
+    });
+
+    function clearFilter(filterNum) {
+        activeFilters[`filter${filterNum}`] = [];
+        document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
+        
+        // Uncheck all checkboxes
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // If Filter 1 was cleared, rebuild Filter 2 and Filter 3 options
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        }
+        // If Filter 2 was cleared, rebuild Filter 3 options
+        else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        // Save and apply the updated filters
+        saveFilterState();
+        applyFilters();
+    }
+
+    function updateFilter(filterNum, value, isChecked, group = '') {
+        const filterKey = `filter${filterNum}`;
+        // Add group prefix if provided
+        const filterValue = group ? `${group}:${value}` : value;
+        
+        if (isChecked) {
+            // Add filter value if not already present
+            if (!activeFilters[filterKey].includes(filterValue)) {
+                activeFilters[filterKey].push(filterValue);
+            }
+        } else {
+            // Remove filter value
+            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+        }
+        
+        // Update the filter display
+        updateSelectedFilters(filterNum);
+        
+        // If Filter 1 changed, rebuild Filter 2 options, then rebuild Filter 3
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        }
+        // If Filter 2 changed, rebuild Filter 3 options
+        else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        // Save and apply the filters
+        saveFilterState();
+        applyFilters();
+    }
+
+    function updateSelectedFilters(filterNum) {
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
+        
+        activeFilters[`filter${filterNum}`].forEach(filter => {
+            // Extract display value from filter
+            let displayValue = filter;
+            let groupName = '';
+            
+            // Handle group:value format
+            if (filter.includes(':')) {
+                [groupName, displayValue] = filter.split(':');
+            }
+            
+            // Create filter tag
+            const tag = document.createElement('div');
+            tag.className = 'filter-tag';
+            
+            // Show group if present
+            let tagContent = '';
+            if (groupName) {
+                tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
+            }
+            
+            // Add filter value and remove button
+            tagContent += displayValue;
+            tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
+            
+            tag.innerHTML = tagContent;
+            container.appendChild(tag);
+        });
+    }
+
+    function removeFilter(filterNum, filter) {
+        const filterKey = `filter${filterNum}`;
+        
+        // Remove from active filters
+        activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filter);
+        
+        // Update UI
+        updateSelectedFilters(filterNum);
+        
+        // Uncheck corresponding checkbox if exists
+        let value = filter;
+        let group = '';
+        
+        if (filter.includes(':')) {
+            [group, value] = filter.split(':');
+        }
+        
+        // Find and uncheck the checkbox
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            if ((checkbox.value === value) && 
+                ((!group && !checkbox.dataset.group) || 
+                 (group && checkbox.dataset.group === group))) {
+                checkbox.checked = false;
+            }
+        });
+        
+        // If Filter 1 was changed, rebuild Filter 2 and Filter 3 options
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        }
+        // If Filter 2 was changed, rebuild Filter 3 options
+        else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        // Save and apply the filters
+        saveFilterState();
+        applyFilters();
+    }
+
+    function populateFilterOptions(containerId, filterValues, filterNum) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            debugLog(`Container not found: ${containerId}`);
+            return;
+        }
+        
+        container.innerHTML = ''; // Clear previous options
+        
+        // First group values by category/prefix if they exist
+        const groupedValues = {};
+        
+        // Process filter values to identify groups
+        filterValues.forEach(value => {
+            if (!value) return; // Skip empty values
+            
+            let group = 'Default';
+            let displayValue = value;
+            
+            // Check if value contains grouping delimiter
+            if (typeof value === 'string' && value.includes(':')) {
+                [group, displayValue] = value.split(':', 2);
+            }
+            
+            // Initialize group array if needed
+            if (!groupedValues[group]) {
+                groupedValues[group] = [];
+            }
+            
+            // Add value to group
+            groupedValues[group].push(displayValue);
+        });
+        
+        // Now create DOM elements for each group
+        Object.keys(groupedValues).sort().forEach(group => {
+            // Skip empty groups
+            if (!groupedValues[group].length) return;
+            
+            // Create option group
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'filter-option-group';
+            
+            // Add group header if not default
+            if (group !== 'Default') {
+                const header = document.createElement('div');
+                header.className = 'filter-group-header';
+                header.textContent = group;
+                groupDiv.appendChild(header);
+            }
+            
+            // Add each filter option in this group
+            groupedValues[group].sort().forEach(value => {
+                // Create filter option
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'filter-option';
+                
+                // Create unique ID for checkbox
+                const safeValue = value.replace(/[^a-zA-Z0-9]/g, '_');
+                const safeGroup = group.replace(/[^a-zA-Z0-9]/g, '_');
+                const id = `filter${filterNum}-${safeGroup}-${safeValue}`;
+                
+                // Create checkbox
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = id;
+                checkbox.value = value;
+                
+                // Store group info for filtering
+                if (group !== 'Default') {
+                    checkbox.dataset.group = group;
+                }
+                
+                // Check if this value is already active
+                const filterValue = group !== 'Default' ? `${group}:${value}` : value;
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
+                
+                // Add change handler
+                checkbox.onchange = () => {
+                    updateFilter(filterNum, value, checkbox.checked, 
+                        group !== 'Default' ? group : '');
+                };
+                
+                // Create label
+                const label = document.createElement('label');
+                label.htmlFor = id;
+                label.textContent = value;
+                
+                // Add to DOM
+                optionDiv.appendChild(checkbox);
+                optionDiv.appendChild(label);
+                groupDiv.appendChild(optionDiv);
+            });
+            
+            // Add group to container
+            container.appendChild(groupDiv);
+        });
+    }
+
+    function checkFilterMatch(activeFilterValues, itemFilterValuesJSON) {
+        // If no active filters, all items match
+        if (!activeFilterValues || activeFilterValues.length === 0) {
+            return true;
+        }
+        
+        try {
+            // Parse item filter values
+            const itemFilterValues = JSON.parse(itemFilterValuesJSON || '[]');
+            
+            // If item has no values, it can't match any filters
+            if (!itemFilterValues || itemFilterValues.length === 0) {
+                return false;
+            }
+            
+            // Check if ANY active filter values match ANY item filter values
+            for (const activeFilter of activeFilterValues) {
+                // Extract value from activeFilter (remove group prefix if exists)
+                const activeValue = activeFilter.includes(':') 
+                    ? activeFilter.split(':')[1] 
+                    : activeFilter;
+                
+                // Check if any item filter value matches this active filter
+                if (itemFilterValues.includes(activeValue)) {
+                    return true;
+                }
+            }
+            
+            // No match found
+            return false;
+        } catch (err) {
+            console.error("Error in checkFilterMatch:", err);
+            debugLog("Error in checkFilterMatch:", {
+                error: err.message,
+                activeFilters: activeFilterValues,
+                itemFilters: itemFilterValuesJSON
+            });
+            return false;
+        }
+    }
+
+    // Add these functions right after the loadFilterState() function
+
+    function rebuildFilter3Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 and filter 2 selections
+        const filter1Selections = activeFilters.filter1;
+        const filter2Selections = activeFilters.filter2;
+        
+        // If both filters are empty, show all filter3 values
+        if (filter1Selections.length === 0 && filter2Selections.length === 0) {
+            // Get all unique filter3 values
+            const allFilter3Values = new Set();
+            allItems.forEach(item => {
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : 
+                                   (item.Filter3 ? [item.Filter3] : []);
+                
+                filter3Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter3Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 3 dropdown with all values
+            populateFilterOptions('filter3-options', [...allFilter3Values].sort(), 3);
+            return;
+        }
+        
+        // Filter items based on filter1 and filter2 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            const filter1Match = filter1Selections.length === 0 || 
+                filter1Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter1Array.includes(filterValue);
+                });
+            
+            // Check if item passes Filter 2
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            const filter2Match = filter2Selections.length === 0 || 
+                filter2Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter2Array.includes(filterValue);
+                });
+            
+            return filter1Match && filter2Match;
+        });
+        
+        // Get unique Filter 3 values from filtered items
+        const availableFilter3Values = new Set();
+        filteredItems.forEach(item => {
+            const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+            filter3Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter3Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 3 selections that are still valid
+        const validFilter3Selections = [];
+        activeFilters.filter3.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter3Values.has(filterValue)) {
+                validFilter3Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 3 selections (remove invalid ones)
+        if (validFilter3Selections.length !== activeFilters.filter3.length) {
+            activeFilters.filter3 = validFilter3Selections;
+            updateSelectedFilters(3);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Populate filter 3 dropdown with only available values
+        populateFilterOptions('filter3-options', [...availableFilter3Values].sort(), 3);
+    }
+
+    function rebuildFilter2Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 selections
+        const filter1Selections = activeFilters.filter1;
+        
+        // If filter1 is empty, show all filter2 values
+        if (filter1Selections.length === 0) {
+            // Get all unique filter2 values
+            const allFilter2Values = new Set();
+            allItems.forEach(item => {
+                const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : 
+                                   (item.Filter2 ? [item.Filter2] : []);
+                
+                filter2Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter2Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 2 dropdown with all values
+            populateFilterOptions('filter2-options', [...allFilter2Values].sort(), 2);
+            return;
+        }
+        
+        // Filter items based on filter1 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            return filter1Selections.some(filter => {
+                // Extract value from filter (remove group prefix if exists)
+                const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                return filter1Array.includes(filterValue);
+            });
+        });
+        
+        // Get unique Filter 2 values from filtered items
+        const availableFilter2Values = new Set();
+        filteredItems.forEach(item => {
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            filter2Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter2Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 2 selections that are still valid
+        const validFilter2Selections = [];
+        activeFilters.filter2.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter2Values.has(filterValue)) {
+                validFilter2Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 2 selections (remove invalid ones)
+        if (validFilter2Selections.length !== activeFilters.filter2.length) {
+            activeFilters.filter2 = validFilter2Selections;
+            updateSelectedFilters(2);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Populate filter 2 dropdown with only available values
+        populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
+    }
+    
+    // Add ISBN fetch functionality
+    function fetchBookInfo(formType) {
+        // Determine which form we're working with (upload or edit)
+        const isbnField = document.getElementById('isbn');
+        const infoContainer = document.getElementById('book-info-container');
+        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Buch nicht gefunden. Überprüfen Sie die ISBN.');
+                    } else {
+                        throw new Error('Fehler beim Abrufen der Buchinformationen');
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Display book information
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.price ? `<p><strong>Preis:</strong> ${data.price}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                infoContainer.innerHTML = `<div class="error-message">Fehler: ${error.message}</div>`;
+            });
+    }
+
+    function openScheduleModal(itemId) {
+        const scheduleModal = document.getElementById('schedule-modal');
+        if (!scheduleModal) return; // Exit if modal doesn't exist
+        
+        const itemIdField = document.getElementById('schedule-item-id');
+        const dateField = document.getElementById('schedule-date');
+        const endDateField = document.getElementById('schedule-end-date');
+        const multiDayCheckbox = document.getElementById('schedule-multi-day');
+        const endDateGroup = document.getElementById('schedule-end-date-group');
+        const notesField = document.getElementById('schedule-notes');
+        const startPeriodField = document.getElementById('schedule-start-period');
+        const endPeriodField = document.getElementById('schedule-end-period');
+        const specificGroup = document.getElementById('schedule-specific-item-group');
+        const specificSelect = document.getElementById('schedule-specific-item');
+        
+        if (itemIdField) itemIdField.value = itemId;
+
+        const selectedItem = Array.isArray(allItems) ? allItems.find(item => item._id === itemId) : null;
+        const groupedCount = Number(selectedItem?.GroupedDisplayCount || 1);
+        const groupedUnits = Array.isArray(selectedItem?.GroupedAvailableUnits) ? selectedItem.GroupedAvailableUnits : [];
+
+        if (specificGroup && specificSelect) {
+            if (groupedCount > 1 && groupedUnits.length > 0) {
+                specificGroup.style.display = 'block';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>' +
+                    groupedUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('');
+            } else {
+                specificGroup.style.display = 'none';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>';
+            }
+            specificSelect.value = '';
+        }
+        
+        // Set default date to today
+        if (dateField) {
+            const today = new Date().toISOString().split('T')[0];
+            dateField.value = today;
+        }
+
+        // Reset multi-day fields
+        if (multiDayCheckbox) {
+            multiDayCheckbox.checked = false;
+            multiDayCheckbox.onchange = function() {
+                if (endDateGroup) {
+                    endDateGroup.style.display = this.checked ? 'block' : 'none';
+                    if (endDateField) {
+                        endDateField.required = this.checked;
+                        if (this.checked && !endDateField.value) {
+                            endDateField.value = dateField.value;
+                        }
+                    }
+                }
+            };
+            // Trigger change to set initial state
+            multiDayCheckbox.dispatchEvent(new Event('change'));
+        }
+        
+        // Clear form
+        if (notesField) notesField.value = '';
+        if (startPeriodField) startPeriodField.value = '';
+        if (endPeriodField) endPeriodField.value = '';
+        if (endDateField) endDateField.value = '';
+        
+        scheduleModal.style.display = 'block';
+    }
+
+    function closeScheduleModal() {
+        const scheduleModal = document.getElementById('schedule-modal');
+        if (scheduleModal) {
+            scheduleModal.style.display = 'none';
+        }
+    }
+
+    // Setup schedule form submission
+    function setupScheduleFormSubmission() {
+        const scheduleForm = document.getElementById('schedule-form');
+        if (scheduleForm) {
+            scheduleForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                
+                // Use the current origin (protocol + hostname) to ensure we're using the correct protocol
+                fetch(window.location.origin + '/schedule_appointment', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    // Check if response is 409 Conflict
+                    if (response.status === 409) {
+                        return response.json().then(data => {
+                            alert('Terminkonflikt: ' + (data.message || 'Der gewählte Termin steht nicht zur Verfügung.'));
+                            return { success: false };
+                        });
+                    } else if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('Error response:', data);
+                            return { success: false, message: data.message };
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        alert('Termin wurde erfolgreich geplant!');
+                        closeScheduleModal();
+                        // Reload items to show updated appointment info
+                        loadItems();
+                    } else if (data.message) {
+                        alert('Fehler beim Planen des Termins: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error scheduling appointment:', error);
+                    alert('Fehler beim Planen des Termins');
+                });
+            });
+        }
+    }
+
+    // Helper functions for appointment display
+    function formatAppointmentDate(dateString) {
+        if (!dateString) return '';
+        try {
+                       const date = new Date(dateString);
+            return date.toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateString;
+        }
+    }
+
+    function formatAppointmentPeriod(period) {
+        if (!period) return '';
+        const periodMap = {
+            '1': '1. Stunde',
+            '2': '2. Stunde',
+            '3': '3. Stunde',
+            '4': '4. Stunde',
+            '5': '5. Stunde',
+            '6': '6. Stunde',
+            '7': '7. Stunde',
+            '8': '8. Stunde',
+            '9': '9. Stunde',
+            '10': '10. Stunde',
+            'pause1': '1. Pause',
+            'pause2': '2. Pause',
+            'mittagspause': 'Mittagspause'
+        };
+        return periodMap[period] || period;
+    }
+
+    function getUpcomingAppointment(appointments) {
+        if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
+            return null;
+        }
+        
+        const now = new Date();
+        const today = now.toDateString();
+        
+        // Filter appointments that are today or in the future
+        const futureAppointments = appointments.filter(apt => {
+            try {
+                const aptDate = new Date(apt.date);
+                return aptDate.toDateString() === today || aptDate >= now.setHours(0, 0, 0, 0);
+            } catch (e) {
+                return false;
+            }
+        });
+        
+        if (futureAppointments.length === 0) return null;
+        
+        // Sort by date and return the earliest
+        futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
+        return futureAppointments[0];
+    }
+
+    function formatDateForInput(dateString) {
+        const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+        const date = new Date(dateString);
+        return date.toLocaleDateString('de-DE', options).replace(/\./g, '-');
+    }
+</script>
+
+<style>
+    /* Main container and layout styles */
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        width: 80%;
+        max-width: 1200px;
+        margin: 20px auto;
+    }
+
+    h1, h2 {
+        text-align: center;
+    }
+
+    /* Filter styles */
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .filter-group {
+        position: relative;
+        min-width: 200px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .filter-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .filter-toggle, .clear-filter {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .clear-filter {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .filter-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 300px;
+        overflow-y: auto;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 100;
+        padding: 8px;
+    }
+
+    .filter-options {
+        padding: 10px;
+    }
+
+    .filter-option {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+    }
+
+    .filter-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        cursor: pointer;
+    }
+
+    .filter-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .filter-option label {
+        margin-left: 5px;
+        cursor: pointer;
+    }
+
+    .filter-option-group {
+        margin-bottom: 12px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+
+    .filter-group-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .selected-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 30px;
+    }
+
+    .filter-tag {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e9ecef;
+        border-radius: 15px;
+        padding: 3px 10px;
+        font-size: 0.8rem;
+    }
+
+    .filter-tag-group {
+        color: #6c757d;
+        font-size: 0.8em;
+        font-style: italic;
+        margin-right: 2px;
+    }
+
+    .filter-tag-remove {
+        background: none;
+        border: none;
+        color: #6c757d;
+        margin-left: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    /* Search styles */
+    .search-container {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+
+    #code-search {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-button {
+        padding: 8px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .search-button:hover {
+        background-color: #0056b3;
+    }
+
+    .search-field {
+        min-width: 250px;
+    }
+
+    #code-search.searching {
+        background-color: #fff3cd;
+        transition: background-color 0.3s;
+        border: 2px solid #ffc107;
+        box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+    }
+
+    /* QR Scanner styles */
+    .qr-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .scan-button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+
+    .scan-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Item display styles */
+    .items-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 20px 0;
+        scroll-snap-type: x mandatory;
+        position: relative;
+        scroll-behavior: smooth;
+    }
+
+    .item-card {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        max-width: 300px;
+        flex-shrink: 0;
+        scroll-snap-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+    position: relative;
+    }
+
+    .item-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .item-card h3 {
+        margin-top: 0;
+    }
+
+    .item-card .description {
+        max-height: 100px;
+        overflow-y: auto;
+    }
+
+    .item-card .image-container {
+        position: relative;
+        max-width: 300px;
+        margin: 10px 0;
+    }
+
+    .item-card .item-image {
+        width: 100%;
+        height: auto;
+        max-height: 300px;
+        display: none;
+        object-fit: cover;
+    }
+
+    .item-card .item-image:first-child {
+        display: block;
+    }
+
+    /* Image navigation buttons removed */
+
+    /* Video preview styling within cards (parity with admin) */
+    .item-card video.item-image {
+        background-color: #000;
+        position: relative;
+    }
+
+    /* Modal styles */
+    .item-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 600px;
+        border-radius: 5px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .close-modal {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .close-modal:hover,
+    .close-modal:focus {
+        color: black;
+        text-decoration: none;
+    }
+
+    /* Form styles */
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+
+    .form-row .form-group {
+        flex: 1;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .save-button, .cancel-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .save-button {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .save-button:hover {
+        background-color: #218838;
+    }
+
+    .cancel-button {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .cancel-button:hover {
+        background-color: #545b62;
+    }
+
+    /* Highlight and status styles */
+    .highlight-item {
+        border: 3px solid gold !important;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
+        position: relative;
+        z-index: 10;
+    }
+
+    .code-match {
+        border: 2px solid #17a2b8 !important;
+        box-shadow: 0 0 15px rgba(23, 162, 184, 0.5) !important;
+        position: relative;
+        z-index: 5;
+    }
+
+    .exact-code-match {
+        border: 3px solid #28a745 !important;
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.7) !important;
+        position: relative;
+        z-index: 11;
+    }
+
+    /* Description match highlight */
+    .desc-match {
+        border: 2px solid #ffc107 !important; /* warning/amber */
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+        position: relative;
+        z-index: 6;
+    }
+
+    /* Messages */
+    .error-message, .no-items-message {
+        padding: 20px;
+        text-align: center;
+        width: 100%;
+        color: var(--bs-danger-text, #842029);
+        background-color: var(--bs-danger-bg-subtle, #f8d7da);
+        border: 1px solid var(--bs-danger-border-subtle, #f5c2c7);
+        border-radius: var(--bs-border-radius);
+        margin: 20px 0;
+    }
+
+    /* Action Button Styles */
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-start;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #dee2e6;
+        flex-wrap: wrap;
+    }
+
+    .modal-actions form {
+        margin: 0;
+    }
+
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+        padding: 10px 18px;
+        border: var(--bs-border-width) var(--bs-border-style) transparent;
+        border-radius: var(--bs-border-radius);
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 120px;
+        height: 40px;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        box-sizing: border-box;
+        margin: 5px;
+    }
+
+    /* Ausleihen/Zurückgeben Button */
+    .ausleihen {
+        background-color: var(--bs-success);
+        color: var(--bs-white) !important;
+        border: 2px solid var(--bs-success);
+    }
+
+    .ausleihen:hover {
+        background-color: #157347; /* Darker success color */
+        border-color: #146c43;
+        transform: translateY(-1px);
+        box-shadow: var(--bs-box-shadow);
+        color: var(--bs-white) !important;
+        text-decoration: none;
+    }
+
+    .ausleihen:active {
+        transform: translateY(0);
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    /* Edit Button */
+    .edit-button {
+        background-color: var(--bs-primary);
+        color: var(--bs-white) !important;
+        border: 2px solid var(--bs-primary);
+    }
+
+    .edit-button:hover {
+        background-color: #0b5ed7; /* Darker primary color */
+        border-color: #0a58ca;
+        transform: translateY(-1px);
+        box-shadow: var(--bs-box-shadow);
+        color: var(--bs-white) !important;
+        text-decoration: none;
+    }
+
+    .edit-button:active {
+        transform: translateY(0);
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    /* Delete Button */
+    .delete-button {
+        background-color: var(--bs-danger);
+        color: var(--bs-white) !important;
+        border: 2px solid var(--bs-danger);
+    }
+
+    .delete-button:hover {
+        background-color: #bb2d3b; /* Darker danger color */
+        border-color: #b02a37;
+        transform: translateY(-1px);
+        box-shadow: var(--bs-box-shadow);
+        color: var(--bs-white) !important;
+        text-decoration: none;
+    }
+
+    .delete-button:active {
+        transform: translateY(0);
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    /* Schedule Button */
+    .schedule-button {
+        background-color: var(--bs-info);
+        color: var(--bs-white) !important;
+        border: 2px solid var(--bs-info);
+    }
+
+    .schedule-button:hover {
+        background-color: #0dcaf0; /* Brighter info color for visibility */
+        border-color: #31d2f2;
+        transform: translateY(-1px);
+        box-shadow: var(--bs-box-shadow);
+        color: var(--bs-dark) !important;
+        text-decoration: none;
+    }
+
+    .schedule-button:active {
+        transform: translateY(0);
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    /* Duplicate Button */
+    .duplicate-button {
+        background-color: var(--bs-purple);
+        color: var(--bs-white) !important;
+        border: 2px solid var(--bs-purple);
+    }
+
+    .duplicate-button:hover {
+        background-color: #6610f2; /* Slightly brighter purple */
+        border-color: #6f42c1;
+        transform: translateY(-1px);
+        box-shadow: var(--bs-box-shadow);
+        color: var(--bs-white) !important;
+        text-decoration: none;
+    }
+
+    .duplicate-button:active {
+        transform: translateY(0);
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    /* Disabled Button */
+    .disabled-button {
+        background-color: var(--bs-secondary) !important;
+        border-color: var(--bs-secondary) !important;
+        color: var(--bs-white) !important;
+        cursor: not-allowed !important;
+        opacity: 0.6;
+    }
+
+    .disabled-button:hover {
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    /* Actions Container */
+    .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        align-items: stretch;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .actions form {
+        margin: 0;
+        display: flex;
+    }
+
+    .actions button, 
+    .actions a {
+        flex: 0 0 auto;
+        width: 120px;
+        height: 40px;
+        margin: 0;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .filter-container {
+            flex-direction: column;
+        }
+        
+        .form-row {
+            flex-direction: column;
+        }
+        
+        /* Mobile-responsive styles for user interface */
+        .container {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 15px !important;
+        }
+        
+        h1, h2 {
+            font-size: 1.4rem !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-container {
+            flex-direction: column !important;
+            gap: 15px !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-group {
+            min-width: auto !important;
+            width: 100% !important;
+        }
+        
+        .filter-header {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        .filter-toggle, .clear-filter {
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .filter-dropdown {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            max-height: 200px !important;
+            margin-top: 10px !important;
+        }
+        
+        .filter-options {
+            padding: 5px !important;
+        }
+        
+        .filter-options label {
+            display: block !important;
+            padding: 10px 12px !important;
+            margin: 2px 0 !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .filter-options label:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .filter-options input[type="checkbox"] {
+            margin-right: 10px !important;
+            transform: scale(1.2) !important;
+        }
+        
+        /* Items container mobile optimization */
+        .items-container {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+            padding: 10px 0 !important;
+            overflow-x: visible !important;
+        }
+        
+        .item-card {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 15px !important;
+            scroll-snap-align: none !important;
+        }
+        
+        .item-card:hover {
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Modal improvements for mobile */
+        .modal-content {
+            width: 95% !important;
+            max-width: 500px !important;
+            margin: 20px auto !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+            padding: 20px !important;
+        }
+        
+        /* Button improvements */
+        .modal-actions {
+            flex-direction: column !important;
+            gap: 10px !important;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            width: 100% !important;
+            min-height: 44px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Navigation buttons mobile */
+        .navigation-buttons {
+            display: none !important; /* Hide horizontal navigation on mobile */
+        }
+        
+        /* QR Scanner mobile */
+        .qr-container {
+            margin-bottom: 15px !important;
+        }
+        
+        .scan-button {
+            width: 100% !important;
+            max-width: 300px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        #qr-reader {
+            width: 100% !important;
+            max-width: 400px !important;
+            margin: 15px auto !important;
+        }
+        
+        /* Search field mobile */
+        .search-field input {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border-radius: 6px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Form improvements */
+        .form-group {
+            margin-bottom: 15px !important;
+        }
+        
+        .form-group label {
+            display: block !important;
+            margin-bottom: 8px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border: 1px solid #ddd !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Image container mobile */
+        .item-card .image-container {
+            max-width: 100% !important;
+            height: 200px !important;
+            overflow: hidden !important;
+            border-radius: 8px !important;
+        }
+        
+        .item-card .item-image {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+        
+        /* Touch improvements */
+        * {
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1) !important;
+        }
+        
+        button, .btn, a, input[type="submit"], input[type="button"] {
+            touch-action: manipulation !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+        }
+        
+        /* Focus improvements for accessibility */
+        button:focus, .btn:focus, input:focus, select:focus, textarea:focus {
+            outline: 2px solid #007bff !important;
+            outline-offset: 2px !important;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25) !important;
+        }
+    }
+    
+    /* Tablet specific styles */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .container {
+            width: 90% !important;
+        }
+        
+        .items-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+        
+        .filter-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+    }
+
+    /* QR Reader styling */
+    #qr-reader {
+        width: 500px;
+        display: none;
+    }
+
+    /* Element text colors for better visibility */
+    .edit-button, .duplicate-button, .generate-qr-button, .ausleihen {
+        color: black !important;
+    }
+    
+    /* Standardized button styles across the application */
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 120px;
+        height: 40px;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        box-sizing: border-box;
+    }
+    
+    .search-button, .scan-button, .filter-toggle, .clear-filter, 
+    .add-new-btn, .popup-close-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-width: 80px;
+        height: 36px;
+        padding: 0 15px;
+        font-weight: 500;
+        box-sizing: border-box;
+    }
+
+    /* Align visuals with admin page styles */
+    /* Ensure only the active image is shown on cards */
+    .item-image.active-image { 
+        display: block !important; 
+        opacity: 1 !important; 
+        z-index: 5; 
+    }
+    .item-image:not(.active-image) { 
+        display: none !important; 
+    }
+    .video-container.active-container { 
+        display: block !important; 
+    }
+    .video-container:not(.active-container) { 
+        display: none !important; 
+    }
+
+    /* Video preview play overlay on thumbnails */
+    .video-preview-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Modal image display and navigation */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    .modal-image.active-image {
+        display: block !important;
+    }
+    /* Ensure videos in modal scale correctly */
+    video.modal-image {
+        width: 100%;
+        height: auto;
+    }
+    /* Modal image display and navigation */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    .modal-image.active-image {
+        display: block !important;
+    }
+    .modal-image-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+    }
+    .modal-image-nav:hover { background-color: rgba(0, 0, 0, 0.9); }
+    .modal-prev-image { left: 10px; }
+    .modal-next-image { right: 10px; }
+    .image-counter {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    /* Modal image container visual parity with admin */
+    .modal-image-container {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow: hidden;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+
+    /* Borrower and appointment info panels in modal */
+    .borrower-info-panel {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .borrower-info-panel h4 { color: #856404; margin: 0 0 10px 0; font-size: 1.1rem; }
+    .borrower-name, .borrow-time { margin: 5px 0; color: #856404; font-weight: 500; }
+
+    .appointment-info-panel {
+        background-color: #e1f5fe;
+        border: 1px solid #81d4fa;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .appointment-info-panel h4 { color: #0277bd; margin: 0 0 10px 0; font-size: 1.1rem; }
+    .appointment-date, .appointment-time, .appointment-user { margin: 5px 0; color: #0277bd; font-weight: 500; }
+
+    /* Modal Details Styling (text formatting) */
+    .modal-details { margin: 20px 0; }
+    .detail-group { display: flex; margin-bottom: 10px; align-items: flex-start; }
+    .detail-group.full-width { flex-direction: column; margin-bottom: 15px; }
+    .detail-label { font-weight: bold; color: #495057; min-width: 150px; margin-right: 10px; }
+    .detail-value { color: #212529; flex: 1; word-wrap: break-word; }
+    .detail-group.full-width .detail-label { margin-bottom: 5px; }
+    .detail-group.full-width .detail-value {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        white-space: pre-wrap;
+    }
+    .status-borrowed { color: #dc3545; font-weight: bold; }
+
+    /* Match admin button styling for borrow */
+    .ausleihen {
+        background-color: #9dff00 !important;
+        color: #ffffff !important;
+        border: 2px solid #007bff !important;
+    }
+    .ausleihen:hover {
+        background-color: #91ff00 !important;
+        border-color: #004085 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+    .ausleihen:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    }
+
+    /* Match admin schedule button styling */
+    .schedule-button {
+        background-color: #17a2b8 !important;
+        color: #ffffff !important;
+        border: 2px solid #17a2b8 !important;
+    }
+    .schedule-button:hover {
+        background-color: #138496 !important;
+        border-color: #117a8b !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: #ffffff !important;
+        text-decoration: none;
+    }
+    .schedule-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Align modal actions layout to admin */
+    .modal-actions { align-items: stretch; }
+    .modal-actions form { margin: 0; flex: 0 0 auto; }
+    .bookmark-btn { position:absolute; top:8px; right:8px; width:46px; height:46px; background:rgba(255,255,255,.92); border:2px solid #ffc107; border-radius:50%; font-size:1.65rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ffc107; box-shadow:0 2px 6px rgba(0,0,0,.18); transition:background .2s, transform .15s, color .2s; z-index:6; }
+    .bookmark-btn:hover { background:#ffc107; color:#212529; }
+    .bookmark-btn:active { transform:scale(.9); }
+    .bookmark-btn.active { background:#ffc107; color:#212529; }
+    .favorite-item { outline: 2px solid #ffc107; }
+    body.favorites-only .item-card:not(.favorite-item){ display:none !important; }
+    .quick-details-button { background:#6c757d; color:#fff; border:2px solid #6c757d; padding:6px 10px; border-radius:4px; cursor:pointer; }
+    .quick-details-button:hover { background:#5a6268; }
+    .inline-action-form { display:inline-block; margin:0; }
+    .modal-action-bar .bookmark-btn { font-size:1.6rem; }
+
+    .container {
+        --table-columns: minmax(170px, 2fr) repeat(5, minmax(105px, 1fr));
+    }
+
+    /* Calendar Styles - Optimized & Mobile Friendly */
+    .calendar-wrapper {
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-top: 10px;
+    }
+    
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background-color: #fff;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .calendar-header button {
+        background: #f3f4f6;
+        border: none;
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-weight: bold;
+        color: #374151;
+    }
+    
+    .calendar-header button:hover { background-color: #e5e7eb; }
+    .calendar-header span { font-weight: 600; font-size: 1.1rem; color: #111827; }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background-color: #fff;
+        padding: 10px;
+        gap: 5px;
+    }
+    
+    .cal-cell {
+        aspect-ratio: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 8px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.2s;
+        color: #374151;
+        position: relative;
+    }
+    
+    .cal-cell.header {
+        aspect-ratio: auto;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #9ca3af;
+        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .cal-cell:not(.header):not(.empty):hover { 
+        background-color: #f3f4f6; 
+    }
+    
+    .cal-cell.empty { cursor: default; }
+    
+    .cal-cell.today { 
+        background-color: #eff6ff;
+        color: #2563eb;
+        font-weight: bold;
+    }
+    
+    .cal-cell.selected {
+        background-color: #2563eb !important;
+        color: #fff !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+    }
+    
+    .cal-cell.has-booking::after {
+        content: '';
+        position: absolute;
+        bottom: 6px;
+        width: 6px;
+        height: 6px;
+        background-color: #ef4444;
+        border-radius: 50%;
+    }
+    
+    .cal-cell.selected.has-booking::after {
+        background-color: #fff;
+    }
+
+    .calendar-day-details {
+        border-top: 1px solid #f3f4f6;
+        padding: 15px;
+        background-color: #f9fafb;
+        display: none;
+        animation: slideDown 0.2s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .calendar-day-details h5 { 
+        margin: 0 0 12px 0; 
+        font-size: 1rem; 
+        font-weight: 600;
+        color: #111827; 
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .cal-booking-item {
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #2563eb;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 480px) {
+        .calendar-grid { gap: 2px; padding: 5px; }
+        .cal-cell { font-size: 0.85rem; border-radius: 6px; }
+        .calendar-header { padding: 10px; }
+        .calendar-header span { font-size: 1rem; }
+    }
+
+    /* Smartphone-focused cleanup: remove heavy UI chrome and improve touch layout */
+    @media (max-width: 768px) {
+        body {
+            padding-bottom: 12px;
+        }
+
+        .container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 12px !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .filter-group {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            padding: 8px 0 !important;
+        }
+
+        .filter-header {
+            align-items: flex-start !important;
+        }
+
+        .filter-header > label {
+            display: block !important;
+            flex: 1 1 100% !important;
+            margin: 0 0 6px 0 !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            line-height: 1.35 !important;
+            color: #212529 !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+        }
+
+        /* Table-mode improvements for mobile/iPad */
+        body.table-view .item-card {
+            padding: 10px 8px !important;
+        }
+
+        body.table-view .item-card .card-content {
+            grid-template-columns: 1fr !important;
+            gap: 4px !important;
+        }
+
+        body.table-view .item-card .card-content h3 {
+            margin: 0 0 6px 0 !important;
+            font-size: 0.95rem !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+            line-height: 1.3 !important;
+        }
+
+        body.table-view .item-card .card-content p {
+            margin: 3px 0 !important;
+            font-size: 0.85rem !important;
+            line-height: 1.3 !important;
+        }
+
+        body.table-view .item-card .card-content p strong {
+            display: inline !important;
+            font-weight: 600 !important;
+            margin-right: 4px !important;
+            min-width: auto !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+        }
+
+        body.table-view .item-card .card-content .item-name-cell {
+            font-size: 0.95rem !important;
+        }
+
+        body.table-view .item-card .image-container {
+            display: none !important;
+        }
+
+        body.table-view .item-card .actions {
+            gap: 6px !important;
+        }
+
+        .filter-option label,
+        .filter-tag,
+        .filter-tag-group {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+        }
+
+        .selected-filters {
+            gap: 6px !important;
+        }
+
+        .search-container {
+            flex-direction: column !important;
+            gap: 8px !important;
+        }
+
+        .search-container input,
+        .search-container .search-button {
+            width: 100% !important;
+        }
+
+        /* Extra small screens table mode */
+        @media (max-width: 480px) {
+            body.table-view .item-card .card-content p strong {
+                display: block !important;
+                margin-right: 0 !important;
+                margin-bottom: 2px !important;
+                color: #6c757d !important;
+                font-size: 0.8rem !important;
+            }
+
+            body.table-view .item-card .card-content p {
+                margin-left: 8px !important;
+                margin-top: 4px !important;
+                padding: 2px 0 !important;
+            }
+
+            body.table-view .item-card {
+                padding: 8px 6px !important;
+            }
+
+            body.table-view .item-card .card-content h3 {
+                font-size: 0.9rem !important;
+            }
+        }
+
+        .items-container {
+            padding: 6px 0 !important;
+            gap: 10px !important;
+        }
+
+        body.table-view .table-view-header {
+            display: none !important;
+        }
+
+        body.table-view .item-card .card-content {
+            grid-template-columns: 1fr !important;
+            gap: 6px !important;
+        }
+
+        body.table-view .item-card .card-content p strong {
+            display: inline !important;
+        }
+
+        .item-card {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            padding: 12px 0 !important;
+        }
+
+        .item-card:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .item-card .image-container {
+            height: auto !important;
+            max-height: 220px !important;
+            border-radius: 6px !important;
+        }
+
+        .actions {
+            gap: 8px !important;
+            border-top: none !important;
+            padding-top: 8px !important;
+        }
+
+        .grouped-borrow-controls {
+            width: 100% !important;
+        }
+
+        .actions form,
+        .actions button,
+        .actions a {
+            width: 100% !important;
+        }
+
+        .grouped-borrow-controls {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 6px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .grouped-borrow-controls label {
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        .grouped-borrow-controls input,
+        .grouped-borrow-controls select {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 40px !important;
+            padding: 8px 10px !important;
+            box-sizing: border-box !important;
+        }
+
+        .inline-action-form {
+            width: 100% !important;
+        }
+
+        .inline-action-form .ausleihen,
+        .inline-action-form button {
+            width: 100% !important;
+        }
+
+        .bookmark-btn {
+            width: 40px !important;
+            height: 40px !important;
+            font-size: 1.35rem !important;
+            top: 6px !important;
+            right: 6px !important;
+        }
+
+        .modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 16px !important;
+        }
+
+        #schedule-specific-item-group {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group select {
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        #conflict-banner {
+            border: none !important;
+            border-left: 4px solid #fd7e14 !important;
+            border-radius: 0 !important;
+            margin-left: -12px !important;
+            margin-right: -12px !important;
+        }
+    }
+</style>
+<script>
+let favoritesOnly = false;
+let tableViewMode = false;
+
+function setViewModeState() {
+    document.body.classList.toggle('table-view', tableViewMode);
+    const icon = document.getElementById('view-mode-icon');
+    const button = document.getElementById('toggle-view-mode');
+    if (icon) icon.textContent = tableViewMode ? '🖼' : '🗂';
+    if (button) {
+        button.title = tableViewMode ? 'In Kartenansicht wechseln' : 'In Tabellenansicht wechseln';
+        button.setAttribute('aria-pressed', tableViewMode ? 'true' : 'false');
+    }
+}
+
+function toggleFavorite(id, btn, card){
+    const method = btn.textContent === '★' ? 'DELETE' : 'POST';
+    fetch(`/favorites/${id}`, {method})
+        .then(r=>{ if(!r.ok) console.error('HTTP Fehler Favoriten', r.status); return r.json().catch(()=>({ok:false,error:'invalid json'})); })
+        .then(data=>{
+            if(!data.ok){ console.error('Antwort Fehler Favoriten', data); return; }
+            const isFav = (data.favorites||[]).includes(id);
+            document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
+                b.textContent = isFav ? '★' : '☆';
+                b.classList.toggle('active', isFav);
+                b.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+            });
+            if(card){
+                if(isFav) card.classList.add('favorite-item'); else card.classList.remove('favorite-item');
+                if(favoritesOnly && !isFav) card.style.display='none';
+            }
+            if(!window.currentFavorites) window.currentFavorites = new Set();
+            if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
+            try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
+        })
+        .catch(err=>console.error('Netzwerkfehler Favoriten', err));
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+    // Initialize favorites cache set if stored
+    try {
+        if(!window.currentFavorites){
+            const cached = sessionStorage.getItem('favoritesCache');
+            if(cached){ window.currentFavorites = new Set(JSON.parse(cached)); }
+        }
+    } catch(e){}
+    const toggleBtn = document.getElementById('toggle-favorites-view');
+    if(toggleBtn){
+        toggleBtn.addEventListener('click', ()=>{
+            favoritesOnly = !favoritesOnly;
+            document.body.classList.toggle('favorites-only', favoritesOnly);
+            document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+            applyFilters();
+        });
+    }
+
+    const viewToggleBtn = document.getElementById('toggle-view-mode');
+    try {
+        tableViewMode = localStorage.getItem('inventarViewMode') === 'table';
+    } catch (e) {
+        tableViewMode = false;
+    }
+    setViewModeState();
+
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', () => {
+            tableViewMode = !tableViewMode;
+            setViewModeState();
+            try {
+                localStorage.setItem('inventarViewMode', tableViewMode ? 'table' : 'cards');
+            } catch (e) {}
+        });
+    }
+});
+
+// Open item modal directly from quick details button by fetching fresh data (ensures up-to-date favorite state)
+function openItemQuick(id){
+    fetch(`/get_item/${id}`).then(r=>r.json()).then(item=>{
+        if(item && !item.error){
+            // ensure favorites set available
+            if(!window.currentFavorites){
+                window.currentFavorites = new Set(JSON.parse(sessionStorage.getItem('favoritesCache')||'[]'));
+            }
+            openItemModal(item);
+        }
+    });
+}
+</script>
+
+<style>
+/* Unified polished filter styling aligned with switch and action buttons */
+.filter-container {
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.filter-group {
+    background: #ffffff;
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 6px rgba(20, 35, 60, 0.08);
+}
+
+.filter-header {
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.filter-header label {
+    font-weight: 700;
+    color: #2f3e4e;
+}
+
+.filter-toggle,
+.clear-filter,
+.search-button,
+.scan-button {
+    border-radius: 10px;
+    border: 1px solid #c7ced6;
+    min-height: 36px;
+    padding: 7px 12px;
+    font-weight: 700;
+    box-shadow: none;
+    transition: transform 0.12s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+.filter-toggle {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2f3e4e;
+}
+
+.filter-toggle.is-open {
+    transform: rotate(180deg);
+    background: #e9f2ff;
+    border-color: #7ea1c8;
+    color: #1f4f7a;
+}
+
+.clear-filter {
+    background: #fff;
+    color: #495868;
+}
+
+.filter-dropdown {
+    top: calc(100% + 8px);
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(20, 35, 60, 0.12);
+    background: #ffffff;
+    padding: 10px;
+}
+
+.filter-option {
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.selected-filters {
+    min-height: 34px;
+    gap: 6px;
+}
+
+.filter-tag {
+    background: #edf4fb;
+    border: 1px solid #d0dfef;
+    color: #2a4763;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
+.search-container input {
+    border: 1px solid #cfd8e3;
+    border-radius: 10px;
+    min-height: 36px;
+}
+
+.qr-container {
+    margin-top: 6px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+}
+
+#qr-reader {
+    margin-top: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.scan-button {
+    background: linear-gradient(180deg, #f6fbff, #e8f2ff);
+    color: #214867;
+    border-color: #96b5d3;
+}
+
+.scan-button.is-active {
+    background: linear-gradient(180deg, #fff4e8, #ffe7cf);
+    color: #8a4c08;
+    border-color: #e1a467;
+}
+
+@media (max-width: 768px) {
+    .filter-group {
+        border-radius: 12px !important;
+        padding: 12px !important;
+    }
+
+    .filter-toggle,
+    .clear-filter,
+    .search-button,
+    .scan-button {
+        min-height: 40px !important;
+        border-radius: 10px !important;
+    }
+
+    .filter-dropdown {
+        border-radius: 10px !important;
+    }
+
+    .qr-container {
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+
+    #qr-reader {
+        border-radius: 10px !important;
+    }
+}
+</style>
+{% endblock %}

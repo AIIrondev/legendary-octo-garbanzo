@@ -1,0 +1,315 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h1>Ausleihen verwalten</h1>
+  <p>Liste aller aktiven und geplanten Ausleihen. Sie können einzelne Einträge zurücksetzen oder bei Schäden eine Rechnung als PDF erstellen.</p>
+
+  {% if entries and entries|length > 0 %}
+  <!-- Filter Section -->
+  <div style="margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
+    <h3>Filter</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+      <div>
+        <label for="user-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Benutzer:</label>
+        <input 
+          type="text" 
+          id="user-filter" 
+          placeholder="Nach Benutzer filtern..." 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        />
+      </div>
+      <div>
+        <label for="item-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Element:</label>
+        <input 
+          type="text" 
+          id="item-filter" 
+          placeholder="Nach Element filtern..." 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        />
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div>
+        <label for="status-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Status:</label>
+        <select 
+          id="status-filter" 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        >
+          <option value="">Alle</option>
+          <option value="active">Aktiv</option>
+          <option value="planned">Geplant</option>
+        </select>
+      </div>
+      <div style="display: flex; align-items: flex-end;">
+        <button 
+          id="reset-filters" 
+          class="btn btn-secondary" 
+          style="width: 100%;"
+        >
+          Filter zurücksetzen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <table class="table" style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Status</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Element</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Element-ID</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Benutzer</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Start</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Ende</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Stunde</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Preis</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Rechnung</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Notizen</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Aktion</th>
+      </tr>
+    </thead>
+    <tbody id="borrowing-table-body">
+      {% for e in entries %}
+      <tr class="borrowing-row"
+          data-user="{{ e.user }}"
+          data-item="{{ e.item_name }}"
+          data-status="{{ e.status }}"
+          data-borrow-id="{{ e.id }}"
+          data-item-id="{{ e.item_id }}"
+          data-item-name="{{ e.item_name }}"
+          data-item-code="{{ e.item_code }}"
+          data-item-cost="{{ e.item_cost_raw }}"
+          data-user-name="{{ e.user }}">
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.status }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.item_name }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee; font-family:monospace;">{{ e.item_id }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.user }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.start }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.end }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.period }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.item_cost }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">
+          {% if e.invoice_number %}
+            <div style="font-weight:600;">{{ e.invoice_number }}</div>
+            <div style="font-size:0.85rem; color:#666;">{{ e.invoice_amount }}</div>
+            {% if e.invoice_paid %}
+              <div style="display:inline-block; margin-top:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.75rem; font-weight:700;">Bezahlt</div>
+              {% if e.invoice_paid_at %}
+              <div style="font-size:0.75rem; color:#666; margin-top:4px;">am {{ e.invoice_paid_at }}</div>
+              {% endif %}
+            {% else %}
+              <div style="display:inline-block; margin-top:6px; padding:2px 8px; border-radius:999px; background:#fee2e2; color:#991b1b; font-size:0.75rem; font-weight:700;">Offen</div>
+            {% endif %}
+          {% else %}
+            <div style="font-size:0.9rem; color:#666;">Noch keine Rechnung</div>
+          {% endif %}
+        </td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.notes }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button type="button" class="btn btn-danger" onclick="openInvoiceModal(this)" {% if e.status != 'active' %}disabled{% endif %}>Rechnung erstellen</button>
+            {% if e.invoice_number and ((not e.invoice_paid) or e.has_damage) %}
+            <form method="post" action="{{ url_for('admin_finalize_invoice_and_repair', borrow_id=e.id) }}" onsubmit="return confirm('Rechnung als bezahlt und Element als repariert markieren?');">
+              <button type="submit" class="btn btn-success">
+                {% if not e.invoice_paid and e.has_damage %}
+                  Bezahlt + repariert
+                {% elif not e.invoice_paid %}
+                  Als bezahlt markieren
+                {% else %}
+                  Als repariert markieren
+                {% endif %}
+              </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('admin_reset_borrowing', borrow_id=e.id) }}" onsubmit="return confirm('Ausleihe zurücksetzen?');">
+              <button type="submit" class="btn btn-warning">Zurücksetzen</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div id="no-results" style="display: none; text-align: center; padding: 20px; color: #666;">
+    <p>Keine Einträge mit den aktuellen Filtern gefunden.</p>
+  </div>
+
+  {% else %}
+    <div class="empty-state">
+      <p>Keine aktiven oder geplanten Ausleihen gefunden.</p>
+    </div>
+  {% endif %}
+</div>
+
+<div id="invoice-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.72); z-index:9999; padding:20px; overflow:auto;">
+  <div style="max-width:760px; margin:40px auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0;">Rechnung erstellen</h2>
+        <p style="margin:6px 0 0; color:#666;">Preis wird aus den Anschaffungskosten vorbelegt und kann bei Bedarf angepasst werden.</p>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="closeInvoiceModal()">Schließen</button>
+    </div>
+
+    <form id="invoice-form" method="post" action="">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div>
+          <label for="invoice-item" style="display:block; font-weight:700; margin-bottom:6px;">Element</label>
+          <input id="invoice-item" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="invoice-borrower" style="display:block; font-weight:700; margin-bottom:6px;">Schüler</label>
+          <input id="invoice-borrower" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="invoice-code" style="display:block; font-weight:700; margin-bottom:6px;">Element-ID / Code</label>
+          <input id="invoice-code" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="invoice-amount" style="display:block; font-weight:700; margin-bottom:6px;">Preis</label>
+          <input id="invoice-amount" name="invoice_amount" type="text" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;" placeholder="z.B. 12,50">
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label for="damage-reason" style="display:block; font-weight:700; margin-bottom:6px;">Schadensbeschreibung</label>
+        <textarea id="damage-reason" name="damage_reason" rows="5" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; resize:vertical;" placeholder="Beschreiben Sie kurz den Schaden oder die Zerstörung."></textarea>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-bottom:18px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" name="mark_destroyed" checked>
+          Element als zerstört markieren
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" name="close_borrowing" checked>
+          Ausleihe abschließen
+        </label>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeInvoiceModal()">Abbrechen</button>
+        <button type="submit" class="btn btn-danger">PDF-Rechnung erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const userFilter = document.getElementById('user-filter');
+  const itemFilter = document.getElementById('item-filter');
+  const statusFilter = document.getElementById('status-filter');
+  const resetButton = document.getElementById('reset-filters');
+  const tableBody = document.getElementById('borrowing-table-body');
+  const noResults = document.getElementById('no-results');
+  
+  function applyFilters() {
+    const userValue = userFilter.value.toLowerCase();
+    const itemValue = itemFilter.value.toLowerCase();
+    const statusValue = statusFilter.value;
+    
+    let visibleCount = 0;
+    
+    document.querySelectorAll('.borrowing-row').forEach(row => {
+      const user = row.getAttribute('data-user').toLowerCase();
+      const item = row.getAttribute('data-item').toLowerCase();
+      const status = row.getAttribute('data-status');
+      
+      const userMatch = user.includes(userValue);
+      const itemMatch = item.includes(itemValue);
+      const statusMatch = statusValue === '' || status === statusValue;
+      
+      const shouldShow = userMatch && itemMatch && statusMatch;
+      
+      if (shouldShow) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    
+    // Show/hide no results message
+    if (visibleCount === 0) {
+      noResults.style.display = 'block';
+    } else {
+      noResults.style.display = 'none';
+    }
+  }
+  
+  function resetFilters() {
+    userFilter.value = '';
+    itemFilter.value = '';
+    statusFilter.value = '';
+    applyFilters();
+  }
+
+  function normalizeMoneyInput(value) {
+    if (!value) {
+      return '';
+    }
+    return String(value).replace(' EUR', '').trim();
+  }
+
+  window.openInvoiceModal = function(button) {
+    const row = button.closest('.borrowing-row');
+    if (!row) {
+      return;
+    }
+
+    const borrowId = row.getAttribute('data-borrow-id') || '';
+    const itemName = row.getAttribute('data-item-name') || '';
+    const borrower = row.getAttribute('data-user-name') || '';
+    const itemCode = row.getAttribute('data-item-code') || '';
+    const itemCost = row.getAttribute('data-item-cost') || '';
+
+    const modal = document.getElementById('invoice-modal');
+    const form = document.getElementById('invoice-form');
+    const amountField = document.getElementById('invoice-amount');
+    const reasonField = document.getElementById('damage-reason');
+
+    form.action = "{{ url_for('admin_create_invoice', borrow_id='__BORROW_ID__') }}".replace('__BORROW_ID__', borrowId);
+    document.getElementById('invoice-item').value = itemName;
+    document.getElementById('invoice-borrower').value = borrower;
+    document.getElementById('invoice-code').value = itemCode;
+    amountField.value = normalizeMoneyInput(itemCost);
+    reasonField.value = 'Das Element ' + itemName + ' wurde während der Ausleihe beschädigt oder zerstört.';
+
+    modal.style.display = 'block';
+    amountField.focus();
+  };
+
+  window.closeInvoiceModal = function() {
+    const modal = document.getElementById('invoice-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  };
+
+  const modal = document.getElementById('invoice-modal');
+  if (modal) {
+    modal.addEventListener('click', function(event) {
+      if (event.target === modal) {
+        closeInvoiceModal();
+      }
+    });
+  }
+  
+  // Add event listeners
+  userFilter.addEventListener('input', applyFilters);
+  itemFilter.addEventListener('input', applyFilters);
+  statusFilter.addEventListener('change', applyFilters);
+  resetButton.addEventListener('click', resetFilters);
+});
+</script>
+{% endblock %}

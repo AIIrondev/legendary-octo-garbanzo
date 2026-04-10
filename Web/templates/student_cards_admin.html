@@ -1,0 +1,358 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Schülerausweise - Inventarsystem{% endblock %}
+
+{% block content %}
+<style>
+    .student-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .student-card-form {
+        background: #f5f5f5;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+
+    .form-actions button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .btn-save {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-save:hover {
+        background: #218838;
+    }
+
+    .btn-cancel {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-cancel:hover {
+        background: #5a6268;
+    }
+
+    .cards-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .cards-table thead {
+        background: #007bff;
+        color: white;
+        font-weight: 600;
+    }
+
+    .cards-table th,
+    .cards-table td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+
+    .cards-table tbody tr:hover {
+        background: #f9f9f9;
+    }
+
+    .cards-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .card-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-edit, .btn-delete {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .btn-edit {
+        background: #007bff;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #0056b3;
+    }
+
+    .btn-delete {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #c82333;
+    }
+
+    .btn-print {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-print {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .btn-print:hover {
+        background: #138496;
+    }
+
+    .btn-export {
+        background: #6f42c1;
+        color: white;
+    }
+
+    .btn-export:hover {
+        background: #5a32a3;
+    }
+
+    .export-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+
+    .empty-state p {
+        font-size: 16px;
+        margin: 10px 0;
+    }
+
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .student-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .cards-table {
+            font-size: 14px;
+        }
+
+        .cards-table th,
+        .cards-table td {
+            padding: 8px 10px;
+        }
+
+        .card-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="container">
+    <div class="student-card-header">
+        <div>
+            <h1>📚 Schülerausweise (Bibliotek)</h1>
+        </div>
+        <div class="export-buttons">
+            <a href="{{ url_for('student_card_barcode_download') }}" class="btn-print" style="background: #28a745;">📥 Alle Ausweise (PDF)</a>
+            <a href="{{ url_for('library_admin') }}" class="btn btn-primary">← Zur Bibliotheks-Upload</a>
+        </div>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="student-card-form">
+        <h2>{% if edit_mode %}Ausweis bearbeiten{% else %}Neuer Schülerausweis{% endif %}</h2>
+        
+        <form method="POST" action="{{ url_for('student_cards_admin') }}">
+            {% if edit_mode %}
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="card_id" value="{{ form_data.get('card_id', '') }}">
+            {% else %}
+                <input type="hidden" name="action" value="add">
+            {% endif %}
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="ausweis_id">Ausweis-ID *</label>
+                    <input type="text" id="ausweis_id" name="ausweis_id" required 
+                           value="{{ form_data.get('ausweis_id', '') }}"
+                           placeholder="z.B. SIS2024001">
+                </div>
+                <div class="form-group">
+                    <label for="student_name">Schüler Name *</label>
+                    <input type="text" id="student_name" name="student_name" required
+                           value="{{ form_data.get('student_name', '') }}"
+                           placeholder="z.B. Max Mustermann">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="default_borrow_days">Standard Ausleihdauer (Tage) *</label>
+                    <input type="number" id="default_borrow_days" name="default_borrow_days" 
+                           min="1" max="365" required
+                           value="{{ form_data.get('default_borrow_days', config.get('default', 14)) }}">
+                </div>
+                <div class="form-group">
+                    <label for="class_name">Klasse</label>
+                    <input type="text" id="class_name" name="class_name"
+                           value="{{ form_data.get('class_name', '') }}"
+                           placeholder="z.B. 10A">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="notes">Notizen</label>
+                    <textarea id="notes" name="notes" rows="3" 
+                              placeholder="Optionale Notizen..."
+                              style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">{{ form_data.get('notes', '') }}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                {% if edit_mode %}
+                    <a href="{{ url_for('student_cards_admin') }}" class="btn-cancel">Abbrechen</a>
+                {% endif %}
+                <button type="submit" class="btn-save">
+                    {% if edit_mode %}Speichern{% else %}Hinzufügen{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Cards List -->
+    <div>
+        <h2>Registrierte Ausweise</h2>
+        {% if student_cards %}
+            <table class="cards-table">
+                <thead>
+                    <tr>
+                        <th>Ausweis-ID</th>
+                        <th>Schüler Name</th>
+                        <th>Klasse</th>
+                        <th>Standard Ausleihdauer</th>
+                        <th>Erstellt</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in student_cards %}
+                        <tr>
+                            <td><strong>{{ card.AusweisId }}</strong></td>
+                            <td>{{ card.SchülerName }}</td>
+                            <td>{{ card.Klasse or '—' }}</td>
+                            <td>{{ card.StandardAusleihdauer }} Tage</td>
+                            <td>{{ card.Erstellt.strftime('%d.%m.%Y') if card.get('Erstellt') else '—' }}</td>
+                            <td>
+                                <div class="card-actions">
+                                    <form method="GET" style="display: inline;">
+                                        <input type="hidden" name="edit" value="{{ card._id }}">
+                                        <button type="submit" class="btn-edit">Bearbeiten</button>
+                                    </form>
+                                    <a href="{{ url_for('student_card_single_barcode_download', card_id=card._id) }}" class="btn-export" style="text-decoration: none; display: inline-block;">📥 PDF</a>
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Wirklich löschen?');">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="card_id" value="{{ card._id }}">
+                                        <button type="submit" class="btn-delete">Löschen</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <p>Keine Schülerausweise registriert.</p>
+                <p>Fügen Sie ein neues Ausweis oben hinzu.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode.js"></script>
+<script>
+    // All PDF exports now go through backend routes
+</script>
+
+{% endblock %}
+

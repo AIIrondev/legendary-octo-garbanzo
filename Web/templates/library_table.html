@@ -1,0 +1,1076 @@
+{% extends "base.html" %}
+
+{% block title %}📚 Bibliothek - Tabellenansicht - {{ APP_VERSION }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Library table-only view styles */
+    .library-table-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .library-header {
+        margin-bottom: 25px;
+    }
+
+    .library-header h1 {
+        margin: 0 0 5px 0;
+        font-size: 2em;
+        color: #333;
+    }
+
+    .library-header p {
+        margin: 0;
+        color: #666;
+        font-size: 0.95em;
+    }
+
+    /* Library search bar */
+    .library-search-bar {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .library-search-input {
+        flex: 1;
+        min-width: 250px;
+        padding: 12px 16px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 16px;
+        background: white;
+    }
+
+    /* Scanner panel */
+    .library-scan-panel {
+        background: #ffffff;
+        border: 1px solid #d9dde4;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 20px;
+    }
+
+    .library-scan-controls {
+        display: grid;
+        grid-template-columns: 220px minmax(220px, 1fr) auto auto;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .library-scan-controls select,
+    .library-scan-controls input {
+        padding: 10px 12px;
+        border: 1px solid #d0d7e2;
+        border-radius: 6px;
+        font-size: 14px;
+        background: #fff;
+    }
+
+    .library-scan-status {
+        margin-top: 10px;
+        font-size: 0.92em;
+        color: #4b5563;
+    }
+
+    .library-scan-status.ok {
+        color: #1f7a38;
+    }
+
+    .library-scan-status.warn {
+        color: #9a6700;
+    }
+
+    .library-scan-status.error {
+        color: #b42318;
+    }
+
+    .library-scan-reader-wrap {
+        display: none;
+        margin-top: 12px;
+        border: 1px solid #d9dde4;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+        max-width: 460px;
+    }
+
+    .library-scan-reader {
+        width: 100%;
+        min-height: 280px;
+    }
+
+    .library-filter-toggle-btn {
+        padding: 10px 16px;
+        background: #f0f2f5;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #333;
+        transition: all 0.2s ease;
+    }
+
+    .library-filter-toggle-btn:hover {
+        background: #e4e6eb;
+        border-color: #999;
+    }
+
+    .library-filter-toggle-btn.active {
+        background: #e0e7ff;
+        border-color: #4f46e5;
+        color: #4f46e5;
+    }
+
+    /* Filter panel */
+    .library-filter-panel {
+        display: none;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .library-filter-panel.open {
+        display: block;
+    }
+
+    .filter-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .filter-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .filter-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-item label {
+        font-weight: 600;
+        font-size: 0.9em;
+        color: #333;
+        margin-bottom: 6px;
+    }
+
+    .filter-item input,
+    .filter-item select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        background: white;
+    }
+
+    .filter-item input:focus,
+    .filter-item select:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+
+    .filter-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        border-top: 1px solid #eee;
+        padding-top: 15px;
+    }
+
+    .filter-buttons .button {
+        flex: 1;
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+
+    /* Library table */
+    .library-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .library-items-table thead {
+        background: #f8f9fa;
+        border-bottom: 2px solid #ddd;
+    }
+
+    .library-items-table th {
+        padding: 14px 16px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .library-items-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #eee;
+        color: #555;
+        font-size: 0.95em;
+    }
+
+    .library-items-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    .library-items-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Table cells */
+    .table-title {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .table-status {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 500;
+    }
+
+    .status-available {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .status-borrowed {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .status-damaged {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    /* Actions */
+    .table-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .table-actions .button {
+        padding: 6px 12px;
+        font-size: 0.85em;
+        white-space: nowrap;
+    }
+
+    /* Empty state */
+    .library-empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+
+    .library-empty-state h3 {
+        font-size: 1.3em;
+        margin-bottom: 10px;
+        color: #666;
+    }
+
+    /* Modal styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .modal-content {
+        background-color: #fff;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        position: relative;
+    }
+
+    .edit-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .edit-grid .full {
+        grid-column: 1 / -1;
+    }
+
+    .edit-grid label {
+        font-weight: 600;
+        font-size: 0.9em;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .edit-grid input,
+    .edit-grid textarea,
+    .edit-grid select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #d0d7e2;
+        border-radius: 6px;
+    }
+
+    .edit-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .close {
+        position: absolute;
+        right: 20px;
+        top: 10px;
+        font-size: 28px;
+        font-weight: bold;
+        color: #999;
+        cursor: pointer;
+    }
+
+    .close:hover {
+        color: #333;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+        .library-table-container {
+            padding: 10px;
+        }
+
+        .library-search-bar {
+            flex-direction: column;
+        }
+
+        .library-search-input {
+            width: 100%;
+        }
+
+        .library-items-table {
+            font-size: 0.85em;
+        }
+
+        .library-items-table th,
+        .library-items-table td {
+            padding: 8px 10px;
+        }
+
+        .table-actions .button {
+            padding: 4px 8px;
+            font-size: 0.75em;
+        }
+
+        .filter-row {
+            grid-template-columns: 1fr;
+        }
+
+        .library-scan-controls {
+            grid-template-columns: 1fr;
+        }
+
+        .library-scan-reader-wrap {
+            max-width: 100%;
+        }
+    }
+</style>
+
+<div class="library-table-container" id="libraryTableContainer" data-can-edit="{{ 1 if is_admin else 0 }}">
+    <!-- Header -->
+    <div class="library-header">
+        <h1>📚 Bibliothek</h1>
+        <p>Bücher, CDs, DVDs und weitere Medien</p>
+    </div>
+
+    <!-- Search and Filter Toggle -->
+    <div class="library-search-bar">
+        <input 
+            type="text" 
+            id="librarySearch" 
+            class="library-search-input" 
+            placeholder="Nach Titel, Autor, ISBN suchen..."
+        >
+        <button 
+            id="filterToggleBtn" 
+            class="library-filter-toggle-btn"
+            aria-label="Filter öffnen/schließen"
+        >
+            🔍 Filter
+        </button>
+    </div>
+
+    <!-- Customizable Filter Panel -->
+
+    <!-- Student card / quick scan workflow -->
+    <div class="library-scan-panel">
+        <div class="library-scan-controls">
+            <select id="scanModeSelect" aria-label="Scan-Modus">
+                <option value="card_only">Nur Ausweis erfassen</option>
+                <option value="quick_toggle">Schnellmodus: Ausweis + Mediencode</option>
+            </select>
+            <input type="text" id="activeStudentCard" placeholder="Aktiver Ausweis (gescannt)" readonly>
+            <button id="resetCardBtn" class="button" type="button">Ausweis löschen</button>
+            <button id="toggleScannerBtn" class="button" type="button">Scanner starten</button>
+        </div>
+        <div id="scanStatus" class="library-scan-status">
+            Hinweis: Im Schnellmodus zuerst den Schülerausweis scannen, danach den Buch-/Mediencode.
+        </div>
+        <div id="scanReaderWrap" class="library-scan-reader-wrap">
+            <div id="libraryQrReader" class="library-scan-reader"></div>
+        </div>
+    </div>
+    <div id="filterPanel" class="library-filter-panel">
+        <div class="filter-row">
+            <div class="filter-item">
+                <label for="filterAuthor">Autor/Künstler:</label>
+                <input type="text" id="filterAuthor" placeholder="z.B. Goethe">
+            </div>
+            <div class="filter-item">
+                <label for="filterISBN">ISBN:</label>
+                <input type="text" id="filterISBN" placeholder="z.B. 978-3...">
+            </div>
+            <div class="filter-item">
+                <label for="filterType">Medientyp:</label>
+                <select id="filterType">
+                    <option value="">-- Alle Typen --</option>
+                    <option value="book">Buch</option>
+                    <option value="cd">CD</option>
+                    <option value="dvd">DVD</option>
+                    <option value="other">Sonstige</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label for="filterStatus">Status:</label>
+                <select id="filterStatus">
+                    <option value="">-- Alle Status --</option>
+                    <option value="available">Verfügbar</option>
+                    <option value="borrowed">Ausgeliehen</option>
+                    <option value="damaged">Defekt/Zerstört</option>
+                </select>
+            </div>
+        </div>
+        <div class="filter-buttons">
+            <button id="applyFilterBtn" class="button" style="background: #4f46e5; color: white;">Filter anwenden</button>
+            <button id="clearFilterBtn" class="button" style="background: #f0f2f5; color: #333;">Zurücksetzen</button>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <div id="tableContainer">
+        <table class="library-items-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Titel</th>
+                    <th style="width: 15%;">Autor/Künstler</th>
+                    <th style="width: 12%;">ISBN/Code</th>
+                    <th style="width: 10%;">Typ</th>
+                    <th style="width: 12%;">Status</th>
+                    <th style="width: 26%;">Aktionen</th>
+                </tr>
+            </thead>
+            <tbody id="itemsTableBody">
+                <!-- Items will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="library-empty-state" style="display: none;">
+        <h3>📭 Keine Bücher gefunden</h3>
+        <p>Versuchen Sie, die Filter anzupassen oder suchen Sie nach anderen Begriffen.</p>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div id="detailModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeDetailModal()">&times;</span>
+        <div id="detailContent"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script>
+    // State
+    let libraryItems = [];
+    let filteredItems = [];
+    let filterPanelOpen = false;
+    let scannerInstance = null;
+    let scannerRunning = false;
+    let activeStudentCardId = '';
+    let lastScanValue = '';
+    let lastScanAt = 0;
+    const canEditLibraryItems = (document.getElementById('libraryTableContainer')?.dataset.canEdit === '1');
+
+    // Load items
+    async function loadLibraryItems() {
+        try {
+            const response = await fetch('/api/library_items');
+            if (!response.ok) throw new Error('Failed to load library items');
+            libraryItems = await response.json();
+            displayItems(libraryItems);
+        } catch (error) {
+            console.error('Error loading library items:', error);
+            document.getElementById('itemsTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Fehler beim Laden der Bibliothekselemente.</td></tr>';
+        }
+    }
+
+    // Display items in table
+    function displayItems(items) {
+        const tbody = document.getElementById('itemsTableBody');
+        const emptyState = document.getElementById('emptyState');
+
+        if (items.length === 0) {
+            tbody.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        tbody.innerHTML = items.map(item => `
+            ${(() => {
+                const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+                const statusClass = statusKey === 'damaged' ? 'status-damaged' : (statusKey === 'borrowed' ? 'status-borrowed' : 'status-available');
+                const statusText = statusKey === 'damaged' ? 'Defekt/Zerstört' : (statusKey === 'borrowed' ? 'Ausgeliehen' : 'Verfügbar');
+                const actionLabel = statusKey === 'available' ? 'Ausleihen' : (statusKey === 'borrowed' ? 'Reservieren' : 'Nicht ausleihbar');
+                const actionDisabled = statusKey === 'damaged' ? 'disabled' : '';
+                return `
+            <tr>
+                <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
+                <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
+                <td>${escapeHtml(item.ISBN || item.Code4 || '-')}</td>
+                <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
+                <td>
+                    <span class="table-status ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="table-actions">
+                    <button class="button" onclick="showItemDetail('${item._id}')">Details</button>
+                    <button class="button" style="background: #28a745; color: white;" onclick="borrowItem('${item._id}')" ${actionDisabled}>
+                        ${actionLabel}
+                    </button>
+                    ${canEditLibraryItems ? `<button class="button" style="background:#0ea5e9;color:#fff;" onclick="openEditLibraryItem('${item._id}')">Bearbeiten</button>` : ''}
+                </td>
+            </tr>
+                `;
+            })()}
+        `).join('');
+    }
+
+    // Filter toggle
+    document.getElementById('filterToggleBtn').addEventListener('click', () => {
+        filterPanelOpen = !filterPanelOpen;
+        const panel = document.getElementById('filterPanel');
+        const btn = document.getElementById('filterToggleBtn');
+        panel.classList.toggle('open');
+        btn.classList.toggle('active');
+    });
+
+    // Apply filters
+    document.getElementById('applyFilterBtn').addEventListener('click', () => {
+        const author = document.getElementById('filterAuthor').value.toLowerCase();
+        const isbn = document.getElementById('filterISBN').value.toLowerCase();
+        const type = document.getElementById('filterType').value;
+        const status = document.getElementById('filterStatus').value;
+
+        filteredItems = libraryItems.filter(item => {
+            const authorMatch = !author || (item.Autor || item.Author || '').toLowerCase().includes(author);
+            const isbnMatch = !isbn || (item.ISBN || item.Code4 || '').toLowerCase().includes(isbn);
+            const typeMatch = !type || (item.ItemType || 'book') === type;
+            const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+            const statusMatch = !status || statusKey === status;
+            return authorMatch && isbnMatch && typeMatch && statusMatch;
+        });
+
+        displayItems(filteredItems);
+    });
+
+    // Clear filters
+    document.getElementById('clearFilterBtn').addEventListener('click', () => {
+        document.getElementById('filterAuthor').value = '';
+        document.getElementById('filterISBN').value = '';
+        document.getElementById('filterType').value = '';
+        document.getElementById('filterStatus').value = '';
+        displayItems(libraryItems);
+    });
+
+    // Search input
+    document.getElementById('librarySearch').addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const toSearch = filteredItems.length > 0 ? filteredItems : libraryItems;
+        const results = toSearch.filter(item =>
+            (item.Name || '').toLowerCase().includes(searchTerm) ||
+            (item.Autor || item.Author || '').toLowerCase().includes(searchTerm) ||
+            (item.ISBN || item.Code4 || '').toLowerCase().includes(searchTerm)
+        );
+        displayItems(results);
+    });
+
+    // Helper functions
+    function getItemTypeLabel(type) {
+        const labels = { 'book': 'Buch', 'cd': 'CD', 'dvd': 'DVD', 'other': 'Sonstige' };
+        return labels[type] || type;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showItemDetail(itemId) {
+        // Load and show detail modal
+        fetch(`/api/item_detail/${itemId}`)
+            .then(r => r.text())
+            .then(html => {
+                document.getElementById('detailContent').innerHTML = html;
+                document.getElementById('detailModal').style.display = 'flex';
+            })
+            .catch(err => console.error('Error loading detail:', err));
+    }
+
+    function closeDetailModal() {
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    function borrowItem(itemId) {
+        const selectedItem = (libraryItems || []).find(item => item._id === itemId);
+        if (selectedItem && selectedItem.LibraryDisplayStatus === 'damaged') {
+            alert('Dieses Medium ist als defekt/zerstört markiert und kann nicht ausgeliehen werden.');
+            return;
+        }
+
+        const defaultCardId = activeStudentCardId || '';
+        const cardId = (window.prompt('Bitte Schülerausweis-ID eingeben:', defaultCardId) || '').trim().toUpperCase();
+        if (!cardId) {
+            alert('Ausleihe abgebrochen: Für Bibliotheksmedien ist eine gültige Schülerausweis-ID erforderlich.');
+            return;
+        }
+
+        setActiveStudentCard(cardId);
+
+        const durationInput = (window.prompt('Ausleihdauer in Tagen (optional):') || '').trim();
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/ausleihen/${itemId}`;
+
+        const cardField = document.createElement('input');
+        cardField.type = 'hidden';
+        cardField.name = 'borrower_card_id';
+        cardField.value = cardId;
+        form.appendChild(cardField);
+
+        const returnTargetField = document.createElement('input');
+        returnTargetField.type = 'hidden';
+        returnTargetField.name = 'return_to';
+        returnTargetField.value = 'library';
+        form.appendChild(returnTargetField);
+
+        if (durationInput) {
+            const durationField = document.createElement('input');
+            durationField.type = 'hidden';
+            durationField.name = 'borrow_duration_days';
+            durationField.value = durationInput;
+            form.appendChild(durationField);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    function setScanStatus(message, kind = '') {
+        const el = document.getElementById('scanStatus');
+        if (!el) return;
+        el.textContent = message;
+        el.classList.remove('ok', 'warn', 'error');
+        if (kind) {
+            el.classList.add(kind);
+        }
+    }
+
+    function setActiveStudentCard(cardId) {
+        activeStudentCardId = (cardId || '').trim().toUpperCase();
+        const input = document.getElementById('activeStudentCard');
+        if (input) {
+            input.value = activeStudentCardId;
+        }
+    }
+
+    function normalizeScannedCode(code) {
+        return (code || '').trim();
+    }
+
+    async function processQuickToggleScan(scannedCode) {
+        if (!activeStudentCardId) {
+            setActiveStudentCard(scannedCode);
+            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
+            return;
+        }
+
+        try {
+            setScanStatus('Verarbeite Mediencode...', 'warn');
+            const response = await fetch('/api/library_scan_action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    student_card_id: activeStudentCardId,
+                    item_code: scannedCode
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                setScanStatus(result.message || 'Scan-Aktion fehlgeschlagen.', 'error');
+                return;
+            }
+
+            if (result.action === 'borrowed') {
+                setScanStatus(`Ausgeliehen: ${result.item_name}`, 'ok');
+            } else if (result.action === 'returned') {
+                setScanStatus(`Zurückgegeben: ${result.item_name}`, 'ok');
+            } else {
+                setScanStatus(result.message || 'Aktion durchgeführt.', 'ok');
+            }
+
+            await loadLibraryItems();
+        } catch (err) {
+            console.error('Quick scan action failed:', err);
+            setScanStatus('Fehler beim Verarbeiten des Scans.', 'error');
+        }
+    }
+
+    function handleScanSuccess(decodedText) {
+        const scannedCode = normalizeScannedCode(decodedText);
+        if (!scannedCode) return;
+
+        const now = Date.now();
+        if (scannedCode === lastScanValue && (now - lastScanAt) < 1500) {
+            return;
+        }
+        lastScanValue = scannedCode;
+        lastScanAt = now;
+
+        const mode = (document.getElementById('scanModeSelect') || {}).value || 'card_only';
+        if (mode === 'card_only') {
+            setActiveStudentCard(scannedCode);
+            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
+            return;
+        }
+
+        processQuickToggleScan(scannedCode);
+    }
+
+    function handleScanError() {
+        // Intentionally silent to avoid UI spam while camera searches codes.
+    }
+
+    async function ensureScannerLibraryLoaded() {
+        if (typeof Html5QrcodeScanner !== 'undefined') {
+            return true;
+        }
+
+        const sources = [
+            'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js'
+        ];
+
+        for (const src of sources) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const existing = document.querySelector(`script[data-scanner-src="${src}"]`);
+                    if (existing) {
+                        const onLoad = () => resolve();
+                        const onError = () => reject(new Error('Script load failed'));
+                        existing.addEventListener('load', onLoad, { once: true });
+                        existing.addEventListener('error', onError, { once: true });
+                        setTimeout(() => {
+                            existing.removeEventListener('load', onLoad);
+                            existing.removeEventListener('error', onError);
+                            if (typeof Html5QrcodeScanner !== 'undefined') {
+                                resolve();
+                            } else {
+                                reject(new Error('Script not available'));
+                            }
+                        }, 1200);
+                        return;
+                    }
+
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    script.defer = true;
+                    script.dataset.scannerSrc = src;
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Script load failed'));
+                    document.head.appendChild(script);
+                });
+
+                if (typeof Html5QrcodeScanner !== 'undefined') {
+                    return true;
+                }
+            } catch (err) {
+                console.warn('Scanner library load failed from', src, err);
+            }
+        }
+
+        return false;
+    }
+
+    async function startScanner() {
+        if (scannerRunning) return;
+
+        const scannerLoaded = await ensureScannerLibraryLoaded();
+        if (!scannerLoaded) {
+            setScanStatus('Scanner-Bibliothek konnte nicht geladen werden.', 'error');
+            return;
+        }
+
+        const readerWrap = document.getElementById('scanReaderWrap');
+        const toggleBtn = document.getElementById('toggleScannerBtn');
+        readerWrap.style.display = 'block';
+
+        try {
+            const formats = [];
+            if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+                formats.push(
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.ITF,
+                    Html5QrcodeSupportedFormats.CODABAR
+                );
+            }
+
+            const scannerConfig = {
+                fps: 10,
+                rememberLastUsedCamera: true,
+                aspectRatio: 1.333334
+            };
+            if (formats.length > 0) {
+                scannerConfig.formatsToSupport = formats;
+            }
+
+            scannerInstance = scannerInstance || new Html5QrcodeScanner(
+                'libraryQrReader',
+                scannerConfig,
+                false
+            );
+
+            scannerInstance.render(handleScanSuccess, handleScanError);
+            scannerRunning = true;
+            toggleBtn.textContent = 'Scanner stoppen';
+            setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
+        } catch (err) {
+            console.error('Scanner start failed:', err);
+            readerWrap.style.display = 'none';
+            const detail = (err && (err.message || err.name)) ? ` (${err.message || err.name})` : '';
+            setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
+        }
+    }
+
+    async function stopScanner() {
+        if (!scannerRunning || !scannerInstance) return;
+        const readerWrap = document.getElementById('scanReaderWrap');
+        const toggleBtn = document.getElementById('toggleScannerBtn');
+        try {
+            await scannerInstance.clear();
+        } catch (err) {
+            console.error('Scanner stop failed:', err);
+        }
+        scannerRunning = false;
+        scannerInstance = null;
+        readerWrap.style.display = 'none';
+        toggleBtn.textContent = 'Scanner starten';
+        setScanStatus('Scanner gestoppt.', 'warn');
+    }
+
+    function wireScannerUi() {
+        const toggleBtn = document.getElementById('toggleScannerBtn');
+        const resetBtn = document.getElementById('resetCardBtn');
+        const modeSelect = document.getElementById('scanModeSelect');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', async () => {
+                if (scannerRunning) {
+                    await stopScanner();
+                } else {
+                    await startScanner();
+                }
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                setActiveStudentCard('');
+                setScanStatus('Ausweis zurückgesetzt. Bitte neu scannen.', 'warn');
+            });
+        }
+
+        if (modeSelect) {
+            modeSelect.addEventListener('change', () => {
+                if (modeSelect.value === 'quick_toggle' && !activeStudentCardId) {
+                    setScanStatus('Schnellmodus: zuerst Schülerausweis scannen.', 'warn');
+                } else if (modeSelect.value === 'card_only') {
+                    setScanStatus('Modus aktiv: Nur Ausweis erfassen.', 'warn');
+                } else {
+                    setScanStatus('Schnellmodus aktiv: jetzt Mediencode scannen.', 'warn');
+                }
+            });
+        }
+    }
+
+    function getLibraryItemById(itemId) {
+        return libraryItems.find(i => String(i._id) === String(itemId));
+    }
+
+    function openEditLibraryItem(itemId) {
+        const item = getLibraryItemById(itemId);
+        if (!item) {
+            alert('Element nicht gefunden.');
+            return;
+        }
+
+        const modal = document.getElementById('editLibraryModal');
+        document.getElementById('editLibraryItemId').value = item._id || '';
+        document.getElementById('editLibraryName').value = item.Name || '';
+        document.getElementById('editLibraryAuthor').value = item.Autor || item.Author || '';
+        document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
+        document.getElementById('editLibraryLocation').value = item.Ort || '';
+        document.getElementById('editLibraryIsbn').value = item.ISBN || '';
+        document.getElementById('editLibraryCode4').value = item.Code_4 || '';
+        document.getElementById('editLibraryType').value = (item.ItemType || 'book');
+        modal.style.display = 'flex';
+    }
+
+    function closeEditLibraryModal() {
+        const modal = document.getElementById('editLibraryModal');
+        modal.style.display = 'none';
+    }
+
+    async function submitEditLibraryItem(event) {
+        event.preventDefault();
+        const itemId = document.getElementById('editLibraryItemId').value;
+        const payload = {
+            name: document.getElementById('editLibraryName').value,
+            autor: document.getElementById('editLibraryAuthor').value,
+            beschreibung: document.getElementById('editLibraryDescription').value,
+            ort: document.getElementById('editLibraryLocation').value,
+            isbn: document.getElementById('editLibraryIsbn').value,
+            code_4: document.getElementById('editLibraryCode4').value,
+            item_type: document.getElementById('editLibraryType').value
+        };
+
+        try {
+            const response = await fetch(`/api/library_item/${itemId}/update`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                alert(result.message || 'Bearbeiten fehlgeschlagen.');
+                return;
+            }
+            closeEditLibraryModal();
+            await loadLibraryItems();
+            setScanStatus('Bibliotheksmedium aktualisiert.', 'ok');
+        } catch (err) {
+            console.error('Library edit failed:', err);
+            alert('Fehler beim Bearbeiten des Bibliotheksmediums.');
+        }
+    }
+
+    // Load on page init
+    document.addEventListener('DOMContentLoaded', () => {
+        loadLibraryItems();
+        wireScannerUi();
+        const editForm = document.getElementById('editLibraryForm');
+        if (editForm) {
+            editForm.addEventListener('submit', submitEditLibraryItem);
+        }
+    });
+</script>
+
+<div id="editLibraryModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width: 760px;">
+        <span class="close" onclick="closeEditLibraryModal()">&times;</span>
+        <h3 style="margin-top:0;">Bibliotheksmedium bearbeiten</h3>
+        <form id="editLibraryForm">
+            <input type="hidden" id="editLibraryItemId">
+            <div class="edit-grid">
+                <div class="full">
+                    <label for="editLibraryName">Titel</label>
+                    <input id="editLibraryName" required>
+                </div>
+                <div>
+                    <label for="editLibraryAuthor">Autor/Künstler</label>
+                    <input id="editLibraryAuthor">
+                </div>
+                <div>
+                    <label for="editLibraryType">Medientyp</label>
+                    <select id="editLibraryType">
+                        <option value="book">Buch</option>
+                        <option value="cd">CD</option>
+                        <option value="dvd">DVD</option>
+                        <option value="media">Sonstige Medien</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="editLibraryIsbn">ISBN</label>
+                    <input id="editLibraryIsbn" placeholder="optional ISBN-10/13">
+                </div>
+                <div>
+                    <label for="editLibraryCode4">Code</label>
+                    <input id="editLibraryCode4" placeholder="optional Mediencode">
+                </div>
+                <div class="full">
+                    <label for="editLibraryLocation">Ort</label>
+                    <input id="editLibraryLocation" required>
+                </div>
+                <div class="full">
+                    <label for="editLibraryDescription">Beschreibung</label>
+                    <textarea id="editLibraryDescription" rows="4" required></textarea>
+                </div>
+            </div>
+            <div class="edit-actions">
+                <button type="submit" class="button" style="background:#0ea5e9;color:#fff;">Speichern</button>
+                <button type="button" class="button" onclick="closeEditLibraryModal()">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

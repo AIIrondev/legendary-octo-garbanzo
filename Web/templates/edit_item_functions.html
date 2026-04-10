@@ -1,0 +1,288 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+<!-- Edit Item Functions -->
+<script>
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
+    // Load location options for edit modal
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('edit-location');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        ortSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
+    // Edit modal functions
+    function openEditModal(itemId) {
+        if (typeof openEditModalFromServer === 'function') {
+            openEditModalFromServer(itemId);
+            return;
+        }
+
+        // Find the item data from allItems array
+        const item = allItems.find(i => i._id === itemId);
+        if (!item) {
+            console.error('Item not found:', itemId);
+            return;
+        }
+
+        // Populate the edit form with current item data
+        document.getElementById('edit-item-id').value = item._id;
+        document.getElementById('edit-name').value = item.Name || '';
+        document.getElementById('edit-description').value = item.Beschreibung || '';
+        document.getElementById('edit-code4').value = item.Code_4 || '';
+        document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
+        document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
+
+        // Set reservable status (default to true if undefined)
+        const reservierbarCheckbox = document.getElementById('edit-reservierbar');
+        if (reservierbarCheckbox) {
+            reservierbarCheckbox.checked = item.Reservierbar !== false;
+        }
+
+        // Load location options
+        loadLocationOptions();
+
+        // Set the current location
+        setTimeout(() => {
+            const locationSelect = document.getElementById('edit-location');
+            if (locationSelect && item.Ort) {
+                locationSelect.value = item.Ort;
+            }
+        }, 100);
+
+        // Handle filter arrays - set current values
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+
+        // Set filter dropdowns (up to 4 each)
+        for (let i = 1; i <= 4; i++) {
+            // Filter 1
+            const filter1Select = document.getElementById(`edit-filter1-${i}`);
+            if (filter1Select) {
+                filter1Select.value = filter1Array[i-1] || '';
+            }
+            
+            // Filter 2
+            const filter2Select = document.getElementById(`edit-filter2-${i}`);
+            if (filter2Select) {
+                filter2Select.value = filter2Array[i-1] || '';
+            }
+            
+            // Filter 3
+            const filter3Select = document.getElementById(`edit-filter3-${i}`);
+            if (filter3Select) {
+                filter3Select.value = filter3Array[i-1] || '';
+            }
+        }
+
+        // Populate existing images
+        populateExistingImages(item.Images || []);
+
+        // Show the modal
+        document.getElementById('edit-modal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+    
+    // Function to add new location (for edit modal)
+    function addNewLocation(prefix) {
+        // Use different input IDs based on whether we're in edit mode
+        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
+        const selectId = prefix === 'edit' ? 'edit-location' : 'ort';
+        
+        const newLocationInput = document.getElementById(inputId);
+        const newLocation = newLocationInput.value.trim();
+        
+        if (!newLocation) {
+            alert('Bitte geben Sie einen Ort ein.');
+            return;
+        }
+        
+        // Add to dropdown
+        const ortSelect = document.getElementById(selectId);
+        const option = document.createElement('option');
+        option.value = newLocation;
+        option.textContent = newLocation;
+        ortSelect.appendChild(option);
+        ortSelect.value = newLocation;
+        
+        // Hide the input field
+        document.getElementById(prefix + '-new-location-container').style.display = 'none';
+        newLocationInput.value = '';
+        
+        // Save to server
+        fetch('/add_location_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'value=' + encodeURIComponent(newLocation)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.warn('Failed to save location to server:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving location:', error);
+        });
+    }
+    
+    // Function to cancel adding a new location
+    function cancelAddLocation(prefix) {
+        const containerId = prefix === 'edit' ? 'edit-new-location-container' : 'new-location-container';
+        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
+        document.getElementById(containerId).style.display = 'none';
+        document.getElementById(inputId).value = '';
+    }
+
+    // Function to populate existing images in edit modal
+    function populateExistingImages(images) {
+        const previewContainer = document.getElementById('edit-image-preview-container');
+        if (!previewContainer) return;
+        
+        previewContainer.innerHTML = '';
+        
+        if (!images || images.length === 0) {
+            previewContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+            return;
+        }
+        
+        images.forEach((imageName, index) => {
+            const preview = document.createElement('div');
+            preview.className = 'image-preview-item';
+            
+            const isVideo = isVideoFile(imageName);
+            const mediaHtml = isVideo 
+                ? `<video src="/uploads/${imageName}" style="max-width: 150px; max-height: 150px; object-fit: cover;" controls preload="metadata"></video>`
+                : `<img src="/uploads/${imageName}" alt="Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">`;
+            
+            preview.innerHTML = `
+                ${mediaHtml}
+                <div class="image-controls">
+                    <button type="button" onclick="removeExistingImage('${imageName}', this)" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px;">Entfernen</button>
+                </div>
+            `;
+            previewContainer.appendChild(preview);
+            
+            // Add hidden input for the image
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'existing_images';
+            hiddenInput.value = imageName;
+            previewContainer.appendChild(hiddenInput);
+        });
+    }
+    
+    // Function to remove an existing image
+    function removeExistingImage(imageName, button) {
+        try {
+            // First, determine context - are we in edit mode or main view?
+            const inEditMode = !!document.getElementById('edit-item-form');
+            
+            // Always remove the preview element (works in both contexts)
+            const previewItem = button.closest('.image-preview-item');
+            if (previewItem) {
+                previewItem.remove();
+            }
+            
+            // If we're in edit mode, handle form inputs
+            if (inEditMode) {
+                // Find and remove the corresponding hidden input in the edit form
+                const editForm = document.getElementById('edit-item-form');
+                
+                if (editForm) {
+                    // Remove from existing images
+                    const existingInputs = editForm.querySelectorAll('input[name="existing_images"]');
+                    existingInputs.forEach(input => {
+                        if (input.value === imageName) {
+                            input.remove();
+                        }
+                    });
+                    
+                    // Add to removed images
+                    const removedInput = document.createElement('input');
+                    removedInput.type = 'hidden';
+                    removedInput.name = 'removed_images';
+                    removedInput.value = imageName;
+                    editForm.appendChild(removedInput);
+                }
+            } else {
+                // In main view, we may need different logic
+                console.log(`Image ${imageName} removed from display in main view`);
+                // Add any main view specific handling here
+            }
+        } catch (error) {
+            console.error(`Error in removeExistingImage: ${error.message}`);
+        }
+    }
+    
+    // Validate file types for image uploads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if we're in the edit item context
+        if (!document.getElementById('edit-item-form')) {
+            console.log('Edit item form not found, skipping edit item functions initialization');
+            return; // Exit early if we're not in the edit item context
+        }
+        
+        const imageInput = document.getElementById('edit-new-images');
+        const previewContainer = document.getElementById('edit-image-preview-container');
+        
+        if (imageInput) {
+            imageInput.addEventListener('change', function(e) {
+                // Validate file types before preview
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+                                    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
+                                    'video/webm', 'video/x-flv', 'video/mp4', 'video/3gpp'];
+                const files = this.files;
+                let hasInvalidFile = false;
+                
+                for (let i = 0; i < files.length; i++) {
+                    if (!allowedTypes.includes(files[i].type)) {
+                        hasInvalidFile = true;
+                        // Clear the file input to prevent submission
+                        this.value = '';
+                        alert('Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP');
+                        return; // Stop processing
+                    }
+                }
+                
+                // Continue with regular preview handling...
+            });
+        }
+    });
+</script>

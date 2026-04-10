@@ -1,0 +1,338 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header-section">
+        <h1>Neuen Benutzer registrieren</h1>
+        <p class="subtitle">Erstellen Sie ein neues Benutzerkonto und legen Sie Zugriffsrechte fest</p>
+    </div>
+
+    <div class="flash-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">
+                        <span class="flash-icon">{% if category == 'success' %}✓{% else %}!{% endif %}</span>
+                        <span class="flash-message">{{ message }}</span>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="content">
+        <div class="form-card">
+            <form method="POST" action="{{ url_for('register') }}">
+                <div class="form-group">
+                    <label for="username">Benutzername</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="username" name="username" placeholder="Geben Sie einen Benutzernamen ein" required>
+                    </div>
+                    <label for="name">Name</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="name" name="name" placeholder="Geben Sie den Namen ein" required>
+                    </div>
+                    <label for="last-name">Nachname</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Passwort</label>
+                    <a class="richtlinen">Das Password muss mindestens 6 Zeichen beinhalten mit Sonderzeichen, groß und klein Buchstaben sowie Zahlen!</a>
+                    <div class="input-container">
+                        <span class="input-icon">🔒</span>
+                        <input type="password" id="password" name="password" placeholder="Geben Sie ein sicheres Passwort ein" required>
+                    </div>
+                </div>
+
+                {% if student_cards_module_enabled %}
+                <div class="form-group">
+                    <label style="display:flex; align-items:center; gap:8px; color:#1f2937;">
+                        <input type="checkbox" id="is-student" name="is_student" style="width:auto;">
+                        Schülerkonto mit Ausweis
+                    </label>
+                    <div id="student-fields" style="display:none; margin-top:10px;">
+                        <label for="student-card-id">Ausweis-ID</label>
+                        <div class="input-container">
+                            <span class="input-icon">🪪</span>
+                            <input type="text" id="student-card-id" name="student_card_id" placeholder="z.B. S-2026-001">
+                        </div>
+                        <label for="max-borrow-days" style="margin-top:10px;">Standard-Ausleihdauer (Tage)</label>
+                        <div class="input-container">
+                            <span class="input-icon">📅</span>
+                            <input type="number" id="max-borrow-days" name="max_borrow_days" min="1" max="{{ student_max_borrow_days }}" value="{{ student_default_borrow_days }}">
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="form-group form-actions">
+                    <button type="submit" class="action-button register-button">Benutzer registrieren</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+:root {
+    --primary-color: #3498db;
+    --primary-dark: #2980b9;
+    --success-color: #2ecc71;
+    --error-color: #e74c3c;
+    --text-color: #333;
+    --light-bg: #f9f9f9;
+    --border-radius: 8px;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--light-bg);
+    margin: 0;
+    padding: 0;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+}
+
+.header-section {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.header-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: #777;
+    margin-top: 0;
+}
+
+.content {
+    background-color: #fff;
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+}
+
+.form-card {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--primary-dark);
+}
+
+.input-container {
+    position: relative;
+}
+
+.input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa;
+    font-size: 1.2rem;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: 100%;
+    padding: 0.8rem 1rem 0.8rem 3rem;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: var(--transition);
+    box-sizing: border-box;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+input::placeholder {
+    color: #aaa;
+}
+
+.form-actions {
+    margin-top: 2rem;
+}
+
+.action-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 30px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: var(--transition);
+    width: 100%;
+    font-size: 1rem;
+}
+
+.action-button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.register-button {
+    background-color: var(--success-color);
+}
+
+.register-button:hover {
+    background-color: #27ae60;
+}
+
+.navigation-buttons {
+    text-align: center;
+    margin: 1.5rem 0;
+}
+
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+}
+
+.back-button:hover {
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+.back-icon {
+    margin-right: 0.5rem;
+    font-size: 1.2rem;
+}
+
+.flash-container {
+    margin-bottom: 1.5rem;
+}
+
+.flash {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--border-radius);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.flash-icon {
+    margin-right: 0.8rem;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.flash.success {
+    background-color: #d4edda;
+    color: #155724;
+    border-left: 4px solid var(--success-color);
+}
+
+.flash.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid var(--error-color);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 1rem;
+        margin: 1rem auto;
+    }
+    
+    .content {
+        padding: 1.5rem;
+    }
+    
+    .header-section h1 {
+        font-size: 2rem;
+    }
+}
+
+.richtlinen{
+    color: #ec0920;
+}
+</style>
+
+{% if student_cards_module_enabled %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const studentCheckbox = document.getElementById('is-student');
+    const studentFields = document.getElementById('student-fields');
+    const studentCardInput = document.getElementById('student-card-id');
+
+    if (!studentCheckbox || !studentFields || !studentCardInput) {
+        return;
+    }
+
+    function toggleStudentFields() {
+        const isChecked = studentCheckbox.checked;
+        studentFields.style.display = isChecked ? 'block' : 'none';
+        studentCardInput.required = isChecked;
+    }
+
+    studentCheckbox.addEventListener('change', toggleStudentFields);
+    toggleStudentFields();
+});
+</script>
+{% endif %}
+{% endblock %}

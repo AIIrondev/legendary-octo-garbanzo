@@ -1,0 +1,4987 @@
+<!--
+   Copyright 2025-2026 AIIrondev
+
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
+-->
+{% extends "base.html" %}
+
+{% block title %}Inventarsystem{% endblock %}
+
+{% block content %}
+<style>
+    /* Page-specific styles */
+
+    h1, h2 {
+        text-align: center;
+    }
+
+    .items-indicator {
+        text-align: center;
+        font-size: 0.9rem;
+        color: #495057;
+        margin: 6px 0 16px;
+        font-weight: 600;
+    }
+
+    /* Filter styles */
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .filter-group {
+        position: relative;
+        min-width: 200px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .filter-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .filter-toggle, .clear-filter {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .clear-filter {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .filter-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 300px;
+        overflow-y: auto;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 100;
+        padding: 8px;
+    }
+
+    .filter-options {
+        padding: 10px;
+    }
+
+    .filter-option {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+    }
+
+    .filter-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        cursor: pointer;
+    }
+
+    .filter-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .filter-option label {
+        margin-left: 5px;
+        cursor: pointer;
+    }
+
+    .filter-option-group {
+        margin-bottom: 12px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+
+    .filter-group-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .selected-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 30px;
+    }
+
+    .filter-tag {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e9ecef;
+        border-radius: 15px;
+        padding: 3px 10px;
+        font-size: 0.8rem;
+    }
+
+    .filter-tag-group {
+        color: #6c757d;
+        font-size: 0.8em;
+        font-style: italic;
+        margin-right: 2px;
+    }
+
+    .filter-tag-remove {
+        background: none;
+        border: none;
+        color: #6c757d;
+        margin-left: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    /* Search styles */
+    .search-container {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+
+    #code-search {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-button {
+        padding: 8px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .search-button:hover {
+        background-color: #0056b3;
+    }
+
+    .search-field {
+        min-width: 250px;
+    }
+
+    #code-search.searching {
+        background-color: #fff3cd;
+        transition: background-color 0.3s;
+        border: 2px solid #ffc107;
+        box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+    }
+
+    /* QR Scanner styles */
+    .qr-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .scan-button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+
+    .scan-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Item display styles */
+    .items-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 20px 0;
+        scroll-snap-type: x mandatory;
+        position: relative;
+        scroll-behavior: smooth;
+    }
+
+    .item-card {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        max-width: 300px;
+        flex-shrink: 0;
+        scroll-snap-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+        position: relative;
+    }
+
+    .item-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .item-card h3 {
+        margin-top: 0;
+    }
+
+    .item-card .description {
+        max-height: 100px;
+        overflow-y: auto;
+    }
+
+    .item-card .image-container {
+        position: relative;
+        max-width: 300px;
+        margin: 10px 0;
+    }
+
+    .item-card .item-image {
+        width: 100%;
+        height: auto;
+        max-height: 300px;
+        display: none;
+        object-fit: cover;
+    }
+
+    .item-card .item-image:first-child {
+        display: block;
+    }
+
+    /* Active image display classes */
+    .item-image.active-image {
+        display: block !important;
+        opacity: 1 !important;
+        z-index: 5;
+    }
+
+    .item-image:not(.active-image) {
+        display: none !important;
+    }
+
+    .video-container.active-container {
+        display: block !important;
+    }
+
+    .video-container:not(.active-container) {
+        display: none !important;
+    }
+
+    /* Fix for images not displaying correctly */
+    @media screen and (max-width: 768px) {
+        /* Override any inline display:none styles */
+        .item-card .item-image[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Make sure first image is visible */
+        .item-card .item-image[data-index="0"] {
+            display: block !important;
+        }
+        
+        /* Show all images in image container but only first one visible */
+        .item-card .image-container {
+            position: relative;
+            height: 200px;
+            margin-bottom: 15px;
+        }
+        
+        /* Fix video container display issues */
+        .video-container[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Position images properly */
+        .item-card .item-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Ensure only one image is visible at a time */
+        .item-card .item-image:not([data-index="0"]) {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Make sure first image is properly positioned */
+        .item-card .item-image[data-index="0"] {
+            position: relative;
+        }
+    }
+
+    /* Navigation buttons */
+    .navbar-nav {
+       align-items: center;
+    }
+   
+    .navigation-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .navigation-buttons .prev-button,
+    .navigation-buttons .next-button {
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    .navigation-buttons .prev-button:hover,
+    .navigation-buttons .next-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Modal styles */
+    .item-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 600px;
+        border-radius: 5px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .close-modal {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .close-modal:hover,
+    .close-modal:focus {
+        color: black;
+        text-decoration: none;
+    }
+
+    /* Form styles */
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+
+    .form-row .form-group {
+        flex: 1;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .save-button, .cancel-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .save-button {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .save-button:hover {
+        background-color: #218838;
+    }
+
+    .cancel-button {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .cancel-button:hover {
+        background-color: #545b62;
+    }
+
+    .add-new-btn {
+        background-color: #17a2b8;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8em;
+        margin-top: 5px;
+    }
+
+    .add-new-btn:hover {
+        background-color: #138496;
+    }
+
+    /* Filter inputs for forms */
+    .filter-inputs {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+
+    .filter-inputs h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #495057;
+    }
+
+    .multi-filter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .filter-dropdown-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    /* Highlight and status styles */
+    .highlight-item {
+        border: 3px solid gold !important;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
+        position: relative;
+        z-index: 10;
+    }
+
+    .code-match {
+        border: 2px solid #17a2b8 !important;
+        box-shadow: 0 0 15px rgba(23, 162, 184, 0.5) !important;
+        position: relative;
+        z-index: 5;
+    }
+
+    .exact-code-match {
+        border: 3px solid #28a745 !important;
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.7) !important;
+        position: relative;
+        z-index: 11;
+    }
+
+    /* Description match highlight */
+    .desc-match {
+        border: 2px solid #ffc107 !important;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+        position: relative;
+        z-index: 6;
+    }
+
+    /* Messages */
+    .error-message, .no-items-message {
+        padding: 20px;
+        text-align: center;
+        width: 100%;
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+
+    .empty-state-cta {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 16px 28px;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #0d6efd, #198754);
+        border: none;
+        border-radius: 10px;
+        text-decoration: none;
+        box-shadow: 0 10px 24px rgba(13, 110, 253, 0.25);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    .empty-state-cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 28px rgba(13, 110, 253, 0.3);
+        text-decoration: none;
+    }
+
+    .empty-state-cta:active {
+        transform: translateY(0);
+    }
+
+    /* Action Button Styles */
+    .modal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-start;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #dee2e6;
+        flex-wrap: wrap;
+        align-items: stretch;
+    }
+
+    .modal-actions form {
+        margin: 0;
+        flex: 0 0 auto;
+    }
+
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button, .damage-button {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 120px;
+        height: 40px;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        box-sizing: border-box;
+    }
+
+    /* Ausleihen/Zurückgeben Button */
+    .ausleihen {
+        background-color: #9dff00;
+        color: white;
+        border: 2px solid #007bff;
+    }
+
+    .ausleihen:hover {
+        background-color: #91ff00;
+        border-color: #004085;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+
+    .ausleihen:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    }
+
+    /* Edit Button */
+    .edit-button {
+        background-color: #007bff;
+        color: white;
+        border: 2px solid #007bff;
+    }
+
+    .edit-button:hover {
+        background-color: #0056b3;
+        border-color: #004085;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .edit-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    }
+
+    /* Delete Button */
+    .delete-button {
+        background-color: #dc3545;
+        color: white;
+        border: 2px solid #dc3545;
+    }
+
+    .delete-button:hover {
+        background-color: #c82333;
+        border-color: #bd2130;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .delete-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+    }
+
+    /* Details Button */
+    .details-button {
+        background-color: #17a2b8;
+        color: white;
+        border: 2px solid #17a2b8;
+    }
+
+    .details-button:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .details-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Schedule Button */
+    .schedule-button {
+        background-color: #17a2b8;
+        color: white;
+        border: 2px solid #17a2b8;
+    }
+
+    .schedule-button:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .schedule-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Duplicate Button */
+    .duplicate-button {
+        background-color: #6f42c1;
+        color: white;
+        border: 2px solid #6f42c1;
+    }
+
+    .duplicate-button:hover {
+        background-color: #5a32a3;
+        border-color: #4e2a8e;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(111, 66, 193, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .duplicate-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
+    }
+
+    .damage-button {
+        background-color: #fd7e14;
+        color: white;
+        border: 2px solid #fd7e14;
+    }
+
+    .damage-button:hover {
+        background-color: #e46d0d;
+        border-color: #c25b05;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(253, 126, 20, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .damage-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(253, 126, 20, 0.3);
+    }
+
+    .damage-badge {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #fff3cd;
+        color: #8a6d3b;
+        border: 1px solid #ffeeba;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .damage-list {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    .damage-list li {
+        margin-bottom: 8px;
+        line-height: 1.35;
+    }
+
+    /* Disabled Button */
+    .disabled-button {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        cursor: not-allowed !important;
+        opacity: 0.6;
+    }
+
+    .disabled-button:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Modal Details Styling */
+    .modal-details {
+        margin: 20px 0;
+    }
+
+    .detail-group {
+        display: flex;
+        margin-bottom: 10px;
+        align-items: flex-start;
+    }
+
+    .detail-group.full-width {
+        flex-direction: column;
+        margin-bottom: 15px;
+    }
+
+    .detail-label {
+        font-weight: bold;
+        color: #495057;
+        min-width: 150px;
+        margin-right: 10px;
+    }
+
+    .detail-value {
+        color: #212529;
+        flex: 1;
+        word-wrap: break-word;
+    }
+
+    .detail-group.full-width .detail-label {
+        margin-bottom: 5px;
+    }
+
+    .detail-group.full-width .detail-value {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        white-space: pre-wrap;
+    }
+
+    .status-borrowed {
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    /* Modal Image Styling */
+    .modal-image-container {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow: hidden;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    
+    .modal-image.active-image {
+        display: block !important;
+    }
+
+    .modal-image-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+    }
+
+    .modal-image-nav:hover {
+        background-color: rgba(0, 0, 0, 0.9);
+    }
+
+    .modal-prev-image {
+        left: 10px;
+    }
+
+    .modal-next-image {
+        right: 10px;
+    }
+
+    .image-counter {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    /* Video preview styling */
+    .item-card video.item-image {
+        background-color: #000;
+        position: relative;
+    }
+
+    .video-preview-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Modal video styling */
+    video.modal-image {
+        width: 100%;
+        height: auto;
+    }
+
+    /* Borrower Info Panel */
+    .borrower-info-panel {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .borrower-info-panel h4 {
+        color: #856404;
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+    }
+
+    .borrower-name, .borrow-time {
+        margin: 5px 0;
+        color: #856404;
+        font-weight: 500;
+    }
+
+    /* Appointment Info Panel */
+    .appointment-info-panel {
+        background-color: #e1f5fe;
+        border: 1px solid #81d4fa;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .appointment-info-panel h4 {
+        color: #0277bd;
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+    }
+
+    .appointment-date, .appointment-time, .appointment-user {
+        margin: 5px 0;
+        color: #0277bd;
+        font-weight: 500;
+    }
+
+    /* Compact appointment badge on cards */
+    .appointment-badge {
+        margin-top: 10px;
+        padding: 10px 12px;
+        background-color: #e1f5fe;
+        border-left: 4px solid #03a9f4;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+    .appointment-badge .appointment-time {
+        display: inline-block;
+        margin-top: 4px;
+        color: #01579b;
+        font-weight: 600;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .filter-container {
+            flex-direction: column;
+        }
+        
+        .form-row {
+            flex-direction: column;
+        }
+        
+        .multi-filter {
+            grid-template-columns: 1fr;
+        }
+        
+        /* Mobile viewport and scrolling improvements */
+        html, body {
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-y !important;
+            height: 100% !important;
+        }
+        
+        body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        /* Mobile-responsive styles for admin interface */
+        .admin-content-container {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 15px !important;
+            overflow-x: hidden !important;
+        }
+        
+        h1, h2 {
+            font-size: 1.4rem !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-container {
+            flex-direction: column !important;
+            gap: 15px !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-group {
+            min-width: auto !important;
+            width: 100% !important;
+        }
+        
+        .filter-header {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        .filter-toggle, .clear-filter {
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .filter-dropdown {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            max-height: 200px !important;
+            margin-top: 10px !important;
+        }
+        
+        .filter-options {
+            padding: 5px !important;
+        }
+        
+        .filter-options label {
+            display: block !important;
+            padding: 10px 12px !important;
+            margin: 2px 0 !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .filter-options label:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .filter-options input[type="checkbox"] {
+            margin-right: 10px !important;
+            transform: scale(1.2) !important;
+        }
+        
+        /* Admin-specific button improvements */
+        .admin-actions {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 10px !important;
+            margin: 15px 0 !important;
+        }
+        
+        .admin-actions button {
+            width: 100% !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Search field mobile optimization */
+        .search-field input {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important; /* Prevents zoom on iOS */
+            border-radius: 6px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Table responsiveness */
+        .table-responsive {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        
+        .table-responsive table {
+            min-width: 600px !important;
+        }
+        
+        /* Form improvements */
+        .form-group {
+            margin-bottom: 15px !important;
+        }
+        
+        .form-group label {
+            display: block !important;
+            margin-bottom: 8px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border: 1px solid #ddd !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Modal improvements for admin */
+        .modal-content {
+            width: 95% !important;
+            max-width: 500px !important;
+            margin: 20px auto !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+        }
+        
+        /* Admin card improvements */
+        .admin-card {
+            margin-bottom: 15px !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Tooltip improvements for mobile */
+        .tooltip {
+            display: none !important; /* Hide tooltips on mobile */
+        }
+        
+        /* Tab navigation improvements */
+        .nav-tabs {
+            flex-wrap: wrap !important;
+            border-bottom: 1px solid #dee2e6 !important;
+        }
+        
+        .nav-tabs .nav-link {
+            padding: 12px 16px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Dropdown improvements */
+        .dropdown-menu {
+            width: 100% !important;
+            max-width: 300px !important;
+        }
+        
+        .dropdown-item {
+            padding: 12px 20px !important;
+            font-size: 0.9rem !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Status indicator improvements */
+        .status-indicator {
+            padding: 6px 12px !important;
+            border-radius: 12px !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Pagination improvements */
+        .pagination {
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+        }
+        
+        .pagination .page-link {
+            padding: 10px 15px !important;
+            margin: 2px !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Alert improvements */
+        .alert {
+            margin: 15px 0 !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            font-size: 0.9rem !important;
+        }
+        
+        /* Card grid improvements */
+        .card-grid {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+        }
+        
+        .card {
+            padding: 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Upload area improvements */
+        .upload-area {
+            padding: 20px !important;
+            border: 2px dashed #ddd !important;
+            border-radius: 8px !important;
+            text-align: center !important;
+            background: #fafafa !important;
+        }
+        
+        .upload-area:hover {
+            border-color: #007bff !important;
+            background: #f0f8ff !important;
+        }
+        
+        /* Progress bar improvements */
+        .progress {
+            height: 8px !important;
+            border-radius: 4px !important;
+            background: #e9ecef !important;
+        }
+        
+        .progress-bar {
+            border-radius: 4px !important;
+        }
+        
+        /* Badge improvements */
+        .badge {
+            padding: 6px 10px !important;
+            font-size: 0.8rem !important;
+            border-radius: 12px !important;
+        }
+        
+        /* List group improvements */
+        .list-group-item {
+            padding: 15px !important;
+            border-radius: 6px !important;
+            margin-bottom: 8px !important;
+            border: 1px solid #dee2e6 !important;
+        }
+        
+        /* Accordion improvements */
+        .accordion-header button {
+            padding: 15px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .accordion-body {
+            padding: 20px !important;
+        }
+    }
+    
+    /* Tablet specific styles */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .admin-content-container {
+            width: 90% !important;
+        }
+        
+        .filter-container {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+        
+        .card-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+        }
+    }
+
+    /* Mobile-responsive styles for admin interface */
+    @media screen and (max-width: 768px) {
+        .admin-content-container {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 15px !important;
+        }
+        
+        h1, h2 {
+            font-size: 1.4rem !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-container {
+            flex-direction: column !important;
+            gap: 15px !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .filter-group {
+            min-width: auto !important;
+            width: 100% !important;
+        }
+        
+        .filter-header {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        .filter-toggle, .clear-filter {
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .filter-dropdown {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            max-height: 200px !important;
+            margin-top: 10px !important;
+        }
+        
+        .filter-options {
+            padding: 5px !important;
+        }
+        
+        .filter-options label {
+            display: block !important;
+            padding: 10px 12px !important;
+            margin: 2px 0 !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .filter-options label:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .filter-options input[type="checkbox"] {
+            margin-right: 10px !important;
+            transform: scale(1.2) !important;
+        }
+        
+        /* Items container mobile optimization */
+        .items-container {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+            padding: 10px 0 !important;
+            overflow-x: visible !important;
+        }
+        
+        .item-card {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 15px !important;
+            scroll-snap-align: none !important;
+        }
+        
+        .item-card:hover {
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Modal improvements for admin */
+        .modal-content {
+            width: 95% !important;
+            max-width: 500px !important;
+            margin: 20px auto !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+            padding: 20px !important;
+        }
+        
+        /* Button improvements */
+        .modal-actions {
+            flex-direction: column !important;
+            gap: 10px !important;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            width: 100% !important;
+            min-height: 44px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Navigation buttons mobile */
+        .navigation-buttons {
+            display: none !important; /* Hide horizontal navigation on mobile */
+        }
+        
+        /* QR Scanner mobile */
+        .qr-container {
+            margin-bottom: 15px !important;
+        }
+        
+        .scan-button {
+            width: 100% !important;
+            max-width: 300px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        #qr-reader {
+            width: 100% !important;
+            max-width: 400px !important;
+            margin: 15px auto !important;
+        }
+        
+        /* Search field mobile */
+        .search-field input {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border-radius: 6px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Form improvements */
+        .form-group {
+            margin-bottom: 15px !important;
+        }
+        
+        .form-group label {
+            display: block !important;
+            margin-bottom: 8px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border: 1px solid #ddd !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Image container mobile */
+        .item-card .image-container {
+            max-width: 100% !important;
+            height: 200px !important;
+            overflow: hidden !important;
+            border-radius: 8px !important;
+        }
+        
+        .item-card .item-image {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+        
+        /* Touch improvements and scrolling */
+        .items-container, .item-card, .image-container, .item-image {
+            touch-action: pan-y !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        
+        * {
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1) !important;
+        }
+
+        button, .btn, a, input[type="submit"], input[type="button"] {
+            touch-action: manipulation !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+        }
+        
+        /* Focus improvements for accessibility */
+        button:focus, .btn:focus, input:focus, select:focus, textarea:focus {
+            outline: 2px solid #007bff !important;
+            outline-offset: 2px !important;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25) !important;
+        }
+    }
+    
+    /* Tablet specific styles */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .admin-content-container {
+            width: 90% !important;
+        }
+        
+        .items-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+        
+        .filter-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+    }
+
+    /* Desktop media queries for better button layout */
+    @media (min-width: 768px) {
+        .modal-content {
+            max-width: 700px;
+            margin: 10% auto;
+        }
+        
+        .modal-actions {
+            gap: 12px;
+            justify-content: flex-start;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            min-width: 110px;
+            flex: 0 0 auto;
+        }
+        
+        /* Ensure buttons wrap properly on smaller desktop screens */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .modal-actions {
+                gap: 8px;
+            }
+            
+            .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+                min-width: 95px;
+            }
+        }
+    }
+
+    /* Large desktop optimization */
+    @media (min-width: 1200px) {
+        .modal-content {
+            max-width: 800px;
+        }
+        
+        .modal-actions {
+            gap: 15px;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            min-width: 120px;
+        }
+    }
+
+    /* Improved mobile scrolling and touch optimization */
+    @media (max-width: 767px) {
+        body {
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+        
+        .admin-content-container {
+            width: 95%;
+            margin: 10px auto;
+            padding: 15px;
+            overflow-x: hidden;
+        }
+        
+        /* Improve image touch handling on mobile */
+        .item-image, .modal-image {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Better modal sizing for mobile */
+        .modal-content {
+            width: 95% !important;
+            max-width: none !important;
+            margin: 10px auto !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+    }
+
+    /* Improved image handling for admin */
+    @media (max-width: 768px) {
+        .item-card .item-image {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 300px !important;
+            display: block !important;
+            object-fit: cover !important;
+        }
+        
+        .item-card .image-container {
+            height: 200px !important;
+            overflow: hidden !important;
+            position: relative !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .item-card video.item-image {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 300px !important;
+            display: block !important;
+            object-fit: cover !important;
+        }
+
+        .actions {
+            gap: 8px !important;
+            border-top: none !important;
+            padding-top: 8px !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+
+        .actions form,
+        .actions button,
+        .actions a {
+            width: 100% !important;
+        }
+
+        .grouped-borrow-controls {
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 6px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .grouped-borrow-controls label {
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        .grouped-borrow-controls input,
+        .grouped-borrow-controls select {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 40px !important;
+            padding: 8px 10px !important;
+            box-sizing: border-box !important;
+        }
+
+        .inline-action-form {
+            width: 100% !important;
+        }
+
+        .inline-action-form button,
+        .inline-action-form .ausleihen {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group select {
+            width: 100% !important;
+            max-width: none !important;
+        }
+    }
+
+    /* Modal image display fixes */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    
+    .modal-image.active-image {
+        display: block !important;
+    }
+    
+    /* QR Reader styling */
+    #qr-reader {
+        width: 500px;
+        display: none;
+    }
+
+    /* Edit new location container */
+    .edit-new-location-container {
+        display: none;
+        margin-top: 10px;
+    }
+
+    /* Modal dialog styling */
+    .modal-dialog-white {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        text-align: center;
+    }
+
+    .modal-content-margin {
+        margin-top: 10px;
+    }
+
+    /* Element text colors for better visibility */
+    .edit-button, .duplicate-button, .generate-qr-button, .ausleihen {
+        color: black !important;
+    }
+    
+    /* Standardized button styles across the application */
+    .search-button, .scan-button, .filter-toggle, .clear-filter, 
+    .add-new-btn, .popup-close-button, .prev-image-button, .next-image-button,
+    .navigation-buttons .prev-button, .navigation-buttons .next-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-width: 80px;
+        height: 36px;
+        padding: 0 15px;
+        font-weight: 500;
+        box-sizing: border-box;
+    }
+    
+    /* Standardize form and document buttons */
+    .save-button, .cancel-button, .remove-book-cover-button, .remove-duplicate-image-button,
+    .import-book-button, .fetch-isbn-button, .nav-back-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 36px;
+        padding: 8px 15px;
+        font-weight: 500;
+        box-sizing: border-box;
+        white-space: nowrap;
+    }
+</style>
+<style>
+    .bookmark-btn { position:absolute; top:8px; right:8px; width:46px; height:46px; background:rgba(255,255,255,.92); border:2px solid #ffc107; border-radius:50%; font-size:1.65rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ffc107; box-shadow:0 2px 6px rgba(0,0,0,.18); transition:background .2s, transform .15s, color .2s; z-index:6; pointer-events:auto; }
+        .bookmark-btn:hover { background:#ffc107; color:#212529; }
+        .bookmark-btn:active { transform:scale(.9); }
+        .bookmark-btn.active { background:#ffc107; color:#212529; }
+        .favorite-item { outline:2px solid #ffc107; }
+    .admin-content-container {
+        --table-columns: minmax(190px, 2fr) repeat(6, minmax(110px, 1fr));
+    }
+    /* Calendar styles for detailed view */
+    .calendar-wrapper {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid #e7edf5;
+        background: #f8fafc;
+    }
+
+    .calendar-header button {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #dbe3ee;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .calendar-header button:hover {
+        background: #f1f5f9;
+    }
+
+    .calendar-header span {
+        font-weight: 700;
+        font-size: 1rem;
+        color: #0f172a;
+        text-align: center;
+        flex: 1;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        padding: 8px;
+        gap: 4px;
+    }
+
+    .cal-cell {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: #334155;
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .cal-cell.header {
+        aspect-ratio: auto;
+        height: 28px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #64748b;
+        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .cal-cell:not(.header):not(.empty):hover {
+        background: #f1f5f9;
+    }
+
+    .cal-cell.empty {
+        cursor: default;
+    }
+
+    .cal-cell.today {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+    }
+
+    .cal-cell.selected {
+        background: #2563eb !important;
+        color: #fff !important;
+    }
+
+    .cal-cell.has-booking::after {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #ef4444;
+        position: absolute;
+        bottom: 5px;
+    }
+
+    .cal-cell.selected.has-booking::after {
+        background: #fff;
+    }
+
+    .calendar-day-details {
+        border-top: 1px solid #e7edf5;
+        padding: 12px;
+        background: #f8fafc;
+        display: none;
+    }
+
+    .calendar-day-details h5 {
+        margin: 0 0 10px;
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    #cal-details-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .cal-empty-state {
+        font-size: 0.9rem;
+        color: #64748b;
+        padding: 8px 2px;
+    }
+
+    .cal-booking-item {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-left: 3px solid #2563eb;
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 6px;
+    }
+
+    .cal-booking-label {
+        display: inline-block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-right: 6px;
+        font-weight: 700;
+    }
+
+    .cal-booking-time,
+    .cal-booking-user,
+    .cal-booking-note {
+        font-size: 0.9rem;
+        color: #1f2937;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+
+    .cal-booking-time strong {
+        font-size: 0.94rem;
+        color: #0f172a;
+    }
+
+    .cal-booking-period {
+        margin-left: 8px;
+        color: #475569;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    @media (max-width: 480px) {
+        .calendar-grid {
+            gap: 3px;
+            padding: 6px;
+        }
+
+        .cal-cell {
+            font-size: 0.86rem;
+            border-radius: 7px;
+        }
+
+        .calendar-header {
+            padding: 10px;
+        }
+
+        .calendar-header span {
+            font-size: 0.95rem;
+        }
+
+        .calendar-day-details {
+            padding: 10px;
+        }
+    }
+</style>
+<script>
+let favoritesOnly = false;
+let tableViewMode = false;
+
+function applyAdminViewMode() {
+    document.body.classList.toggle('table-view', tableViewMode);
+    const icon = document.getElementById('view-mode-icon');
+    const button = document.getElementById('toggle-view-mode');
+    if (icon) icon.textContent = tableViewMode ? '🖼' : '🗂';
+    if (button) {
+        button.title = tableViewMode ? 'In Kartenansicht wechseln' : 'In Tabellenansicht wechseln';
+        button.setAttribute('aria-pressed', tableViewMode ? 'true' : 'false');
+    }
+}
+
+function toggleFavorite(id, btn, card){
+    if (!btn || btn.dataset.pending === '1') {
+        return;
+    }
+    btn.dataset.pending = '1';
+    const currentlyFav = btn.classList.contains('active');
+
+    fetch(`/favorites/toggle/${id}`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+    }).then(async (r)=>{
+        let data = null;
+        try {
+            data = await r.json();
+        } catch (_) {
+            data = { ok: false, error: 'invalid json' };
+        }
+
+        if (!r.ok || !data || data.ok !== true) {
+            console.error('Favoriten Fehler', { status: r.status, data });
+            throw new Error('Favorit konnte nicht gespeichert werden.');
+        }
+
+        const isFav = Boolean(data.is_favorite);
+        document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
+            b.textContent = isFav ? '★' : '☆';
+            b.classList.toggle('active', isFav);
+        });
+        document.querySelectorAll('.item-card').forEach(cardEl => {
+            const favBtn = cardEl.querySelector(`.bookmark-btn[data-fav-id='${id}']`);
+            if (favBtn) {
+                cardEl.classList.toggle('favorite-item', isFav);
+                cardEl.dataset.favorite = isFav ? '1' : '0';
+            }
+        });
+        if(card){
+            if(isFav){ card.classList.add('favorite-item'); } else { card.classList.remove('favorite-item'); }
+            if(favoritesOnly && !isFav){ card.style.display='none'; }
+        }
+        try {
+            if(!window.currentFavorites) window.currentFavorites = new Set();
+            if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
+        } catch(e) { /* silent */ }
+    }).catch(err=>{
+        console.error('Favoriten Netzwerkfehler', err);
+        // Keep UI consistent with last known state on error.
+        btn.classList.toggle('active', currentlyFav);
+        btn.textContent = currentlyFav ? '★' : '☆';
+    }).finally(()=>{
+        delete btn.dataset.pending;
+    });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+    try {
+        tableViewMode = localStorage.getItem('inventarAdminViewMode') === 'table';
+    } catch (e) {
+        tableViewMode = false;
+    }
+    applyAdminViewMode();
+
+    const viewToggleBtn = document.getElementById('toggle-view-mode');
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', () => {
+            tableViewMode = !tableViewMode;
+            applyAdminViewMode();
+            try {
+                localStorage.setItem('inventarAdminViewMode', tableViewMode ? 'table' : 'cards');
+            } catch (e) { /* ignore */ }
+        });
+    }
+
+    const t = document.getElementById('toggle-favorites-view');
+    if(t){
+        t.addEventListener('click', ()=>{
+            favoritesOnly = !favoritesOnly;
+            document.body.classList.toggle('favorites-only', favoritesOnly);
+            document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+            applyFilters();
+        });
+    }
+});
+</script>
+
+<div class="admin-content-container">
+    <!-- Admin conflict warning banner (populated by JS) -->
+    <div id="conflict-banner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-left:4px solid #fd7e14; color:#856404; padding:12px 16px; border-radius:4px; margin-bottom:16px; position:relative;">
+        <strong>⚠ Buchungskonflikte erkannt:</strong>
+        <ul id="conflict-banner-list" style="margin:6px 0 0 0; padding-left:20px;"></ul>
+        <button onclick="document.getElementById('conflict-banner').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:1rem;cursor:pointer;color:#856404;">✕</button>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/booking_conflicts')
+            .then(r => r.json())
+            .then(data => {
+                if (data.conflicts && data.conflicts.length > 0) {
+                    const banner = document.getElementById('conflict-banner');
+                    const list = document.getElementById('conflict-banner-list');
+                    list.innerHTML = '';
+                    data.conflicts.forEach(function(c) {
+                        const li = document.createElement('li');
+                        li.textContent = '"' + c.Item + '" (Nutzer: ' + c.User + ') – ' + (c.ConflictNote || 'Konflikt beim Aktivieren der Reservierung.');
+                        list.appendChild(li);
+                    });
+                    banner.style.display = 'block';
+                }
+            })
+            .catch(() => {});
+    });
+    </script>
+    <div class="content">
+        <h1 style="position:relative;">Inventar Objekte
+            <div class="view-switch-group">
+                <button id="toggle-view-mode" class="view-toggle-btn" title="In Tabellenansicht wechseln">
+                    <span id="view-mode-icon">🗂</span>
+                </button>
+                <button id="toggle-favorites-view" class="view-toggle-btn" title="Nur Merkliste anzeigen">
+                    <span id="favorites-view-icon">🔖</span>
+                </button>
+            </div>
+        </h1>
+        <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
+        <div class="filter-container">
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Unterrichtsfach:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter1-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(1)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter1"></div>
+                <div class="filter-dropdown" id="filter1-dropdown">
+                    <div class="filter-options" id="filter1-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Jahrgangsstufe:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter2-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(2)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter2"></div>
+                <div class="filter-dropdown" id="filter2-dropdown">
+                    <div class="filter-options" id="filter2-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Thema:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter3"></div>
+                <div class="filter-dropdown" id="filter3-dropdown">
+                    <div class="filter-options" id="filter3-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-group search-field">
+                <div class="filter-header">
+                    <label for="code-search">Code suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearCodeSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="code-search" placeholder="Code eingeben..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByCode()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
+
+            <div class="filter-group search-field">
+                <div class="filter-header">
+                    <label for="desc-search">Titel/Beschreibung suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearDescSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="desc-search" placeholder="Begriff in Beschreibung..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByDescription()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="qr-container">
+            <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
+            <div id="qr-reader"></div>
+        </div>
+
+        <div id="table-view-header" class="table-view-header" aria-hidden="true">
+            <span>Name</span>
+            <span>Ort</span>
+            <span>Unterrichtsfach</span>
+            <span>Jahrgangsstufe</span>
+            <span>Thema</span>
+            <span>Barcode</span>
+            <span>Anzahl</span>
+        </div>
+
+        <div id="items-container" class="items-container">
+            <!-- Items will be dynamically loaded here -->
+        </div>
+        <div class="navigation-buttons">
+            <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
+            <button class="next-button" onclick="scrollNext()">&#10095;</button>
+        </div>
+    </div>
+    <div id="item-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="modal-content-wrapper">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add the edit modal form -->
+    <div id="edit-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeEditModal()">&times;</span>
+            <h2>Objekt bearbeiten</h2>
+            <form id="edit-item-form" method="POST" enctype="multipart/form-data">
+                <input type="hidden" id="edit-item-id" name="id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-name">Name:</label>
+                        <input type="text" id="edit-name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-location">Ort:</label>
+                        <select id="edit-location" name="ort" required>
+                            <option value="">-- Bitte Ort auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                        <button type="button" class="add-new-btn" id="edit-add-new-location-btn">
+                            Neuen Ort hinzufügen
+                        </button>
+                        <div id="edit-new-location-container" class="edit-new-location-container">
+                            <input type="text" id="edit-new-location-input" placeholder="Neuen Ort eingeben">
+                            <button type="button" onclick="addNewLocation('edit')">Hinzufügen</button>
+                            <button type="button" onclick="cancelAddLocation('edit')">Abbrechen</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-description">Beschreibung:</label>
+                    <textarea id="edit-description" name="beschreibung" required></textarea>
+                </div>
+                
+                <!-- Updated filter inputs for edit form with dropdowns -->
+                <div class="filter-inputs">
+                    <h3>Unterrichtsfach:</h3>
+                    <div class="multi-filter">
+                        <div class="form-group">
+                            <label for="edit-filter1-1">Wert 1:</label>
+                            <select id="edit-filter1-1" name="filter" class="filter-dropdown-select">
+                                <option value="">-- Bitte auswählen --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter1-2">Wert 2:</label>
+                            <select id="edit-filter1-2" name="filter" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter1-3">Wert 3:</label>
+                            <select id="edit-filter1-3" name="filter" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter1-4">Wert 4:</label>
+                            <select id="edit-filter1-4" name="filter" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <h3>Jahrgangsstufe:</h3>
+                    <div class="multi-filter">
+                        <div class="form-group">
+                            <label for="edit-filter2-1">Wert 1:</label>
+                            <select id="edit-filter2-1" name="filter2" class="filter-dropdown-select">
+                                <option value="">-- Bitte auswählen --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter2-2">Wert 2:</label>
+                            <select id="edit-filter2-2" name="filter2" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter2-3">Wert 3:</label>
+                            <select id="edit-filter2-3" name="filter2" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter2-4">Wert 4:</label>
+                            <select id="edit-filter2-4" name="filter2" class="filter-dropdown-select">
+                                <option value="">-- Optional --</option>
+                                <!-- Options will be loaded by JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <h3>Thema:</h3>
+                    <div class="multi-filter">
+                        <div class="form-group">
+                            <label for="edit-filter3-1">Wert 1:</label>
+                            <input type="text" id="edit-filter3-1" name="filter3">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter3-2">Wert 2:</label>
+                            <input type="text" id="edit-filter3-2" name="filter3">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter3-3">Wert 3:</label>
+                            <input type="text" id="edit-filter3-3" name="filter3">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-filter3-4">Wert 4:</label>
+                            <input type="text" id="edit-filter3-4" name="filter3">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-year">Anschaffungsjahr:</label>
+                    <input type="date" id="edit-year" name="anschaffungsjahr">
+                </div>
+                <div class="form-group">
+                    <label for="edit-cost">Anschaffungskosten:</label>
+                    <input id="edit-cost" name="anschaffungskosten">
+                </div>
+                <div class="form-group">
+                    <label for="edit-code4">Code:</label>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input id="edit-code4" name="code_4">
+                        <button type="button" class="fetch-isbn-button" id="scan-edit-code-btn">Barcode scannen</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-reservierbar" style="display:inline-block; width:auto; margin-right:10px;">Reservierbar:</label>
+                    <input type="checkbox" id="edit-reservierbar" name="reservierbar" style="width:auto;">
+                    <small style="display:block; color:#666;">Wenn deaktiviert, kann der Artikel nicht im Voraus reserviert werden.</small>
+                </div>
+
+                <!-- New section for managing images -->
+                <div class="form-group">
+                    <label>Vorhandene Bilder:</label>
+                    <div id="edit-existing-images" class="existing-images-container">
+                        <!-- Existing images will be added here dynamically -->
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-new-images">
+                        <span>Neue Bilder/Videos hinzufügen:</span>
+                        <span>(Bilder/Videos werden vom Original übernommen)</span>
+                    </label>
+                    <input type="file" id="edit-new-images" name="new_images" accept=".jpg, .jpeg, .png, .gif, .mp4, .mov, .avi, .mkv, .webm, .flv, .m4v, .3gp" multiple>
+                    <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>
+                    <!-- Add image preview container -->
+                    <div class="image-preview-container" id="edit-image-preview-container"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-isbn">ISBN:</label>
+                    <div class="isbn-input-group">
+                        <input type="text" id="edit-isbn" name="isbn" placeholder="ISBN eingeben...">
+                        <button type="button" class="fetch-isbn-button" id="scan-edit-isbn-btn">ISBN scannen</button>
+                        <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('edit')">Buchinformationen abrufen</button>
+                    </div>
+                    <div id="edit-book-info-container" class="book-info-container"></div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="save-button">Speichern</button>
+                    <button type="button" class="cancel-button" onclick="closeEditModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Appointment Modal -->
+<div id="schedule-modal" class="item-modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeScheduleModal()">&times;</span>
+        <h2>Termin planen</h2>
+        <form id="schedule-form">
+            <input type="hidden" id="schedule-item-id" name="item_id">
+            <div class="form-group" id="schedule-specific-item-group" style="display:none;">
+                <label for="schedule-specific-item">Unterartikel (optional):</label>
+                <select id="schedule-specific-item" name="specific_item_id">
+                    <option value="">Automatisch wählen</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-date">Startdatum:</label>
+                <input type="date" id="schedule-date" name="schedule_date" required>
+            </div>
+
+            <div class="form-group">
+                <label for="schedule-multi-day" style="display:inline-block; width:auto; margin-right:10px;">Mehrtägig:</label>
+                <input type="checkbox" id="schedule-multi-day" name="is_multi_day" style="width:auto;">
+            </div>
+
+            <div class="form-group" id="schedule-end-date-group" style="display:none;">
+                <label for="schedule-end-date">Enddatum:</label>
+                <input type="date" id="schedule-end-date" name="schedule_end_date">
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-start-period">Von Schulstunde:</label>
+                <select id="schedule-start-period" name="start_period" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="1">1. Stunde (08:00 - 08:45)</option>
+                    <option value="2">2. Stunde (08:45 - 09:30)</option>
+                    <option value="3">3. Stunde (09:45 - 10:30)</option>
+                    <option value="4">4. Stunde (10:30 - 11:15)</option>
+                    <option value="5">5. Stunde (11:30 - 12:15)</option>
+                    <option value="6">6. Stunde (12:15 - 13:00)</option>
+                    <option value="7">7. Stunde (13:30 - 14:15)</option>
+                    <option value="8">8. Stunde (14:15 - 15:00)</option>
+                    <option value="9">9. Stunde (15:15 - 16:00)</option>
+                    <option value="10">10. Stunde (16:00 - 16:45)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-end-period">Bis Schulstunde:</label>
+                <select id="schedule-end-period" name="end_period" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="1">1. Stunde (08:00 - 08:45)</option>
+                    <option value="2">2. Stunde (08:45 - 09:30)</option>
+                    <option value="3">3. Stunde (09:45 - 10:30)</option>
+                    <option value="4">4. Stunde (10:30 - 11:15)</option>
+                    <option value="5">5. Stunde (11:30 - 12:15)</option>
+                    <option value="6">6. Stunde (12:15 - 13:00)</option>
+                    <option value="7">7. Stunde (13:30 - 14:15)</option>
+                    <option value="8">8. Stunde (14:15 - 15:00)</option>
+                    <option value="9">9. Stunde (15:15 - 16:00)</option>
+                    <option value="10">10. Stunde (16:00 - 16:45)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-notes">Notizen:</label>
+                <textarea id="schedule-notes" name="notes" placeholder="Optionale Notizen..."></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="save-button">Termin speichern</button>
+                <button type="button" class="cancel-button" onclick="closeScheduleModal()">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Initialize template variables before any JavaScript code -->
+<script>
+    // Create a global object to hold server-side template values
+    window.serverVars = {};
+    window.serverVars.highlightItemId = "{% if highlight_item is defined and highlight_item %}{{ highlight_item }}{% else %}null{% endif %}";
+    
+    window.isDebug = false; // Set to true only for development environment
+</script>
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script>
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
+    // Initialize QR Code scanner and global variables
+    let html5QrcodeScanner = null;
+    let codeSearchTerm = '';
+    let descSearchIds = null; // Set of matching IDs or null when disabled
+    let currentUsername = '';
+    let allItems = []; // Cache for all items
+    const studentCardsModuleEnabled = {{ 'true' if student_cards_module_enabled else 'false' }};
+    const studentDefaultBorrowDays = {{ student_default_borrow_days|default(14) }};
+    const studentMaxBorrowDays = {{ student_max_borrow_days|default(365) }};
+    
+    // Get the highlight item ID from the pre-processed server variables
+    let highlightItemId = window.serverVars.highlightItemId;
+    
+    // Global variables to store active filters (SINGLE DECLARATION)
+    let activeFilters = {
+        filter1: [],
+        filter2: [],
+        filter3: []
+    };
+    
+    // Simplified no-op version of debug function for production
+    function debugLog() {
+        // No-op in production
+        return;
+    }
+    
+    document.getElementById('scanButton').addEventListener('click', function() {
+        const qrReader = document.getElementById('qr-reader');
+        const scanBtn = document.getElementById('scanButton');
+
+        const setScannerUi = (isOpen) => {
+            if (!scanBtn) return;
+            scanBtn.classList.toggle('is-active', isOpen);
+            scanBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            scanBtn.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
+        };
+        
+        if (qrReader.style.display === 'none') {
+            qrReader.style.display = 'block';
+            
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader", { 
+                    fps: 10, 
+                    qrbox: 250,
+                    rememberLastUsedCamera: true
+                }
+            );
+            
+            html5QrcodeScanner.render((decodedText) => {
+                html5QrcodeScanner.clear();
+                qrReader.style.display = 'none';
+                
+                // Instead of navigating to the URL, put the scanned code in the search box
+                const searchInput = document.getElementById('code-search');
+                if (searchInput) {
+                    searchInput.value = decodedText;
+                    // Trigger search automatically
+                    searchByCode();
+                }
+
+                setScannerUi(false);
+            });
+
+            setScannerUi(true);
+        } else {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            setScannerUi(false);
+        }
+    });
+
+    function scanIntoEditCode() {
+        const qrReader = document.getElementById('qr-reader');
+        const editCodeInput = document.getElementById('edit-code4');
+        const scanEditBtn = document.getElementById('scan-edit-code-btn');
+        if (!qrReader || !editCodeInput || !scanEditBtn) {
+            return;
+        }
+
+        if (qrReader.style.display !== 'none') {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            scanEditBtn.textContent = 'Barcode scannen';
+            return;
+        }
+
+        qrReader.style.display = 'block';
+        scanEditBtn.textContent = 'Scanner schließen';
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { 
+            fps: 10, 
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        html5QrcodeScanner.render((decodedText) => {
+            html5QrcodeScanner.clear();
+            qrReader.style.display = 'none';
+            editCodeInput.value = String(decodedText || '').trim();
+            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            scanEditBtn.textContent = 'Barcode scannen';
+        });
+    }
+
+    function scanIntoEditIsbn() {
+        const qrReader = document.getElementById('qr-reader');
+        const editIsbnInput = document.getElementById('edit-isbn');
+        const scanIsbnBtn = document.getElementById('scan-edit-isbn-btn');
+        if (!qrReader || !editIsbnInput || !scanIsbnBtn) {
+            return;
+        }
+
+        if (qrReader.style.display !== 'none') {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            scanIsbnBtn.textContent = 'ISBN scannen';
+            return;
+        }
+
+        qrReader.style.display = 'block';
+        scanIsbnBtn.textContent = 'Scanner schließen';
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', {
+            fps: 10,
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        html5QrcodeScanner.render((decodedText) => {
+            html5QrcodeScanner.clear();
+            qrReader.style.display = 'none';
+            editIsbnInput.value = String(decodedText || '').trim();
+            scanIsbnBtn.textContent = 'ISBN scannen';
+            if (typeof fetchBookInfo === 'function') {
+                fetchBookInfo('edit');
+            }
+        });
+    }
+
+    function rebuildFilter3Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 and filter 2 selections
+        const filter1Selections = activeFilters.filter1;
+        const filter2Selections = activeFilters.filter2;
+        
+        // If both filters are empty, show all filter3 values
+        if (filter1Selections.length === 0 && filter2Selections.length === 0) {
+            // Get all unique filter3 values
+            const allFilter3Values = new Set();
+            allItems.forEach(item => {
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : 
+                                     (item.Filter3 ? [item.Filter3] : []);
+                
+                filter3Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter3Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 3 dropdown with all values
+            populateFilterOptions('filter3-options', [...allFilter3Values].sort(), 3);
+            return;
+        }
+        
+        // Filter items based on filter1 and filter2 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            const filter1Match = filter1Selections.length === 0 || 
+                filter1Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter1Array.includes(filterValue);
+                });
+            
+            // Check if item passes Filter 2
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            const filter2Match = filter2Selections.length === 0 || 
+                filter2Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter2Array.includes(filterValue);
+                });
+            
+            return filter1Match && filter2Match;
+        });
+        
+        // Get unique Filter 3 values from filtered items
+        const availableFilter3Values = new Set();
+        filteredItems.forEach(item => {
+            const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+            filter3Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter3Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 3 selections that are still valid
+        const validFilter3Selections = [];
+        activeFilters.filter3.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter3Values.has(filterValue)) {
+                validFilter3Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 3 selections (remove invalid ones)
+        if (validFilter3Selections.length !== activeFilters.filter3.length) {
+            activeFilters.filter3 = validFilter3Selections;
+            updateSelectedFiltersDisplay(3);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Populate filter 3 dropdown with only available values
+        populateFilterOptions('filter3-options', [...availableFilter3Values].sort(), 3);
+    }
+
+    function rebuildFilter2Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 selections
+        const filter1Selections = activeFilters.filter1;
+        
+        // If filter1 is empty, show all filter2 values
+        if (filter1Selections.length === 0) {
+            // Get all unique filter2 values
+            const allFilter2Values = new Set();
+            allItems.forEach(item => {
+                const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : 
+                                     (item.Filter2 ? [item.Filter2] : []);
+                
+                filter2Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter2Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 2 dropdown with all values
+            populateFilterOptions('filter2-options', [...allFilter2Values].sort(), 2);
+            return;
+        }
+        
+        // Filter items based on filter1 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            return filter1Selections.some(filter => {
+                // Extract value from filter (remove group prefix if exists)
+                const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                return filter1Array.includes(filterValue);
+            });
+        });
+        
+        // Get unique Filter 2 values from filtered items
+        const availableFilter2Values = new Set();
+        filteredItems.forEach(item => {
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            filter2Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter2Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 2 selections that are still valid
+        const validFilter2Selections = [];
+        activeFilters.filter2.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter2Values.has(filterValue)) {
+                validFilter2Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 2 selections (remove invalid ones)
+        if (validFilter2Selections.length !== activeFilters.filter2.length) {
+            activeFilters.filter2 = validFilter2Selections;
+            updateSelectedFiltersDisplay(2);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Make sure we're using the correct variable before populating
+        if (typeof availableFilter2Values !== 'undefined') {
+            // Populate filter 2 dropdown with only available values
+            populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
+        } else {
+            console.error("availableFilter2Values is undefined in rebuildFilter2Options");
+            // Fallback to using an empty array
+            populateFilterOptions('filter2-options', [], 2);
+        }
+    }
+
+    function saveFilterState() {
+        localStorage.setItem('inventarSystemFilters', JSON.stringify(activeFilters));
+    }
+    
+    function loadFilterState() {
+        const savedFilters = localStorage.getItem('inventarSystemFilters');
+        if (savedFilters) {
+            try {
+                // Parse saved filters
+                const parsedFilters = JSON.parse(savedFilters);
+                
+                // Restore to active filters
+                if (parsedFilters.filter1) activeFilters.filter1 = parsedFilters.filter1;
+                if (parsedFilters.filter2) activeFilters.filter2 = parsedFilters.filter2;
+                if (parsedFilters.filter3) activeFilters.filter3 = parsedFilters.filter3;
+                
+                // Update UI to show selected filters
+                updateSelectedFilters(1);
+                updateSelectedFilters(2);
+                updateSelectedFilters(3);
+                
+                // We'll rebuild Filter 3 options after items are loaded
+            } catch (e) {
+                console.error("Error loading saved filters:", e);
+            }
+        }
+    }
+    
+    function clearFilterState() {
+        localStorage.removeItem('inventarSystemFilters');
+        // Reset active filters
+        activeFilters = {
+            filter1: [],
+            filter2: [],
+            filter3: []
+        };
+    }
+    
+    // Load predefined filter values for dropdowns
+    function loadPredefinedFilterValues(filterNumber) {
+        fetch(`/get_predefined_filter_values/${filterNumber}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // For edit modal dropdowns
+                const editFilterSelects = [
+                    document.getElementById(`edit-filter${filterNumber}-1`),
+                    document.getElementById(`edit-filter${filterNumber}-2`),
+                    document.getElementById(`edit-filter${filterNumber}-3`),
+                    document.getElementById(`edit-filter${filterNumber}-4`)
+                ];
+                
+                editFilterSelects.forEach(select => {
+                    if (select) {
+                        // Clear existing options except the first one
+                        while (select.children.length > 1) {
+                            select.removeChild(select.lastChild);
+                        }
+                        
+                        // Add new options - data.values contains the array
+                        data.values.forEach(filter => {
+                            if (filter && filter.trim() !== '') {
+                                const option = document.createElement('option');
+                                option.value = filter;
+                                option.textContent = filter;
+                                select.appendChild(option);
+                            }
+                        });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error(`Error loading predefined filter ${filterNumber} values:`, error);
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load saved filters
+        loadFilterState();
+        
+        // Load predefined filter values for dropdowns
+        loadPredefinedFilterValues(1);
+        loadPredefinedFilterValues(2);
+        
+        // Set up edit form submission
+        setupEditFormSubmission();
+        
+        // Set up schedule form submission
+        setupScheduleFormSubmission();
+        
+        // Set up add new location buttons
+        const editAddLocationBtn = document.getElementById('edit-add-new-location-btn');
+        if (editAddLocationBtn) {
+            editAddLocationBtn.addEventListener('click', function() {
+                const container = document.getElementById('edit-new-location-container');
+                container.style.display = container.style.display === 'none' ? 'block' : 'none';
+            });
+        }
+        
+        // Find and attach event listener to all logout links
+        const logoutLinks = document.querySelectorAll('a[href*="logout"]');
+        logoutLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                clearFilterState(); // Clear filters when logging out
+            });
+        });
+        
+        // Fetch user status to get current username
+        fetch('/user_status')
+            .then(response => response.json())
+            .then(data => {
+                currentUsername = data.username;
+                // Now load items with username information
+                loadItems();
+                // Setup card images display after a short delay to ensure items are loaded
+                setTimeout(function() {
+                    searchByCode();
+                }, 300);
+            })
+            .catch(error => {
+                console.error('Error fetching user status:', error);
+                loadItems(); // Load items anyway in case of error
+            });
+        
+        // Hook description search input handlers
+        const descInput = document.getElementById('desc-search');
+        if (descInput) {
+            descInput.addEventListener('input', function(){
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => { searchByDescription(); }, 400);
+            });
+            descInput.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); searchByDescription(); }});
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const itemModal = document.getElementById('item-modal');
+            const editModal = document.getElementById('edit-modal');
+            
+            if (event.target === itemModal) {
+                itemModal.style.display = 'none';
+            }
+            if (event.target === editModal) {
+                editModal.style.display = 'none';
+            }
+        };
+
+        // Set up code validation for edit form
+        const editCodeField = document.getElementById('edit-code4');
+        if (editCodeField) {
+            editCodeField.addEventListener('blur', function() {
+                const itemIdField = document.getElementById('edit-item-id');
+                const excludeId = itemIdField ? itemIdField.value : null;
+                validateCodeField(this, excludeId);
+            });
+        }
+
+        const scanEditCodeBtn = document.getElementById('scan-edit-code-btn');
+        if (scanEditCodeBtn) {
+            scanEditCodeBtn.addEventListener('click', scanIntoEditCode);
+        }
+
+        const scanEditIsbnBtn = document.getElementById('scan-edit-isbn-btn');
+        if (scanEditIsbnBtn) {
+            scanEditIsbnBtn.addEventListener('click', scanIntoEditIsbn);
+        }
+    });
+
+    // Function to load items from server
+    function loadItems() {
+        fetch("{{ url_for('get_items') }}")
+            .then(response => response.json())
+            .then(data => {
+                const itemsContainer = document.querySelector('#items-container');
+                const itemsIndicator = document.getElementById('items-indicator');
+                /* favorites load start removed */
+                // Creating a Set to store unique filter values
+                const filter1Values = new Set();
+                const filter2Values = new Set();
+                const filter3Values = new Set();
+                allItems = data.items || [];
+                itemsContainer.innerHTML = '';
+                if (!data.items || data.items.length === 0) {
+                    itemsContainer.innerHTML = `
+                        <div class="no-items-message">
+                            <div>Keine Objekte gefunden</div>
+                            <a class="empty-state-cta" href="{{ url_for('upload_admin') }}">Erstellen sie hier ihr erstes Item</a>
+                        </div>
+                    `;
+                    if (itemsIndicator) {
+                        itemsIndicator.textContent = 'Objekte im System: 0';
+                    }
+                    return;
+                }
+                if (itemsIndicator) {
+                    itemsIndicator.textContent = `Objekte im System: ${data.items.length}`;
+                }
+                data.items.sort((a, b) => {
+                    const nameA = a.Name ? a.Name.toLowerCase() : '';
+                    const nameB = a.Name ? a.Name.toLowerCase() : '';
+                    return nameA.localeCompare(nameB);
+                });
+                const favoriteIds = new Set(data.favorites || []);
+                data.items.forEach(item => {
+                    try {
+                        const card = document.createElement('div');
+                        card.classList.add('item-card');
+                        card.classList.add('clickable-card');
+                        
+                        // Add highlight class if this is the item we're looking for
+                        if (highlightItemId && item._id === highlightItemId) {
+                            card.classList.add('highlight-item');
+                            setTimeout(() => {
+                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 500);
+                        }
+                        
+                        const favActive = favoriteIds.has(item._id);
+                        if (favActive) card.classList.add('favorite-item');
+                        card.dataset.favorite = favActive ? '1' : '0';
+
+                        // Process and store filter values
+                        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+                        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+                        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+                        
+                        // Store arrays on the card as data attributes
+                        card.dataset.filter1 = JSON.stringify(filter1Array);
+                        card.dataset.filter2 = JSON.stringify(filter2Array);
+                        card.dataset.filter3 = JSON.stringify(filter3Array);
+                        card.dataset.code = (item.Code_4 !== undefined && item.Code_4 !== null) ? 
+                          String(item.Code_4).trim() : '';
+                        card.dataset.groupCodes = JSON.stringify(Array.isArray(item.GroupedAllCodes) ? item.GroupedAllCodes : []);
+        
+                        // Add filter values to their respective sets
+                        filter1Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter1Values.add(value);
+                            }
+                        });
+        
+                        filter2Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter2Values.add(value);
+                            }
+                        });
+        
+                        filter3Array.forEach(value => {
+                            if (value && typeof value === 'string' && value.trim() !== '') {
+                                filter3Values.add(value);
+                            }
+                        });
+
+                        // Display first filter value or dash if none exist
+                        const filter1Display = filter1Array.length > 0 ? filter1Array[0] : '-';
+                        const filter2Display = filter2Array.length > 0 ? filter2Array[0] : '-';
+                        const filter3Display = filter3Array.length > 0 ? filter3Array[0] : '-';
+                        
+                        // Additional filter values indicator
+                        const filter1More = filter1Array.length > 1 ? ` (+${filter1Array.length - 1} mehr)` : '';
+                        const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
+                        const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
+
+                        const imagesHtml = item.Images ? item.Images.map((image, index) => {
+                            // Check if the image already has a full URL path or just the filename
+                            const imageSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                            image : 
+                                            `{{ url_for('uploaded_file', filename='') }}${image}`;
+                            
+                            // Get thumbnail info for this image index
+                            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                            
+                            const isVideo = isVideoFile(image);
+                            if (isVideo) {
+                                // For videos, use thumbnail if available, otherwise original video
+                                const videoSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : imageSrc;
+                                
+                                if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
+                                    // Show thumbnail image with video overlay for card view
+                                    return `<div class="video-container" data-index="${index}">
+                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                                data-original="${image}">
+                                            <div class="video-preview-overlay">
+                                                <div class="video-play-button">▶</div>
+                                            </div>
+                                            </div>`;
+                                }
+                            } else {
+                                // For images, use thumbnail if available
+                                const imageSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : `{{ url_for('uploaded_file', filename='') }}${image}`;
+                                    
+                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${image}">`;
+                            }
+                        }).join('') : '';
+                        
+                        // Check if item is borrowed by current user
+                        const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+                        
+                        // Add borrower info badge if item is borrowed
+                        let borrowerBadge = '';
+                        if (!item.Verfuegbar && item.BorrowerInfo) {
+                            borrowerBadge = `
+                                <div class="borrower-badge">
+                                    Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
+                                    ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
+                                </div>`;
+                        }
+
+                        // Add appointment badge if item has upcoming appointments
+                        let appointmentBadge = '';
+                        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+                            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+                            if (upcomingAppointment) {
+                                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                                
+                                appointmentBadge = `
+                                    <div class="appointment-badge">
+                                        <strong>Geplant für:</strong> ${formattedDate}<br>
+                                        <span class="appointment-time">${startPeriod}${endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : ''}</span>
+                                    </div>`;
+                            }
+                        }
+                        const damageCount = Array.isArray(item.DamageReports) ? item.DamageReports.length : 0;
+                        const groupedCount = Number(item.GroupedDisplayCount || 1);
+                        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+                        const isGroupedItem = groupedCount > 1;
+                        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+                        const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
+                        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
+
+                        card.innerHTML = `
+                            <div class="card-content" data-item-id="${item._id}">
+                                <h3 class="item-col-name">${item.Name}</h3>
+                                <p class="item-col-location"><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                                <p class="item-col-filter1"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
+                                <p class="item-col-filter2"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
+                                <p class="item-col-filter3"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-col-code"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <p class="item-col-count"><strong>Anzahl:</strong> ${groupedCount}</p>
+                                ${damageCount > 0 ? `<div class="damage-badge">Schäden gemeldet: ${damageCount}</div>` : ''}
+                                <div class="image-container">
+                                    ${imagesHtml}
+                                </div>
+                                ${borrowerBadge}
+                                ${appointmentBadge}
+                            </div>
+                            <div class="actions">
+                                ${isAvailableForBorrow && !item.BlockedNow ? 
+                                    `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                        ${isGroupedItem ? `
+                                        <div class="grouped-borrow-controls" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
+                                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                                            <select id="specific-item-card-${item._id}" name="specific_item_id" style="max-width:190px; padding:4px;">
+                                                <option value="">Automatisch wählen</option>
+                                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code}</option>`).join('')}
+                                            </select>
+                                        </div>` : ''}
+                                        <button class="ausleihen" type="submit">Ausleihen</button>
+                                    </form>` 
+                                : isBorrowedByMe ?
+                                    `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                                    </form>`
+                                :
+                                    `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
+                                }
+                                <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
+                                    <button class="delete-button">Löschen</button>
+                                </a>
+                                <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-card-${item._id}')">Bearbeiten</button>
+                                <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
+                                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                            </div>
+                        `;
+                        itemsContainer.appendChild(card);
+                        // Append bookmark AFTER innerHTML so it isn't wiped
+                        const bookmark = document.createElement('button');
+                        bookmark.className = 'bookmark-btn' + (favActive? ' active':'');
+                        bookmark.type = 'button';
+                        bookmark.title = 'Merken';
+                        bookmark.setAttribute('role','button');
+                        bookmark.setAttribute('aria-label','Merken');
+                        bookmark.dataset.favId = item._id;
+                        bookmark.textContent = favActive ? '★' : '☆';
+                        bookmark.style.zIndex = '25';
+                        bookmark.addEventListener('click', (ev)=>{ ev.stopPropagation(); toggleFavorite(item._id, bookmark, card); });
+                        card.appendChild(bookmark);
+                        /* bookmark appended */
+                        
+                        // Add click event listeners to the card content area
+                        const cardContent = card.querySelector('.card-content');
+                        if (cardContent) {
+                            cardContent.addEventListener('click', function(e) {
+                                if (e.target.tagName === 'BUTTON' || 
+                                    e.target.tagName === 'A' || 
+                                    e.target.tagName === 'INPUT' ||
+                                    e.target.closest('button') || 
+                                    e.target.closest('a') || 
+                                    e.target.closest('.image-container')) {
+                                    return;
+                                }
+                                
+                                e.stopPropagation();
+                                
+                                const modalItemData = {...item};
+                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
+                                
+                                openItemModal(modalItemData);
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Error processing item:', err, item);
+                    }
+                });
+                
+                // Populate filter options
+                populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
+                populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
+                populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
+                
+                itemsContainer.scrollLeft = 0;
+                applyFilters();
+                
+                // Setup proper image display for all cards
+                setupCardImagesDisplay();
+
+                // Rebuild filters if needed
+                if (activeFilters.filter1.length > 0) {
+                    rebuildFilter2Options();
+                }
+                if (activeFilters.filter1.length > 0 || activeFilters.filter2.length > 0) {
+                    rebuildFilter3Options();
+                }
+                /* favorites render count removed */
+            })
+            .catch(error => {
+                console.error('Error fetching items:', error);
+                const itemsContainer = document.querySelector('#items-container');
+                const itemsIndicator = document.getElementById('items-indicator');
+                itemsContainer.innerHTML = 
+                    '<div class="error-message">Fehler beim Laden der Objekte. Bitte versuchen Sie es später erneut.</div>';
+                if (itemsIndicator) {
+                    itemsIndicator.textContent = 'Objekte im System: 0';
+                }
+            });
+    }
+
+    function searchByCode() {
+        const searchInput = document.getElementById('code-search');
+        const rawSearchTerm = searchInput.value;
+        codeSearchTerm = rawSearchTerm.trim().toLowerCase();
+        
+        searchInput.classList.add('searching');
+        
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
+        });
+        
+        applyFilters(true);
+        
+        setTimeout(() => {
+            searchInput.classList.remove('searching');
+        }, 500);
+    }
+
+    function applyFilters(isDirectSearch = false) {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        const itemsIndicator = document.getElementById('items-indicator');
+        
+        let visibleCount = 0;
+        let codeMatchCount = 0;
+        let exactMatchCount = 0;
+    let firstMatchedCard = null;
+    let firstDescMatchedCard = null;
+        let exactMatchCard = null;
+        
+        const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
+        const isCodeSearch = searchTerm.length > 0;
+        
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            const rawCode = item.dataset.code || '';
+            const itemCode = rawCode.trim().toLowerCase();
+            const groupCodes = (() => {
+                try {
+                    return JSON.parse(item.dataset.groupCodes || '[]')
+                        .map(code => String(code || '').trim().toLowerCase())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
+            const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
+            const isFavoriteCard = item.dataset.favorite === '1';
+            
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
+            const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
+            
+            const codeCandidates = [itemCode, ...groupCodes].filter(Boolean);
+            let matchesCodeSearch = !isCodeSearch || codeCandidates.some(code => code.includes(searchTerm));
+            let exactCodeMatch = isCodeSearch && codeCandidates.some(code => code === searchTerm);
+            
+            const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
+            if (passesAllFilters && matchesCodeSearch && matchesDesc && (!favoritesOnly || isFavoriteCard)) {
+                item.style.display = 'block';
+                visibleCount++;
+                
+                if (exactCodeMatch) {
+                    item.classList.add('highlight-item', 'exact-code-match');
+                    exactMatchCount++;
+                    if (!exactMatchCard) {
+                        exactMatchCard = item;
+                    }
+                } else if (isCodeSearch && matchesCodeSearch) {
+                    item.classList.add('code-match');
+                    codeMatchCount++;
+                    if (!firstMatchedCard) {
+                        firstMatchedCard = item;
+                    }
+                }
+
+                // Add description match highlight
+                if (descSearchIds && itemId && descSearchIds.has(String(itemId))) {
+                    item.classList.add('desc-match');
+                    if (!firstDescMatchedCard) firstDescMatchedCard = item;
+                } else {
+                    item.classList.remove('desc-match');
+                }
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        if (itemsIndicator) {
+            itemsIndicator.textContent = `Objekte im System: ${allItems.length} | Angezeigt: ${visibleCount}`;
+        }
+        
+        if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
+            setTimeout(() => {
+                const cardToHighlight = exactMatchCard || firstMatchedCard;
+                
+                if (cardToHighlight) {
+                    centerCardInView(cardToHighlight, itemsContainer);
+                    applyAttentionAnimation(cardToHighlight);
+                }
+            }, 300);
+        }
+
+        // If description search active, scroll to first description match too
+        if (descSearchIds && firstDescMatchedCard) {
+            setTimeout(() => {
+                centerCardInView(firstDescMatchedCard, itemsContainer);
+                applyAttentionAnimation(firstDescMatchedCard);
+            }, 250);
+        }
+    }
+
+    function checkFilterMatch(activeFilters, itemFilterData) {
+        if (activeFilters.length === 0) return true;
+        
+        let itemFilterArray;
+        try {
+            itemFilterArray = JSON.parse(itemFilterData || '[]');
+        } catch {
+            itemFilterArray = [];
+        }
+        
+        return activeFilters.some(filter => {
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            return itemFilterArray.includes(filterValue);
+        });
+    }
+
+    function centerCardInView(card, container) {
+        card.style.display = 'block';
+        
+        const containerRect = container.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        
+        const scrollPosition = card.offsetLeft - (containerRect.width/2) + (cardRect.width/2);
+        
+        container.scrollTo({
+            left: scrollPosition,
+            behavior: 'smooth'
+        });
+    }
+
+    function applyAttentionAnimation(card) {
+        // Simply apply green border without animation
+        card.style.border = '3px solid #28a745';
+        card.style.boxShadow = '0 0 20px rgba(40, 167, 69, 0.7)';
+    }
+
+    function clearCodeSearch() {
+        const searchInput = document.getElementById('code-search');
+        searchInput.value = '';
+        codeSearchTerm = '';
+        
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
+        });
+        
+        applyFilters();
+    }
+
+    // Description search using backend substring match
+    function searchByDescription(){
+        const input = document.getElementById('desc-search');
+        const term = (input?.value || '').trim();
+        if (!term){
+            descSearchIds = null;
+            applyFilters(true);
+            return;
+        }
+        input?.classList.add('searching');
+        fetch(`/search_word/${encodeURIComponent(term)}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (data && data.success && Array.isArray(data.response)){
+                    descSearchIds = new Set(data.response.map(String));
+                } else {
+                    descSearchIds = new Set();
+                }
+                applyFilters(true);
+            })
+            .catch(()=>{ descSearchIds = new Set(); applyFilters(true); })
+            .finally(()=>{ setTimeout(()=> input?.classList.remove('searching'), 300); });
+    }
+
+    function clearDescSearch(){
+        const input = document.getElementById('desc-search');
+        if (input) input.value = '';
+        descSearchIds = null;
+        applyFilters();
+    }
+
+    function openEditModalForSelectedUnit(defaultItemId, selectId) {
+        let targetItemId = defaultItemId;
+
+        try {
+            const selectedUnit = selectId ? document.getElementById(selectId) : null;
+            if (selectedUnit && selectedUnit.value) {
+                targetItemId = selectedUnit.value;
+            }
+        } catch (e) {
+            // Keep default item id as fallback.
+        }
+
+        openEditModalFromServer(targetItemId);
+    }
+
+    function closeEditModal() {
+        const editModal = document.getElementById('edit-modal');
+        if (editModal) {
+            editModal.style.display = 'none';
+        }
+    }
+
+    function openEditModalFromServer(itemId) {
+        const editModal = document.getElementById('edit-modal');
+        if (!editModal) {
+            console.error('Edit modal nicht gefunden');
+            return;
+        }
+
+        console.log('DEBUG: openEditModal called with itemId:', itemId);
+
+        // Fetch the item data from the backend
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                console.log('DEBUG: Response status:', response.status);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                console.log('DEBUG: Fetched data:', data);
+                // Backend returns the item directly or wrapped in error/success
+                const item = data.error ? null : (data.item || data);
+                
+                console.log('DEBUG: Parsed item:', item);
+                
+                if (!item || !item._id) {
+                    console.error('DEBUG: Item not found or invalid');
+                    alert('Item nicht gefunden');
+                    return;
+                }
+
+                // Fill in the form fields with the item data
+                document.getElementById('edit-item-id').value = item._id || '';
+                document.getElementById('edit-name').value = item.Name || '';
+                document.getElementById('edit-location').value = item.Ort || '';
+                document.getElementById('edit-description').value = item.Beschreibung || '';
+                document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
+                document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
+                document.getElementById('edit-code4').value = item.Code_4 || '';
+                document.getElementById('edit-isbn').value = item.ISBN || '';
+                document.getElementById('edit-reservierbar').checked = item.Reservierbar !== false;
+
+                // Fill in filter 1 (Unterrichtsfach)
+                const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+                document.getElementById('edit-filter1-1').value = filter1Array[0] || '';
+                document.getElementById('edit-filter1-2').value = filter1Array[1] || '';
+                document.getElementById('edit-filter1-3').value = filter1Array[2] || '';
+                document.getElementById('edit-filter1-4').value = filter1Array[3] || '';
+
+                // Fill in filter 2 (Jahrgangsstufe)
+                const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+                document.getElementById('edit-filter2-1').value = filter2Array[0] || '';
+                document.getElementById('edit-filter2-2').value = filter2Array[1] || '';
+                document.getElementById('edit-filter2-3').value = filter2Array[2] || '';
+                document.getElementById('edit-filter2-4').value = filter2Array[3] || '';
+
+                // Fill in filter 3 (Thema)
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+                document.getElementById('edit-filter3-1').value = filter3Array[0] || '';
+                document.getElementById('edit-filter3-2').value = filter3Array[1] || '';
+                document.getElementById('edit-filter3-3').value = filter3Array[2] || '';
+                document.getElementById('edit-filter3-4').value = filter3Array[3] || '';
+
+                // Display existing images
+                const existingImagesContainer = document.getElementById('edit-existing-images');
+                existingImagesContainer.innerHTML = '';
+                if (item.Images && Array.isArray(item.Images)) {
+                    item.Images.forEach((image, index) => {
+                        const isVideo = isVideoFile(image);
+                        const imageDiv = document.createElement('div');
+                        imageDiv.className = 'existing-image-item';
+                        imageDiv.style.marginBottom = '10px';
+
+                        const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                        const imageSrc = thumbnailInfo && thumbnailInfo.has_preview ? 
+                            thumbnailInfo.preview_url : 
+                            (image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                image : 
+                                `{{ url_for('uploaded_file', filename='') }}${image}`);
+
+                        if (isVideo) {
+                            imageDiv.innerHTML = `
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <video src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" controls></video>
+                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
+                                </div>
+                            `;
+                        } else {
+                            imageDiv.innerHTML = `
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <img src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" alt="Existierendes Bild ${index + 1}">
+                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
+                                </div>
+                            `;
+                        }
+                        existingImagesContainer.appendChild(imageDiv);
+                    });
+                }
+
+                // Display the modal
+                editModal.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Fehler beim Laden des Items:', error);
+                alert('Fehler beim Laden des Items');
+            });
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, (char) => {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return map[char] || char;
+        });
+    }
+
+    function formatDamageTimestamp(ts) {
+        if (!ts) return '-';
+        const date = new Date(ts);
+        if (Number.isNaN(date.getTime())) return String(ts);
+        return date.toLocaleString('de-DE');
+    }
+
+    function registerDamage(itemId) {
+        const noteInput = prompt('Notiz zum Schaden (optional):', '');
+        if (noteInput === null) {
+            return;
+        }
+        const note = noteInput.trim();
+
+        fetch(`/report_damage/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: note || 'Schaden gemeldet' })
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok || !data.success) {
+                throw new Error(data.message || 'Fehler beim Speichern der Schadensmeldung.');
+            }
+            alert(`Schaden gespeichert. Insgesamt gemeldet: ${data.damage_count}`);
+            loadItems();
+            const modal = document.getElementById('item-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            alert(error.message || 'Fehler beim Speichern der Schadensmeldung.');
+        });
+    }
+
+    function markDamageAsRepaired(itemId) {
+        fetch(`/mark_damage_repaired/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok || !data.success) {
+                throw new Error(data.message || 'Fehler beim Markieren als repariert.');
+            }
+            alert(`Reparatur gespeichert. Erledigte Schäden: ${data.resolved_count}`);
+            loadItems();
+            const modal = document.getElementById('item-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            alert(error.message || 'Fehler beim Markieren als repariert.');
+        });
+    }
+
+    function openItemModal(item) {
+        const modal = document.getElementById('item-modal');
+        const modalContent = document.getElementById('modal-content-wrapper');
+        
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+        
+        const imagesHtml = item.Images ? item.Images.map((image, index) => {
+            const isVideo = isVideoFile(image);
+            // Get thumbnail info for this image index
+            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+            
+            if (isVideo) {
+                // Use the original file path for videos with proper URL construction
+                const videoSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
+                    image : 
+                    `{{ url_for('uploaded_file', filename='') }}${image}`;
+                
+                return `<video src="${videoSrc}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata"></video>`;
+            } else {
+                // For images, use preview URL if available, otherwise construct a proper URL to the image
+                const imageSrc = thumbnailInfo && thumbnailInfo.has_preview ? 
+                    thumbnailInfo.preview_url : 
+                    (image.startsWith('/uploads/') || image.startsWith('http') ? 
+                        image : 
+                        `{{ url_for('uploaded_file', filename='') }}${image}`);
+                
+                return `<img src="${imageSrc}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}">`;
+            }
+        }).join('') : '';
+        
+        const groupedCount = Number(item.GroupedDisplayCount || 1);
+        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+        const isGroupedItem = groupedCount > 1;
+        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+        const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
+        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
+        
+        let borrowerInfoHtml = '';
+        if (isBorrowed && item.BorrowerInfo) {
+            borrowerInfoHtml = `
+                <div class="borrower-info-panel">
+                    <h4>Ausleihstatus</h4>
+                    <p class="borrower-name">Ausgeliehen von: ${item.BorrowerInfo.username}</p>
+                    <p class="borrow-time">Seit: ${item.BorrowerInfo.borrowTime || 'Unbekannt'}</p>
+                </div>
+            `;
+        }
+        
+        // Add appointment info panel if item has appointments
+        let appointmentInfoHtml = '';
+        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+            if (upcomingAppointment) {
+                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                const timeDisplay = startPeriod + (endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : '');
+                
+                appointmentInfoHtml = `
+                    <div class="appointment-info-panel">
+                        <h4>Geplanter Termin</h4>
+                        <p class="appointment-date">Datum: ${formattedDate}</p>
+                        <p class="appointment-time">Zeit: ${timeDisplay}</p>
+                        ${upcomingAppointment.notes ? `<p class="appointment-notes">Notizen: ${upcomingAppointment.notes}</p>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        const damageReports = Array.isArray(item.DamageReports) ? item.DamageReports : [];
+        const damageInfoHtml = damageReports.length > 0
+            ? `<ul class="damage-list">${damageReports.map(report => {
+                const desc = escapeHtml(report?.description || '-');
+                const by = escapeHtml(report?.reported_by || 'Unbekannt');
+                const at = escapeHtml(formatDamageTimestamp(report?.reported_at));
+                return `<li><strong>${at}</strong> durch ${by}<br>${desc}</li>`;
+            }).join('')}</ul>`
+            : 'Keine Schäden erfasst.';
+        
+        modalContent.innerHTML = `
+            <h2>${item.Name}</h2>
+            ${borrowerInfoHtml}
+            ${appointmentInfoHtml}
+            
+            <div class="modal-image-container">
+                ${imagesHtml}
+                ${item.Images && item.Images.length > 1 ? `
+                    <button class="modal-image-nav modal-prev-image" onclick="changeModalImage(-1)">&#10094;</button>
+                    <button class="modal-image-nav modal-next-image" onclick="changeModalImage(1)">&#10095;</button>
+                    <div class="image-counter">1/${item.Images.length}</div>
+                ` : ''}
+            </div>
+            
+            <div class="modal-details">
+                <div class="detail-group">
+                    <div class="detail-label">Ort:</div>
+                    <div class="detail-value">${item.Ort || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value ${isBorrowed ? 'status-borrowed' : ''}">
+                        ${isBorrowed ? 'Ausgeliehen' : 'Verfügbar'}
+                    </div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Unterrichtsfach:</div>
+                    <div class="detail-value">${filter1Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Jahrgangsstufe:</div>
+                    <div class="detail-value">${filter2Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Thema:</div>
+                    <div class="detail-value">${filter3Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Code:</div>
+                    <div class="detail-value">${item.Code_4 || '-'}</div>
+                </div>
+
+                <div class="detail-group">
+                    <div class="detail-label">Anzahl:</div>
+                    <div class="detail-value">${item.GroupedDisplayCount || 1}</div>
+                </div>
+
+                ${isGroupedItem ? `
+                <div class="detail-group">
+                    <div class="detail-label">Verfügbar:</div>
+                    <div class="detail-value">${availableGroupedCount}</div>
+                </div>` : ''}
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungsjahr:</div>
+                    <div class="detail-value">${item.Anschaffungsjahr || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungskosten:</div>
+                    <div class="detail-value">${item.Anschaffungskosten || '-'}</div>
+                </div>
+                
+                <div class="detail-group full-width">
+                    <div class="detail-label">Beschreibung:</div>
+                    <div class="detail-value">${item.Beschreibung || '-'}</div>
+                </div>
+
+                <div class="detail-group full-width">
+                    <div class="detail-label">Schäden:</div>
+                    <div class="detail-value">${damageInfoHtml}</div>
+                </div>
+
+                <div class="detail-group full-width" style="margin-top:12px; padding:10px; border:1px solid #e3e3e3; border-radius:8px;">
+                    <div class="detail-label">Verfügbarkeit prüfen:</div>
+                    <div class="detail-value">
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                            <input type="date" id="avail-date" style="padding:6px;">
+                            <select id="avail-start" style="padding:6px;">
+                                <option value="">Von Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <select id="avail-end" style="padding:6px;">
+                                <option value="">Bis Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <button id="avail-check" class="filter-toggle">Prüfen</button>
+                            <span id="avail-result" style="margin-left:8px;"></span>
+                        </div>
+                        <div id="avail-conflicts" style="margin-top:8px; color:#a00;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-group full-width" style="margin-top:15px;">
+                <div class="detail-label">Geplante Ausleihen:</div>
+                <div class="detail-value">
+                    <button id="toggle-bookings" class="calendar-toggle-btn" style="margin-bottom:12px; padding:10px 16px; border-radius:6px; background:#f3f4f6; border:1px solid #d1d5db; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s ease;">
+                        <span>📅</span>
+                        <span id="toggle-bookings-text">Kalender anzeigen</span>
+                    </button>
+                    <div id="bookings-panel" style="display:none; margin-top:10px;">
+                        <div class="calendar-wrapper">
+                            <div class="calendar-header">
+                                <button id="cal-prev">&lt;</button>
+                                <span id="cal-month-year"></span>
+                                <button id="cal-next">&gt;</button>
+                            </div>
+                            <div id="calendar-grid" class="calendar-grid"></div>
+                        </div>
+                        <div id="calendar-day-details" class="calendar-day-details">
+                            <h5 id="cal-details-date"></h5>
+                            <div id="cal-details-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                ${!isBorrowed ? 
+                    `<form method="POST" action="/ausleihen/${item._id}">
+                        ${isGroupedItem ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:78px; padding:4px;">
+                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                            <select id="specific-item-modal-${item._id}" name="specific_item_id" style="max-width:220px; padding:4px;">
+                                <option value="">Automatisch wählen</option>
+                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${escapeHtml(unit.code || '-')}</option>`).join('')}
+                            </select>
+                        </div>` : ''}
+                        <button class="ausleihen" type="submit">Ausleihen</button>
+                    </form>` 
+                    : (!isGroupedItem && item.User === currentUsername) ?
+                    `<form method="POST" action="/zurueckgeben/${item._id}">
+                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                    </form>`
+                    : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                }
+                <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-modal-${item._id}')">Bearbeiten</button>
+                <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
+                ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
+                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
+                    <button class="delete-button">Löschen</button>
+                </a>
+            </div>
+        `;
+        
+        modal.style.display = 'block';
+        
+        const closeButton = modal.querySelector('.close-modal');
+        closeButton.onclick = function() {
+            modal.style.display = 'none';
+        };
+        
+        window.currentModalImageIndex = 0;
+        window.totalModalImages = item.Images ? item.Images.length : 0;
+
+        // Planned bookings panel (Calendar Logic for Admin)
+        const toggleBtn = document.getElementById('toggle-bookings');
+        const panel = document.getElementById('bookings-panel');
+        const calGrid = document.getElementById('calendar-grid');
+        const calMonthYear = document.getElementById('cal-month-year');
+        const calPrev = document.getElementById('cal-prev');
+        const calNext = document.getElementById('cal-next');
+        const detailsPanel = document.getElementById('calendar-day-details');
+        const detailsDate = document.getElementById('cal-details-date');
+        const detailsList = document.getElementById('cal-details-list');
+
+        let bookings = [];
+        let currentDate = new Date();
+        let displayedMonth = currentDate.getMonth();
+        let displayedYear = currentDate.getFullYear();
+
+        function renderCalendar() {
+            calGrid.innerHTML = '';
+            const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            calMonthYear.textContent = `${monthNames[displayedMonth]} ${displayedYear}`;
+
+            // Headers
+            const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'cal-cell header';
+                div.textContent = day;
+                calGrid.appendChild(div);
+            });
+
+            const firstDay = new Date(displayedYear, displayedMonth, 1);
+            const lastDay = new Date(displayedYear, displayedMonth + 1, 0);
+            
+            // Adjust for Monday start
+            let startDayIndex = firstDay.getDay() - 1;
+            if (startDayIndex === -1) startDayIndex = 6;
+
+            // Empty cells
+            for (let i = 0; i < startDayIndex; i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell empty';
+                calGrid.appendChild(div);
+            }
+
+            // Days
+            for (let i = 1; i <= lastDay.getDate(); i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell';
+                div.dataset.day = String(i);
+                div.textContent = i;
+                
+                const currentDayDate = new Date(displayedYear, displayedMonth, i);
+                const today = new Date();
+                if (currentDayDate.toDateString() === today.toDateString()) {
+                    div.classList.add('today');
+                }
+
+                // Check for bookings
+                const dayBookings = bookings.filter(b => {
+                    const checkDate = new Date(displayedYear, displayedMonth, i);
+                    checkDate.setHours(0,0,0,0);
+                    
+                    const bStart = new Date(b.start);
+                    bStart.setHours(0,0,0,0);
+                    
+                    let bEnd = b.end ? new Date(b.end) : new Date(bStart);
+                    bEnd.setHours(0,0,0,0);
+
+                    return checkDate >= bStart && checkDate <= bEnd;
+                });
+
+                if (dayBookings.length > 0) {
+                    div.classList.add('has-booking');
+                    div.onclick = () => showDayDetails(i, dayBookings);
+                }
+
+                calGrid.appendChild(div);
+            }
+        }
+
+        function showDayDetails(day, dayBookings) {
+            document.querySelectorAll('.cal-cell').forEach(c => c.classList.remove('selected'));
+            const selectedDay = calGrid.querySelector(`.cal-cell[data-day="${day}"]`);
+            if (selectedDay) {
+                selectedDay.classList.add('selected');
+            }
+
+            const esc = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
+            detailsPanel.style.display = 'block';
+            detailsDate.textContent = `Termine am ${day}.${displayedMonth + 1}.${displayedYear}`;
+            
+            if (dayBookings.length === 0) {
+                detailsList.innerHTML = '<div class="cal-empty-state">Keine Termine für diesen Tag.</div>';
+                return;
+            }
+
+            detailsList.innerHTML = dayBookings.map(b => {
+                const startStr = new Date(b.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const endStr = b.end ? new Date(b.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                const timeRange = `${startStr}${endStr ? ' - ' + endStr : ''}`;
+                const periodStr = b.period ? `${b.period}. Stunde` : '';
+                const userStr = b.user ? esc(b.user) : 'Nicht angegeben';
+                const notesStr = b.notes ? esc(b.notes) : '';
+
+                return `<div class="cal-booking-item">
+                    <div class="cal-booking-time"><span class="cal-booking-label">Zeit</span><strong>${esc(timeRange)}</strong>${periodStr ? `<span class="cal-booking-period">${esc(periodStr)}</span>` : ''}</div>
+                    <div class="cal-booking-user"><span class="cal-booking-label">Nutzer</span>${userStr}</div>
+                    ${notesStr ? `<div class="cal-booking-note"><span class="cal-booking-label">Notiz</span>${notesStr}</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        toggleBtn?.addEventListener('click', ()=>{
+            const btnText = document.getElementById('toggle-bookings-text');
+            if(panel.style.display === 'none'){
+                panel.style.display = 'block';
+                if(btnText) btnText.textContent = 'Kalender verbergen';
+                toggleBtn.style.background = '#e0e7ff';
+                toggleBtn.style.borderColor = '#818cf8';
+                if(bookings.length === 0){
+                    fetch(`/get_planned_bookings/${item._id}`)
+                        .then(r=>r.json())
+                        .then(d=>{ 
+                            if(d && d.ok && Array.isArray(d.bookings)){ 
+                                bookings = d.bookings; 
+                                renderCalendar(); 
+                            } else { 
+                                calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; 
+                            } 
+                        })
+                        .catch(()=>{ calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; });
+                } else {
+                    renderCalendar();
+                }
+            } else {
+                panel.style.display = 'none';
+                detailsPanel.style.display = 'none';
+                if(btnText) btnText.textContent = 'Kalender anzeigen';
+                toggleBtn.style.background = '#f3f4f6';
+                toggleBtn.style.borderColor = '#d1d5db';
+            }
+        });
+
+        calPrev?.addEventListener('click', () => {
+            displayedMonth--;
+            if (displayedMonth < 0) {
+                displayedMonth = 11;
+                displayedYear--;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
+
+        calNext?.addEventListener('click', () => {
+            displayedMonth++;
+            if (displayedMonth > 11) {
+                displayedMonth = 0;
+                displayedYear++;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
+
+
+        // Availability checker
+        const availDate = document.getElementById('avail-date');
+        const availStart = document.getElementById('avail-start');
+        const availEnd = document.getElementById('avail-end');
+        const availBtn = document.getElementById('avail-check');
+        const availRes = document.getElementById('avail-result');
+        const availConf = document.getElementById('avail-conflicts');
+        availBtn?.addEventListener('click', ()=>{
+            const d = availDate?.value;
+            const s = availStart?.value;
+            const e = availEnd?.value || s;
+            if(!d || !s){
+                availRes.textContent = 'Bitte Datum und Startstunde wählen.';
+                return;
+            }
+            availRes.textContent = 'Prüfe…';
+            availConf.innerHTML = '';
+            fetch(`/check_availability?item_id=${encodeURIComponent(item._id)}&date=${encodeURIComponent(d)}&start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`)
+                .then(r=>r.json())
+                .then(ans=>{
+                    if(ans && ans.ok){
+                        if(ans.available){
+                            availRes.textContent = 'Verfügbar ✅';
+                        } else {
+                            availRes.textContent = 'Nicht verfügbar ❌';
+                            if(Array.isArray(ans.conflicts)){
+                                availConf.innerHTML = ans.conflicts.map(c=>{
+                                    const start = c.start ? new Date(c.start).toLocaleString() : '';
+                                    const end = c.end ? new Date(c.end).toLocaleString() : '';
+                                    const who = c.user ? ` (${c.user})` : '';
+                                    const status = c.status || '';
+                                    return `<div>- ${status}${who}: ${start}${end? ' - '+end: ''}</div>`;
+                                }).join('');
+                            }
+                        }
+                    } else {
+                        availRes.textContent = 'Fehler bei der Prüfung.';
+                    }
+                })
+                .catch(()=>{ availRes.textContent = 'Fehler bei der Prüfung.'; });
+        });
+    }
+
+    function changeModalImage(direction) {
+        const currentIndex = window.currentModalImageIndex;
+        const total = window.totalModalImages;
+        
+        if (total <= 1) return;
+        
+        // Remove active class from current image
+        const currentImage = document.getElementById(`modal-image-${currentIndex}`);
+        if (currentImage) {
+            currentImage.classList.remove('active-image');
+            
+            // If it's a video, pause it when navigating away
+            if (currentImage.tagName === 'VIDEO' && !currentImage.paused) {
+                try {
+                    currentImage.pause();
+                } catch (e) {
+                    console.error("Could not pause video:", e);
+                }
+            }
+        }
+        
+        // Calculate new index with wrapping
+        let newIndex = (currentIndex + direction) % total;
+        if (newIndex < 0) newIndex = total - 1;
+        
+        // Add active class to new image
+        const newImage = document.getElementById(`modal-image-${newIndex}`);
+        if (newImage) {
+            newImage.classList.add('active-image');
+        }
+        
+        // Update counter
+        const counter = document.querySelector('.image-counter');
+        if (counter) counter.textContent = `${newIndex + 1}/${total}`;
+        
+        window.currentModalImageIndex = newIndex;
+    }
+    
+    function scrollPrev() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 25; // Entspricht dem gap-Wert im CSS
+        const scrollAmount = cardWidth + gap;
+        
+        // Verbesserte Scrollfunktion mit visueller Rückmeldung
+        container.scrollBy({
+            left: -scrollAmount,
+            behavior: 'smooth'
+        });
+        
+        // Visuelles Feedback für den Button
+        const button = document.querySelector('.prev-button');
+        if (button) {
+            button.classList.add('active');
+            setTimeout(() => button.classList.remove('active'), 300);
+        }
+    }
+
+    function scrollNext() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 25; // Entspricht dem gap-Wert im CSS
+        const scrollAmount = cardWidth + gap;
+        
+        // Verbesserte Scrollfunktion mit visueller Rückmeldung
+        container.scrollBy({
+            left: scrollAmount,
+            behavior: 'smooth'
+        });
+        
+        // Visuelles Feedback für den Button
+        const button = document.querySelector('.next-button');
+        if (button) {
+            button.classList.add('active');
+            setTimeout(() => button.classList.remove('active'), 300);
+        }
+    }
+
+    // Function to ensure proper image display on mobile and desktop
+    function setupCardImagesDisplay() {
+        // Wait for DOM to be fully loaded
+        setTimeout(() => {
+            console.log("Setting up card images display");
+            const cards = document.querySelectorAll('.item-card');
+            cards.forEach(card => {
+                const images = card.querySelectorAll('.item-image');
+                
+                // Add active class to first image
+                if (images.length > 0) {
+                    images[0].classList.add('active-image');
+                    console.log("Set active image on card");
+                    
+                    // Also handle video containers if present
+                    const videoContainers = card.querySelectorAll('.video-container');
+                    if (videoContainers.length > 0) {
+                        videoContainers[0].classList.add('active-container');
+                    }
+                }
+            });
+        }, 200);
+    }
+
+    // Update the image navigation functions to use classes instead of inline styles
+    function prevImage(event) {
+        event.stopPropagation();
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
+        
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex > 0) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex - 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerPrev = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerPrev) containerPrev.classList.add('active-container');
+            }
+        }
+    }
+
+    function nextImage(event) {
+        event.stopPropagation();
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
+        
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex < images.length - 1) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex + 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerNext = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerNext) containerNext.classList.add('active-container');
+            }
+        }
+    }
+    
+    function closeAllFilterDropdowns(exceptId = null) {
+        document.querySelectorAll('.filter-dropdown').forEach(dd => {
+            if (!exceptId || dd.id !== exceptId) {
+                dd.style.display = 'none';
+            }
+        });
+        document.querySelectorAll('.filter-toggle').forEach(btn => {
+            btn.classList.remove('is-open');
+            btn.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) {
+            return;
+        }
+
+        const shouldOpen = dropdown.style.display !== 'block';
+        closeAllFilterDropdowns(dropdownId);
+        dropdown.style.display = shouldOpen ? 'block' : 'none';
+        const group = dropdown.closest('.filter-group');
+        const toggle = group ? group.querySelector('.filter-toggle') : null;
+        if (toggle) {
+            toggle.classList.toggle('is-open', shouldOpen);
+            toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.filter-group')) {
+            closeAllFilterDropdowns();
+        }
+    });
+
+    function clearFilter(filterNum) {
+        activeFilters[`filter${filterNum}`] = [];
+        document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
+        
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        saveFilterState();
+        applyFilters();
+    }
+
+    function updateFilter(filterNum, value, isChecked, group = '') {
+        const filterKey = `filter${filterNum}`;
+        const filterValue = group ? `${group}:${value}` : value;
+        
+        if (isChecked) {
+            if (!activeFilters[filterKey].includes(filterValue)) {
+                activeFilters[filterKey].push(filterValue);
+            }
+        } else {
+            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+        }
+        
+        updateSelectedFiltersDisplay(filterNum);
+        
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        saveFilterState();
+        applyFilters();
+    }
+
+    function updateSelectedFiltersDisplay(filterNum) {
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
+        
+        activeFilters[`filter${filterNum}`].forEach(filter => {
+            let displayValue = filter;
+            let groupName = '';
+            
+            if (filter.includes(':')) {
+                [groupName, displayValue] = filter.split(':');
+            }
+            
+            const tag = document.createElement('div');
+            tag.className = 'filter-tag';
+            
+            let tagContent = '';
+            if (groupName) {
+                tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
+            }
+            
+            tagContent += displayValue;
+            tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
+            
+            tag.innerHTML = tagContent;
+            container.appendChild(tag);
+        });
+    }
+
+    function removeFilter(filterNum, filter) {
+        const filterKey = `filter${filterNum}`;
+        
+        activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filter);
+        
+        updateSelectedFiltersDisplay(filterNum);
+        
+        let value = filter;
+        let group = '';
+        
+        if (filter.includes(':')) {
+            [group, value] = filter.split(':');
+        }
+        
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            if ((checkbox.value === value) && 
+                ((!group && !checkbox.dataset.group) || 
+                 (group && checkbox.dataset.group === group))) {
+                checkbox.checked = false;
+            }
+        });
+        
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        saveFilterState();
+        applyFilters();
+    }
+
+    function populateFilterOptions(containerId, filterValues, filterNum) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        const groupedValues = {};
+        
+        filterValues.forEach(value => {
+            if (!value) return;
+            
+            let group = 'Default';
+            let displayValue = value;
+            
+            if (typeof value === 'string' && value.includes(':')) {
+                [group, displayValue] = value.split(':', 2);
+            }
+            
+            if (!groupedValues[group]) {
+                groupedValues[group] = [];
+            }
+            
+            groupedValues[group].push(displayValue);
+        });
+        
+        Object.keys(groupedValues).sort().forEach(group => {
+            if (!groupedValues[group].length) return;
+            
+            if (Object.keys(groupedValues).length > 1 && group !== 'Default') {
+                const groupHeader = document.createElement('div');
+                groupHeader.className = 'filter-group-header';
+                groupHeader.textContent = group;
+                container.appendChild(groupHeader);
+            }
+            
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'filter-option-group';
+            
+            groupedValues[group].sort().forEach(value => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'filter-option';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = value;
+                checkbox.dataset.group = group !== 'Default' ? group : '';
+                
+                const filterValue = group !== 'Default' ? `${group}:${value}` : value;
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
+                
+                checkbox.addEventListener('change', function() {
+                    updateFilter(filterNum, value, this.checked, group !== 'Default' ? group : '');
+                });
+                
+                const label = document.createElement('label');
+                label.textContent = value;
+                label.prepend(checkbox);
+                
+                optionDiv.appendChild(label);
+                groupContainer.appendChild(optionDiv);
+            });
+            
+            container.appendChild(groupContainer);
+        });
+    }
+
+    // Load location options for edit modal
+    // Edit-related functions moved to edit_item_functions.html
+
+    // Schedule modal functions
+    function openScheduleModal(itemId) {
+        const scheduleModal = document.getElementById('schedule-modal');
+        if (!scheduleModal) return;
+        
+        const itemIdField = document.getElementById('schedule-item-id');
+        const dateField = document.getElementById('schedule-date');
+        const endDateField = document.getElementById('schedule-end-date');
+        const multiDayCheckbox = document.getElementById('schedule-multi-day');
+        const endDateGroup = document.getElementById('schedule-end-date-group');
+        const notesField = document.getElementById('schedule-notes');
+        const startPeriodField = document.getElementById('schedule-start-period');
+        const endPeriodField = document.getElementById('schedule-end-period');
+        const specificGroup = document.getElementById('schedule-specific-item-group');
+        const specificSelect = document.getElementById('schedule-specific-item');
+        
+        if (itemIdField) itemIdField.value = itemId;
+
+        const selectedItem = Array.isArray(allItems) ? allItems.find(item => item._id === itemId) : null;
+        const groupedCount = Number(selectedItem?.GroupedDisplayCount || 1);
+        const groupedUnits = Array.isArray(selectedItem?.GroupedAvailableUnits) ? selectedItem.GroupedAvailableUnits : [];
+
+        if (specificGroup && specificSelect) {
+            if (groupedCount > 1 && groupedUnits.length > 0) {
+                specificGroup.style.display = 'block';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>' +
+                    groupedUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('');
+            } else {
+                specificGroup.style.display = 'none';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>';
+            }
+            specificSelect.value = '';
+        }
+        
+        // Set default date to today
+        if (dateField) {
+            const today = new Date().toISOString().split('T')[0];
+            dateField.value = today;
+        }
+
+        // Reset multi-day fields
+        if (multiDayCheckbox) {
+            multiDayCheckbox.checked = false;
+            multiDayCheckbox.onchange = function() {
+                if (endDateGroup) {
+                    endDateGroup.style.display = this.checked ? 'block' : 'none';
+                    if (endDateField) {
+                        endDateField.required = this.checked;
+                        if (this.checked && !endDateField.value) {
+                            endDateField.value = dateField.value;
+                        }
+                    }
+                }
+            };
+            // Trigger change to set initial state
+            multiDayCheckbox.dispatchEvent(new Event('change'));
+        }
+        
+        // Clear form
+        if (notesField) notesField.value = '';
+        if (startPeriodField) startPeriodField.value = '';
+        if (endPeriodField) endPeriodField.value = '';
+        if (endDateField) endDateField.value = '';
+        
+        scheduleModal.style.display = 'block';
+    }
+
+    function closeScheduleModal() {
+        document.getElementById('schedule-modal').style.display = 'none';
+    }
+
+    // Setup schedule form submission
+    function setupScheduleFormSubmission() {
+        const scheduleForm = document.getElementById('schedule-form');
+        if (scheduleForm) {
+            scheduleForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                
+                // Use the current origin (protocol + hostname) to ensure we're using the correct protocol
+                fetch(window.location.origin + '/schedule_appointment', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    // Check if response is 409 Conflict
+                    if (response.status === 409) {
+                        return response.json().then(data => {
+                            alert('Terminkonflikt: ' + (data.message || 'Der gewählte Termin steht nicht zur Verfügung.'));
+                            return { success: false };
+                        });
+                    } else if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('Error response:', data);
+                            return { success: false, message: data.message };
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        alert('Termin wurde erfolgreich geplant!');
+                        closeScheduleModal();
+                        // Reload items to show updated appointment info
+                        loadItems();
+                    } else if (data.message) {
+                        alert('Fehler beim Planen des Termins: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error scheduling appointment:', error);
+                    alert('Fehler beim Planen des Termins');
+                });
+            });
+        }
+    }
+
+    // Setup edit form submission
+    function setupEditFormSubmission() {
+        const editForm = document.getElementById('edit-item-form');
+        if (editForm) {
+            editForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const itemId = document.getElementById('edit-item-id').value;
+                const formData = new FormData(this);
+                
+                fetch(`/edit_item/${itemId}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        closeEditModal();
+                        // Reload items to show updated information
+                        loadItems();
+                        // Show success message
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'alert alert-success';
+                        successMsg.textContent = 'Item wurde erfolgreich aktualisiert!';
+                        successMsg.style.position = 'fixed';
+                        successMsg.style.top = '20px';
+                        successMsg.style.right = '20px';
+                        successMsg.style.zIndex = '9999';
+                        document.body.appendChild(successMsg);
+                        setTimeout(() => {
+                            if (successMsg.parentNode) {
+                                successMsg.parentNode.removeChild(successMsg);
+                            }
+                        }, 3000);
+                    } else {
+                        alert('Fehler beim Aktualisieren des Items');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating item:', error);
+                    alert('Fehler beim Aktualisieren des Items');
+                });
+            });
+        }
+    }
+
+    // Duplication function
+    function duplicateItem(itemId) {
+        // Show loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                        background: rgba(0,0,0,0.5); z-index: 10000; display: flex; 
+                        align-items: center; justify-content: center;">
+                <div class="modal-dialog-white">
+                    <div>Element wird dupliziert...</div>
+                    <div class="modal-content-margin">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(loadingDiv);
+
+        // Create form data for the duplicate_item request
+        const formData = new FormData();
+        formData.append('original_item_id', itemId);
+
+        // Send duplication request to get item data
+        fetch('/duplicate_item', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.body.removeChild(loadingDiv);
+            
+            if (data.success) {
+                // Store duplication data in sessionStorage for the upload page
+                sessionStorage.setItem('duplicateItemData', JSON.stringify(data.item_data));
+                
+                // Redirect to upload admin page
+                window.location.href = '/upload_admin?duplicate=true';
+            } else {
+                alert('Fehler beim Duplizieren: ' + (data.message || 'Unbekannter Fehler'));
+            }
+        })
+        .catch(error => {
+            document.body.removeChild(loadingDiv);
+            console.error('Error duplicating item:', error);
+            alert('Fehler beim Duplizieren des Elements. Bitte versuchen Sie es erneut.');
+        });
+    }
+
+    // Helper functions for appointment display
+    function formatAppointmentDate(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateString;
+        }
+    }
+
+    function formatAppointmentTime(timeString) {
+        if (!timeString) return '';
+        // timeString format: "HH:MM" or "HH:MM:SS"
+        const timeParts = timeString.split(':');
+        if (timeParts.length >= 2) {
+            return `${timeParts[0]}:${timeParts[1]}`;
+        }
+        return timeString;
+    }
+
+    function formatAppointmentPeriod(period) {
+        if (!period) return '';
+        const periodMap = {
+            '1': '1. Stunde',
+            '2': '2. Stunde',
+            '3': '3. Stunde',
+            '4': '4. Stunde',
+            '5': '5. Stunde',
+            '6': '6. Stunde',
+            '7': '7. Stunde',
+            '8': '8. Stunde',
+            '9': '9. Stunde',
+            '10': '10. Stunde',
+            'pause1': '1. Pause',
+            'pause2': '2. Pause',
+            'mittagspause': 'Mittagspause'
+        };
+        return periodMap[period] || period;
+    }
+
+    function getUpcomingAppointment(appointments) {
+        if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
+            return null;
+        }
+        
+        const now = new Date();
+        const today = now.toDateString();
+        
+        // Filter appointments that are today or in the future
+        const futureAppointments = appointments.filter(apt => {
+            try {
+                const aptDate = new Date(apt.date);
+                return aptDate.toDateString() === today || aptDate >= now.setHours(0, 0, 0, 0);
+            } catch (e) {
+                return false;
+            }
+        });
+        
+        if (futureAppointments.length === 0) return null;
+        
+        // Sort by date and return the earliest
+        futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
+        return futureAppointments[0];
+    }
+</script>
+
+<!-- Include edit item functions -->
+{% include "edit_item_functions.html" %}
+
+<!-- Include reset item functions -->
+{% include "reset_item_functions.html" %}
+
+<!-- Include the new reset modal -->
+{% include "reset_item_modal.html" %}
+
+<style>
+/* Unified polished filter styling aligned with switch and action buttons */
+.filter-container {
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.filter-group {
+    background: #ffffff;
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 6px rgba(20, 35, 60, 0.08);
+}
+
+.filter-header {
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.filter-header label {
+    font-weight: 700;
+    color: #2f3e4e;
+}
+
+.filter-toggle,
+.clear-filter,
+.search-button,
+.scan-button {
+    border-radius: 10px;
+    border: 1px solid #c7ced6;
+    min-height: 36px;
+    padding: 7px 12px;
+    font-weight: 700;
+    box-shadow: none;
+    transition: transform 0.12s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+.filter-toggle {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2f3e4e;
+}
+
+.filter-toggle.is-open {
+    transform: rotate(180deg);
+    background: #e9f2ff;
+    border-color: #7ea1c8;
+    color: #1f4f7a;
+}
+
+.clear-filter {
+    background: #fff;
+    color: #495868;
+}
+
+.filter-dropdown {
+    top: calc(100% + 8px);
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(20, 35, 60, 0.12);
+    background: #ffffff;
+    padding: 10px;
+}
+
+.filter-option {
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.selected-filters {
+    min-height: 34px;
+    gap: 6px;
+}
+
+.filter-tag {
+    background: #edf4fb;
+    border: 1px solid #d0dfef;
+    color: #2a4763;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
+.search-container input {
+    border: 1px solid #cfd8e3;
+    border-radius: 10px;
+    min-height: 36px;
+}
+
+.qr-container {
+    margin-top: 6px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+}
+
+#qr-reader {
+    margin-top: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.scan-button {
+    background: linear-gradient(180deg, #f6fbff, #e8f2ff);
+    color: #214867;
+    border-color: #96b5d3;
+}
+
+.scan-button.is-active {
+    background: linear-gradient(180deg, #fff4e8, #ffe7cf);
+    color: #8a4c08;
+    border-color: #e1a467;
+}
+
+/* Table-mode responsive improvements for mobile/iPad */
+@media (max-width: 768px) {
+    body.table-view .item-card {
+        padding: 10px 8px !important;
+    }
+
+    body.table-view .item-card .card-content {
+        grid-template-columns: 1fr !important;
+        gap: 4px !important;
+    }
+
+    body.table-view .item-card .card-content h3 {
+        margin: 0 0 6px 0 !important;
+        font-size: 0.95rem !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.3 !important;
+    }
+
+    body.table-view .item-card .card-content p {
+        margin: 3px 0 !important;
+        font-size: 0.85rem !important;
+        line-height: 1.3 !important;
+    }
+
+    body.table-view .item-card .card-content p strong {
+        display: inline !important;
+        font-weight: 600 !important;
+        margin-right: 4px !important;
+        min-width: auto !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+
+    body.table-view .item-card .card-content .item-name-cell {
+        font-size: 0.95rem !important;
+    }
+
+    body.table-view .item-card .image-container {
+        display: none !important;
+    }
+
+    body.table-view .item-card .actions {
+        gap: 6px !important;
+    }
+
+    /* Extra small screens table mode */
+    @media (max-width: 480px) {
+        body.table-view .item-card .card-content p strong {
+            display: block !important;
+            margin-right: 0 !important;
+            margin-bottom: 2px !important;
+            color: #6c757d !important;
+            font-size: 0.8rem !important;
+        }
+
+        body.table-view .item-card .card-content p {
+            margin-left: 8px !important;
+            margin-top: 4px !important;
+            padding: 2px 0 !important;
+        }
+
+        body.table-view .item-card {
+            padding: 8px 6px !important;
+        }
+
+        body.table-view .item-card .card-content h3 {
+            font-size: 0.9rem !important;
+        }
+    }
+
+    .filter-group {
+        border-radius: 12px !important;
+        padding: 12px !important;
+    }
+
+    .filter-toggle,
+    .clear-filter,
+    .search-button,
+    .scan-button {
+        min-height: 40px !important;
+        border-radius: 10px !important;
+    }
+
+    .filter-dropdown {
+        border-radius: 10px !important;
+    }
+
+    .qr-container {
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+
+    #qr-reader {
+        border-radius: 10px !important;
+    }
+}
+</style>
+{% endblock %}
