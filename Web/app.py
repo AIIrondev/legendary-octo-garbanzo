@@ -113,6 +113,26 @@ def _get_asset_version():
     return APP_VERSION
 
 
+def _is_library_module_path(path):
+    """Return True when the current request path belongs to the library module."""
+    if not path:
+        return False
+
+    library_prefixes = (
+        '/library',
+        '/library_',
+        '/student_cards',
+    )
+    return path.startswith(library_prefixes)
+
+
+def _get_current_module(path):
+    """Resolve the active UI module for navbar separation."""
+    if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
+        return 'library'
+    return 'inventory'
+
+
 def _parse_money_value(value):
     """Parse a user-facing money value into a float when possible."""
     if value is None:
@@ -318,9 +338,13 @@ def inject_version():
             is_admin = us.check_admin(session['username'])
         except Exception:
             is_admin = False
+
+    current_module = _get_current_module(request.path)
+
     return {
         'APP_VERSION': APP_VERSION,
         'ASSET_VERSION': asset_version,
+        'CURRENT_MODULE': current_module,
         'school_periods': SCHOOL_PERIODS,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
         'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,

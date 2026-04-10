@@ -7,7 +7,7 @@
    For commercial licensing inquiries: https://github.com/AIIrondev
 -->
 <!DOCTYPE html>
-<html lang="en" data-module="inventory">
+<html lang="en" data-module="{{ CURRENT_MODULE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -369,7 +369,7 @@
         <span class="module-label">Module:</span>
         <div class="module-tabs">
             <a href="{{ url_for('home') }}" 
-               class="module-tab" 
+               class="module-tab {% if CURRENT_MODULE == 'inventory' %}active{% endif %}" 
                id="inventoryModule" 
                data-module="inventory">
                📦 Inventarsystem
@@ -377,7 +377,7 @@
             {% if library_module_enabled %}
             <div class="module-separator"></div>
             <a href="{{ url_for('library_view') }}" 
-               class="module-tab" 
+               class="module-tab {% if CURRENT_MODULE == 'library' %}active{% endif %}" 
                id="libraryModule" 
                data-module="library">
                📚 Bibliothek
@@ -386,48 +386,7 @@
         </div>
     </div>
     {% endif %}
-
-    <script>
-        (function() {
-            // Detect current module based on URL and update data-module attribute
-            const currentPath = window.location.pathname;
-            const htmlTag = document.documentElement;
-            
-            // Detect module and pages
-            const isLibraryModule = currentPath.includes('/library') || 
-                                   currentPath.includes('/library_admin') ||
-                                   currentPath.includes('/library_loans') ||
-                                   currentPath.includes('/student_cards');
-            
-            const currentModule = isLibraryModule ? 'library' : 'inventory';
-            htmlTag.setAttribute('data-module', currentModule);
-            
-            // Update module selector tabs
-            const invModule = document.getElementById('inventoryModule');
-            const libModule = document.getElementById('libraryModule');
-
-            if (currentModule === 'library') {
-                if (libModule) libModule.classList.add('active');
-                if (invModule) invModule.classList.remove('active');
-            } else {
-                if (invModule) invModule.classList.add('active');
-                if (libModule) libModule.classList.remove('active');
-            }
-            
-            // Show/hide appropriate navbar based on current module
-            const invNavbar = document.getElementById('inventoryNavbar');
-            const libNavbar = document.getElementById('libraryNavbar');
-
-            if (currentModule === 'library') {
-                if (invNavbar) invNavbar.style.display = 'none';
-                if (libNavbar) libNavbar.style.display = '';
-            } else {
-                if (invNavbar) invNavbar.style.display = '';
-                if (libNavbar) libNavbar.style.display = 'none';
-            }
-        })();
-    </script>
-
+    {% if CURRENT_MODULE != 'library' %}
     <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
@@ -490,9 +449,10 @@
             </div>
         </div>
     </nav>
+    {% endif %}
 
-    {% if library_module_enabled %}
-    <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar" style="display: none;">
+    {% if library_module_enabled and CURRENT_MODULE == 'library' %}
+    <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('library_view') }}" data-icon="📚">Bibliothek</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#libraryNavContent">
@@ -555,23 +515,6 @@
         </div>
     </nav>
     {% endif %}
-
-    <script>
-        (function() {
-            // Show/hide appropriate navbar based on current module
-            const currentPath = window.location.pathname;
-            const invNavbar = document.getElementById('inventoryNavbar');
-            const libNavbar = document.getElementById('libraryNavbar');
-
-            if (currentPath.includes('/library')) {
-                if (invNavbar) invNavbar.style.display = 'none';
-                if (libNavbar) libNavbar.style.display = '';
-            } else {
-                if (invNavbar) invNavbar.style.display = '';
-                if (libNavbar) libNavbar.style.display = 'none';
-            }
-        })();
-    </script>
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
