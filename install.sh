@@ -36,6 +36,17 @@ need_cmd() {
     fi
 }
 
+refresh_start_script_from_main() {
+    local start_url
+    start_url="https://raw.githubusercontent.com/$REPO_SLUG/main/start.sh"
+
+    if curl -fsSL "$start_url" -o "$TMP_DIR/start.sh"; then
+        sudo install -m 755 "$TMP_DIR/start.sh" "$PROJECT_DIR/start.sh"
+    else
+        echo "Warning: failed to refresh start.sh from main; using bundled start.sh"
+    fi
+}
+
 install_docker_if_missing() {
     if command -v docker >/dev/null 2>&1; then
         return 0
@@ -318,6 +329,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EOF
         sudo install -m 755 "$TMP_DIR/restart.sh" "$PROJECT_DIR/restart.sh"
     fi
+
+    refresh_start_script_from_main
 
     if [ ! -f "$PROJECT_DIR/cleanup-old.sh" ] && [ -f "$INSTALLER_DIR/cleanup-old.sh" ]; then
         sudo install -m 755 "$INSTALLER_DIR/cleanup-old.sh" "$PROJECT_DIR/cleanup-old.sh"
