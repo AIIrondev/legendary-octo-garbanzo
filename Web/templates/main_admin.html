@@ -26,23 +26,15 @@
         font-weight: 600;
     }
 
+    .bulk-delete-inline-wrap {
+        position: relative;
+        display: inline-flex;
+    }
+
     .bulk-delete-drawer-toggle {
-        position: fixed;
-        right: 0;
-        top: 46%;
-        transform: translateY(-50%);
-        z-index: 220;
-        border: 1px solid #0b5ed7;
-        border-radius: 10px 0 0 10px;
-        padding: 10px 10px 10px 8px;
-        background: linear-gradient(180deg, #0d6efd 0%, #0b5ed7 100%);
-        color: #fff;
-        font-weight: 700;
-        font-size: 0.85rem;
-        letter-spacing: 0.02em;
-        cursor: pointer;
-        box-shadow: 0 8px 18px rgba(13, 110, 253, 0.26);
-        transition: transform 0.15s ease, box-shadow 0.2s ease;
+        position: static;
+        transform: none;
+        z-index: 2;
     }
 
     .bulk-delete-drawer-toggle .drawer-icon {
@@ -55,26 +47,30 @@
     }
 
     .bulk-delete-drawer-toggle:active {
-        transform: translateY(-50%) scale(0.98);
+        transform: scale(0.98);
     }
 
     .bulk-delete-drawer {
-        position: fixed;
-        right: 12px;
-        top: 50%;
-        transform: translate(120%, -50%);
-        width: min(360px, calc(100vw - 24px));
-        z-index: 219;
+        position: absolute;
+        right: 0;
+        top: calc(100% + 10px);
+        transform: translateY(-8px);
+        width: min(360px, calc(100vw - 34px));
+        z-index: 35;
         border: 1px solid #dbe3ee;
         background: #ffffff;
         border-radius: 14px;
         padding: 14px;
         box-shadow: 0 18px 34px rgba(15, 23, 42, 0.15);
-        transition: transform 0.25s ease;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        opacity: 0;
+        pointer-events: none;
     }
 
     .bulk-delete-drawer.open {
-        transform: translate(0, -50%);
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
     }
 
     .bulk-delete-drawer strong {
@@ -391,16 +387,11 @@
         cursor: pointer;
     }
 
-    .bulk-delete-drawer-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, 0.14);
-        z-index: 218;
-        display: none;
-    }
-
-    .bulk-delete-drawer-overlay.open {
-        display: block;
+    @media (max-width: 768px) {
+        .bulk-delete-drawer {
+            right: -8px;
+            width: min(340px, calc(100vw - 24px));
+        }
     }
 
     .item-card .item-image {
@@ -2255,23 +2246,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 <button id="toggle-favorites-view" class="view-toggle-btn" title="Nur Merkliste anzeigen">
                     <span id="favorites-view-icon">🔖</span>
                 </button>
+                <div class="bulk-delete-inline-wrap">
+                    <button type="button" id="bulk-delete-drawer-toggle" class="view-toggle-btn bulk-delete-drawer-toggle" aria-expanded="false" title="Massenlöschung" onclick="toggleBulkDeleteDrawer()">
+                        <span class="drawer-icon">⚙</span>
+                    </button>
+                    <div id="bulk-delete-drawer" class="bulk-delete-drawer" aria-hidden="true">
+                        <strong>Massenlöschung nach Kriterien</strong>
+                        <div class="bulk-delete-summary" id="bulk-delete-summary">0 Elemente ausgewählt</div>
+                        <small>Filter zuerst setzen, dann alle sichtbaren Elemente markieren oder einzelne Karten per Checkbox auswählen.</small>
+                        <div class="bulk-delete-actions">
+                            <button type="button" onclick="selectVisibleItems()">Alle sichtbaren auswählen</button>
+                            <button type="button" onclick="clearBulkSelection()">Auswahl leeren</button>
+                            <button type="button" id="bulk-delete-button" class="danger" onclick="deleteSelectedItems()" disabled>Auswahl löschen</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </h1>
         <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
-        <button type="button" id="bulk-delete-drawer-toggle" class="bulk-delete-drawer-toggle" aria-expanded="false" onclick="toggleBulkDeleteDrawer()">
-            <span class="drawer-icon">⚙</span> Auswahl
-        </button>
-        <div id="bulk-delete-drawer-overlay" class="bulk-delete-drawer-overlay" onclick="setBulkDeleteDrawer(false)"></div>
-        <div id="bulk-delete-drawer" class="bulk-delete-drawer" aria-hidden="true">
-            <strong>Massenlöschung nach Kriterien</strong>
-            <div class="bulk-delete-summary" id="bulk-delete-summary">0 Elemente ausgewählt</div>
-            <small>Filter zuerst setzen, dann alle sichtbaren Elemente markieren oder einzelne Karten per Checkbox auswählen.</small>
-            <div class="bulk-delete-actions">
-                <button type="button" onclick="selectVisibleItems()">Alle sichtbaren auswählen</button>
-                <button type="button" onclick="clearBulkSelection()">Auswahl leeren</button>
-                <button type="button" id="bulk-delete-button" class="danger" onclick="deleteSelectedItems()" disabled>Auswahl löschen</button>
-            </div>
-        </div>
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
@@ -3002,18 +2994,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function setBulkDeleteDrawer(open) {
         bulkDeleteDrawerOpen = Boolean(open);
         const drawer = document.getElementById('bulk-delete-drawer');
-        const overlay = document.getElementById('bulk-delete-drawer-overlay');
         const toggle = document.getElementById('bulk-delete-drawer-toggle');
         if (drawer) {
             drawer.classList.toggle('open', bulkDeleteDrawerOpen);
             drawer.setAttribute('aria-hidden', bulkDeleteDrawerOpen ? 'false' : 'true');
         }
-        if (overlay) {
-            overlay.classList.toggle('open', bulkDeleteDrawerOpen);
-        }
         if (toggle) {
             toggle.setAttribute('aria-expanded', bulkDeleteDrawerOpen ? 'true' : 'false');
-            toggle.innerHTML = bulkDeleteDrawerOpen ? '<span class="drawer-icon">✕</span> Auswahl' : '<span class="drawer-icon">⚙</span> Auswahl';
+            toggle.innerHTML = bulkDeleteDrawerOpen ? '<span class="drawer-icon">✕</span>' : '<span class="drawer-icon">⚙</span>';
         }
     }
 
@@ -3079,6 +3067,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape' && bulkDeleteDrawerOpen) {
+            setBulkDeleteDrawer(false);
+        }
+    });
+
+    document.addEventListener('click', function(event) {
+        if (!bulkDeleteDrawerOpen) {
+            return;
+        }
+        const wrapper = document.querySelector('.bulk-delete-inline-wrap');
+        if (wrapper && !wrapper.contains(event.target)) {
             setBulkDeleteDrawer(false);
         }
     });
