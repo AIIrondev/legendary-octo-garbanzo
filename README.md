@@ -1,5 +1,7 @@
 # Inventarsystem
 
+[![https://github.com/AIIrondev/legendary-octo-garbanzo](https://github.com/AIIrondev/legendary-octo-garbanzo/actions/workflows/release-docker.yml/badge.svg)](https://github.com/AIIrondev/legendary-octo-garbanzo/actions/workflows/release-docker.yml)
+
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
 **Aktuelle Version: 3.2.1**
