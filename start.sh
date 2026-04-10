@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ENV_FILE="$SCRIPT_DIR/.docker-build.env"
-APP_IMAGE_REPO="ghcr.io/aiirondev/inventarsystem"
+APP_IMAGE_REPO="ghcr.io/aiirondev/legendary-octo-garbanzo"
 DIST_DIR="$SCRIPT_DIR/dist"
 
 SUDO=""
@@ -17,7 +17,7 @@ NUITKA_BUILD_VALUE="0"
 HTTP_PORT_VALUE="80"
 HTTPS_PORT_VALUE="443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
-APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/inventarsystem:latest}"
+APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 
 usage() {
     cat <<EOF
@@ -364,11 +364,12 @@ configure_nuitka_mode() {
 }
 
 resolve_app_image() {
-    local env_image="" release_tag=""
+    local env_image="" release_tag="" default_latest
+    default_latest="$APP_IMAGE_REPO:latest"
 
     if [ -f "$ENV_FILE" ]; then
         env_image="$(awk -F= '/^INVENTAR_APP_IMAGE=/{print $2}' "$ENV_FILE" | tail -n1 | tr -d ' ' || true)"
-        if [ -n "$env_image" ] && [ "$env_image" != "ghcr.io/aiirondev/inventarsystem:latest" ]; then
+        if [ -n "$env_image" ] && [ "$env_image" != "$default_latest" ]; then
             APP_IMAGE_VALUE="$env_image"
             return 0
         fi
@@ -379,7 +380,7 @@ resolve_app_image() {
     fi
 
     if [ -n "$release_tag" ]; then
-        APP_IMAGE_VALUE="ghcr.io/aiirondev/inventarsystem:$release_tag"
+        APP_IMAGE_VALUE="$APP_IMAGE_REPO:$release_tag"
         return 0
     fi
 

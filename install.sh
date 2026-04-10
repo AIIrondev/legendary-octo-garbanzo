@@ -21,6 +21,13 @@ LEGACY_SYSTEM_DIR=""
 LEGACY_BACKUP_ARCHIVE=""
 CLEANUP_OLD_SERVICES=true
 CLEANUP_OLD_REMOVE_CRON=false
+TMP_DIR=""
+
+cleanup_tmp_dir() {
+    if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+}
 
 need_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -263,10 +270,10 @@ main() {
     need_cmd python3
     need_cmd curl
 
-    local tmp_dir meta_file tag bundle_url image_url
-    tmp_dir="$(mktemp -d)"
-    meta_file="$tmp_dir/release.json"
-    trap 'rm -rf "$tmp_dir"' EXIT
+    local meta_file tag bundle_url image_url
+    TMP_DIR="$(mktemp -d)"
+    meta_file="$TMP_DIR/release.json"
+    trap cleanup_tmp_dir EXIT
 
     mapfile -t release_info < <(latest_tag_and_bundle_url "$meta_file")
     tag="${release_info[0]:-}"
@@ -282,16 +289,16 @@ main() {
     echo "Installing Inventarsystem release $tag into $PROJECT_DIR"
     sudo mkdir -p "$PROJECT_DIR"
 
-    curl -fL "$bundle_url" -o "$tmp_dir/$BUNDLE_ASSET"
-    sudo tar -xzf "$tmp_dir/$BUNDLE_ASSET" -C "$PROJECT_DIR"
+    curl -fL "$bundle_url" -o "$TMP_DIR/$BUNDLE_ASSET"
+    sudo tar -xzf "$TMP_DIR/$BUNDLE_ASSET" -C "$PROJECT_DIR"
 
     if [ -z "$image_url" ]; then
         echo "Error: release image asset is missing"
         exit 1
     fi
 
-    curl -fL "$image_url" -o "$tmp_dir/inventarsystem-image-$tag.tar.gz"
-    sudo docker load -i "$tmp_dir/inventarsystem-image-$tag.tar.gz" >/dev/null
+    curl -fL "$image_url" -o "$TMP_DIR/inventarsystem-image-$tag.tar.gz"
+    sudo docker load -i "$TMP_DIR/inventarsystem-image-$tag.tar.gz" >/dev/null
 
     if [ ! -f "$PROJECT_DIR/start.sh" ]; then
         echo "Error: release bundle is missing start.sh"
@@ -302,14 +309,14 @@ main() {
         exit 1
     fi
     if [ ! -f "$PROJECT_DIR/restart.sh" ]; then
-        cat > "$tmp_dir/restart.sh" <<'EOF'
+        cat > "$TMP_DIR/restart.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "$SCRIPT_DIR/stop.sh"
 "$SCRIPT_DIR/start.sh"
 EOF
-        sudo install -m 755 "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
+        sudo install -m 755 "$TMP_DIR/restart.sh" "$PROJECT_DIR/restart.sh"
     fi
 
     if [ ! -f "$PROJECT_DIR/cleanup-old.sh" ] && [ -f "$INSTALLER_DIR/cleanup-old.sh" ]; then
@@ -322,13 +329,13 @@ EOF
     echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
 
     if [ ! -f "$PROJECT_DIR/.docker-build.env" ]; then
-        cat > "$tmp_dir/.docker-build.env" <<EOF
+        cat > "$TMP_DIR/.docker-build.env" <<EOF
 NUITKA_BUILD=0
 INVENTAR_HTTP_PORT=80
 INVENTAR_HTTPS_PORT=443
 INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag
 EOF
-        sudo install -m 644 "$tmp_dir/.docker-build.env" "$PROJECT_DIR/.docker-build.env"
+        sudo install -m 644 "$TMP_DIR/.docker-build.env" "$PROJECT_DIR/.docker-build.env"
     elif sudo grep -q '^INVENTAR_APP_IMAGE=' "$PROJECT_DIR/.docker-build.env"; then
         sudo sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag|" "$PROJECT_DIR/.docker-build.env"
     else
@@ -338,7 +345,7 @@ EOF
     backup_legacy_database
 
     echo "Starting stack..."
-    sudo bash "$PROJECT_DIR/start.sh"
+    sudo env INVENTAR_APP_IMAGE="ghcr.io/aiirondev/legendary-octo-garbanzo:$tag" bash "$PROJECT_DIR/start.sh"
 
     restore_legacy_backup_into_docker
     cleanup_old_services
