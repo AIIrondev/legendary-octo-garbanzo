@@ -185,6 +185,62 @@ def _append_audit_event_standalone(event_type, payload):
             client.close()
 
 
+def _build_audit_review_markdown(verify_result, event_counts, audit_rows, generated_at=None):
+    """Build a detailed, downloadable markdown review for audit status and events."""
+    ts = generated_at or datetime.datetime.utcnow().isoformat() + 'Z'
+    lines = []
+    lines.append('# Audit Review Export')
+    lines.append('')
+    lines.append(f'- Generated at: {ts}')
+    lines.append(f"- Chain status: {'OK' if verify_result.get('ok') else 'ERROR'}")
+    lines.append(f"- Total entries: {verify_result.get('count', 0)}")
+    lines.append(f"- Last chain index: {verify_result.get('last_chain_index', 0)}")
+    lines.append(f"- Last hash: {verify_result.get('last_hash', '')}")
+    lines.append(f"- Mismatch count: {len(verify_result.get('mismatches', []) or [])}")
+    lines.append('')
+
+    lines.append('## Event Type Distribution')
+    lines.append('')
+    if event_counts:
+        for item in event_counts:
+            lines.append(f"- {item.get('event_type', 'unknown')}: {item.get('count', 0)}")
+    else:
+        lines.append('- No events available')
+    lines.append('')
+
+    mismatches = verify_result.get('mismatches', []) or []
+    lines.append('## Chain Mismatches')
+    lines.append('')
+    if mismatches:
+        for mismatch in mismatches:
+            lines.append(
+                f"- index={mismatch.get('chain_index')} | error={mismatch.get('error')} | expected={mismatch.get('expected')} | found={mismatch.get('found')}"
+            )
+    else:
+        lines.append('- None')
+    lines.append('')
+
+    lines.append('## Recent Events')
+    lines.append('')
+    for row in audit_rows:
+        lines.append(f"### Event #{row.get('chain_index')}")
+        lines.append(f"- Timestamp: {row.get('timestamp') or row.get('created_at')}")
+        lines.append(f"- Type: {row.get('event_type', '')}")
+        lines.append(f"- Actor: {row.get('actor', '')}")
+        lines.append(f"- Source: {row.get('source', '')}")
+        lines.append(f"- IP: {row.get('ip', '')}")
+        lines.append(f"- Entry hash: {row.get('entry_hash', '')}")
+        lines.append(f"- Prev hash: {row.get('prev_hash', '')}")
+        payload_json = json.dumps(row.get('payload', {}), ensure_ascii=False, sort_keys=True, indent=2, default=str)
+        lines.append('- Payload:')
+        lines.append('```json')
+        lines.append(payload_json)
+        lines.append('```')
+        lines.append('')
+
+    return '\n'.join(lines)
+
+
 def _parse_money_value(value):
     """Parse a user-facing money value into a float when possible."""
     if value is None:
@@ -5359,6 +5415,83 @@ def admin_audit_dashboard():
         app.logger.error(f"Error loading audit dashboard: {exc}")
         flash('Fehler beim Laden des Audit-Dashboards.', 'error')
         return redirect(url_for('home_admin'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/audit/export', methods=['GET'])
+def admin_audit_export():
+    """Export a detailed audit review in markdown or json format."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    fmt = (request.args.get('format') or 'md').strip().lower()
+    try:
+        limit = int((request.args.get('limit') or '1000').strip())
+    except Exception:
+        limit = 1000
+    limit = max(1, min(limit, 5000))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        verify_result = al.verify_audit_chain(db)
+
+        event_counts = list(
+            db['audit_log'].aggregate([
+                {'$group': {'_id': '$event_type', 'count': {'$sum': 1}}},
+                {'$project': {'_id': 0, 'event_type': {'$ifNull': ['$_id', 'unknown']}, 'count': 1}},
+                {'$sort': {'count': -1, 'event_type': 1}}
+            ])
+        )
+
+        audit_rows = list(
+            db['audit_log'].find(
+                {},
+                {
+                    'chain_index': 1,
+                    'event_type': 1,
+                    'actor': 1,
+                    'source': 1,
+                    'ip': 1,
+                    'timestamp': 1,
+                    'created_at': 1,
+                    'entry_hash': 1,
+                    'prev_hash': 1,
+                    'payload': 1,
+                }
+            ).sort('chain_index', -1).limit(limit)
+        )
+
+        generated_at = datetime.datetime.utcnow().isoformat() + 'Z'
+
+        if fmt == 'json':
+            export_payload = {
+                'generated_at': generated_at,
+                'verify_result': verify_result,
+                'event_counts': event_counts,
+                'events': audit_rows,
+            }
+            response = make_response(json.dumps(export_payload, ensure_ascii=False, indent=2, default=str))
+            response.headers['Content-Type'] = 'application/json; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=audit-review-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.json'
+            return response
+
+        markdown_content = _build_audit_review_markdown(
+            verify_result=verify_result,
+            event_counts=event_counts,
+            audit_rows=audit_rows,
+            generated_at=generated_at,
+        )
+        response = make_response(markdown_content)
+        response.headers['Content-Type'] = 'text/markdown; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename=audit-review-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.md'
+        return response
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
     finally:
         if client:
             client.close()

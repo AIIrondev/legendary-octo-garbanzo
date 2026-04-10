@@ -5,6 +5,11 @@
   <h1>Audit Dashboard</h1>
   <p>Integritätsstatus der Audit-Chain und letzte Audit-Ereignisse (max. 200 Einträge).</p>
 
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 18px;">
+    <a class="btn btn-primary" href="{{ url_for('admin_audit_export', format='md') }}">Audit Review exportieren (Markdown)</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin_audit_export', format='json') }}">Audit Review exportieren (JSON)</a>
+  </div>
+
   <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:16px 0 20px;">
     <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff;">
       <div style="font-size:0.85rem; color:#64748b;">Chain Status</div>
