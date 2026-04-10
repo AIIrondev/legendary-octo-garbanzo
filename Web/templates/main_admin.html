@@ -26,6 +26,57 @@
         font-weight: 600;
     }
 
+    .bulk-delete-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #f2c4c4;
+        background: #fff8f8;
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin: 0 0 18px;
+    }
+
+    .bulk-delete-toolbar strong {
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .bulk-delete-summary {
+        color: #7a4a4a;
+        font-size: 0.92rem;
+        margin-top: 4px;
+    }
+
+    .bulk-delete-toolbar small {
+        color: #7a4a4a;
+        display: block;
+        margin-top: 2px;
+    }
+
+    .bulk-delete-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .bulk-delete-actions button {
+        border: 1px solid #cfd8dc;
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: pointer;
+        background: #fff;
+        font-weight: 600;
+    }
+
+    .bulk-delete-actions .danger {
+        background: #dc3545;
+        color: #fff;
+        border-color: #c82333;
+    }
+
     /* Filter styles */
     .filter-container {
         display: flex;
@@ -237,6 +288,12 @@
         position: relative;
     }
 
+    .item-card.bulk-selected {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.18), 0 0 10px rgba(0, 0, 0, 0.1);
+        background: #fffdfd;
+    }
+
     .item-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
@@ -255,6 +312,31 @@
         position: relative;
         max-width: 300px;
         margin: 10px 0;
+    }
+
+    .bulk-delete-row {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        margin-bottom: 8px;
+        gap: 8px;
+    }
+
+    .bulk-delete-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9rem;
+        color: #6b1f1f;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .bulk-delete-toggle input {
+        width: 16px;
+        height: 16px;
+        accent-color: #dc3545;
+        cursor: pointer;
     }
 
     .item-card .item-image {
@@ -2112,6 +2194,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
             </div>
         </h1>
         <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
+        <div class="bulk-delete-toolbar">
+            <div>
+                <strong>Massenlöschung nach Kriterien</strong>
+                <div class="bulk-delete-summary" id="bulk-delete-summary">0 Elemente ausgewählt</div>
+                <small>Filter zuerst setzen, dann alle sichtbaren Elemente markieren oder einzelne Karten per Checkbox auswählen.</small>
+            </div>
+            <div class="bulk-delete-actions">
+                <button type="button" onclick="selectVisibleItems()">Alle sichtbaren auswählen</button>
+                <button type="button" onclick="clearBulkSelection()">Auswahl leeren</button>
+                <button type="button" id="bulk-delete-button" class="danger" onclick="deleteSelectedItems()" disabled>Auswahl löschen</button>
+            </div>
+        </div>
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
@@ -2492,6 +2586,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
     let allItems = []; // Cache for all items
+    let bulkDeleteSelection = new Set();
     const studentCardsModuleEnabled = {{ 'true' if student_cards_module_enabled else 'false' }};
     const studentDefaultBorrowDays = {{ student_default_borrow_days|default(14) }};
     const studentMaxBorrowDays = {{ student_max_borrow_days|default(365) }};
@@ -2822,6 +2917,109 @@ document.addEventListener('DOMContentLoaded', ()=>{
             filter3: []
         };
     }
+
+    function updateBulkDeleteSummary() {
+        const summary = document.getElementById('bulk-delete-summary');
+        const button = document.getElementById('bulk-delete-button');
+        const count = bulkDeleteSelection.size;
+
+        if (summary) {
+            summary.textContent = `${count} ${count === 1 ? 'Element' : 'Elemente'} ausgewählt`;
+        }
+        if (button) {
+            button.disabled = count === 0;
+            button.textContent = count === 0 ? 'Auswahl löschen' : `Auswahl löschen (${count})`;
+        }
+    }
+
+    function setBulkDeleteSelection(itemId, checked) {
+        const normalizedId = String(itemId || '').trim();
+        if (!normalizedId) {
+            return;
+        }
+
+        if (checked) {
+            bulkDeleteSelection.add(normalizedId);
+        } else {
+            bulkDeleteSelection.delete(normalizedId);
+        }
+
+        document.querySelectorAll(`.item-card[data-item-id='${normalizedId}']`).forEach(card => {
+            card.classList.toggle('bulk-selected', checked);
+            const checkbox = card.querySelector('.bulk-delete-checkbox');
+            if (checkbox && checkbox.checked !== checked) {
+                checkbox.checked = checked;
+            }
+        });
+
+        updateBulkDeleteSummary();
+    }
+
+    function selectVisibleItems() {
+        document.querySelectorAll('.item-card').forEach(card => {
+            if (card.style.display === 'none') {
+                return;
+            }
+            const itemId = String(card.dataset.itemId || '').trim();
+            if (!itemId) {
+                return;
+            }
+            bulkDeleteSelection.add(itemId);
+            card.classList.add('bulk-selected');
+            const checkbox = card.querySelector('.bulk-delete-checkbox');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+
+        updateBulkDeleteSummary();
+    }
+
+    function clearBulkSelection() {
+        bulkDeleteSelection.clear();
+        document.querySelectorAll('.item-card.bulk-selected').forEach(card => {
+            card.classList.remove('bulk-selected');
+            const checkbox = card.querySelector('.bulk-delete-checkbox');
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        });
+
+        updateBulkDeleteSummary();
+    }
+
+    function deleteSelectedItems() {
+        const selectedIds = [...bulkDeleteSelection];
+        if (selectedIds.length === 0) {
+            alert('Bitte zuerst mindestens ein Element auswählen.');
+            return;
+        }
+
+        if (!confirm(`Wirklich ${selectedIds.length} ausgewählte Elemente revisionssicher deaktivieren?`)) {
+            return;
+        }
+
+        fetch('{{ url_for('bulk_delete_items') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ item_ids: selectedIds })
+        })
+        .then(async response => {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Fehler beim Sammellöschen.');
+            }
+            clearBulkSelection();
+            alert(data.message || 'Auswahl gelöscht.');
+            loadItems();
+        })
+        .catch(error => {
+            alert(error.message || 'Fehler beim Sammellöschen.');
+        });
+    }
     
     // Load predefined filter values for dropdowns
     function loadPredefinedFilterValues(filterNumber) {
@@ -3148,6 +3346,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
+                                <div class="bulk-delete-row">
+                                    <label class="bulk-delete-toggle">
+                                        <input type="checkbox" class="bulk-delete-checkbox" data-item-id="${item._id}" ${bulkDeleteSelection.has(String(item._id)) ? 'checked' : ''} onchange="setBulkDeleteSelection('${item._id}', this.checked)">
+                                        Für Löschung markieren
+                                    </label>
+                                </div>
                                 ${isAvailableForBorrow && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                         ${isGroupedItem ? `
@@ -3225,6 +3429,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 
                 itemsContainer.scrollLeft = 0;
                 applyFilters();
+                updateBulkDeleteSummary();
                 
                 // Setup proper image display for all cards
                 setupCardImagesDisplay();

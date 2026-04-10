@@ -4148,6 +4148,79 @@ def duplicate_item():
         return jsonify({'success': False, 'message': 'Serverfehler beim Duplizieren'}), 500
 
 
+def _soft_delete_item_groups(db, root_item_ids, username):
+    """Soft-delete one or more item groups and their borrow records."""
+    now = datetime.datetime.now()
+    unique_group_item_ids = []
+    seen_ids = set()
+
+    for root_item_id in root_item_ids:
+        for group_item_id in it.get_group_item_ids(root_item_id):
+            if group_item_id not in seen_ids:
+                seen_ids.add(group_item_id)
+                unique_group_item_ids.append(group_item_id)
+
+    if not unique_group_item_ids:
+        return {
+            'success': False,
+            'message': 'Element nicht gefunden.',
+            'soft_deleted_items': 0,
+            'soft_deleted_borrows': 0,
+            'group_item_ids': [],
+        }
+
+    delete_success = True
+    soft_deleted_items = 0
+
+    for group_item_id in unique_group_item_ids:
+        result = db['items'].update_one(
+            {'_id': ObjectId(group_item_id), 'Deleted': {'$ne': True}},
+            {'$set': {
+                'Deleted': True,
+                'DeletedAt': now,
+                'DeletedBy': username,
+                'LastUpdated': now,
+                'Verfuegbar': False,
+            }}
+        )
+        if result.modified_count > 0:
+            soft_deleted_items += 1
+        elif result.matched_count == 0:
+            delete_success = False
+
+    borrow_result = db['ausleihungen'].update_many(
+        {
+            'Item': {'$in': unique_group_item_ids},
+            'Status': {'$ne': 'deleted'}
+        },
+        {'$set': {
+            'Status': 'deleted',
+            'DeletedAt': now,
+            'DeletedBy': username,
+            'LastUpdated': now,
+        }}
+    )
+
+    _append_audit_event(
+        db,
+        'inventory_item_soft_deleted',
+        {
+            'root_item_ids': root_item_ids,
+            'group_item_ids': unique_group_item_ids,
+            'soft_deleted_items': soft_deleted_items,
+            'soft_deleted_borrow_records': borrow_result.modified_count,
+        }
+    )
+
+    return {
+        'success': delete_success,
+        'soft_deleted_items': soft_deleted_items,
+        'soft_deleted_borrows': borrow_result.modified_count,
+        'group_item_ids': unique_group_item_ids,
+        'message': 'OK' if delete_success else 'Fehler beim revisionssicheren Deaktivieren des Elements.',
+    }
+
+
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
 def delete_item(id):
     """
@@ -4182,57 +4255,14 @@ def delete_item(id):
         flash('Element nicht gefunden.', 'error')
         return redirect(url_for('home_admin'))
 
-    # GoBD hardening: keep files and records immutable, use soft-delete markers only.
-    delete_success = True
-    soft_deleted_items = 0
-    soft_deleted_borrows = 0
-    now = datetime.datetime.now()
-
     client = None
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-
-        for group_item_id in group_item_ids:
-            result = db['items'].update_one(
-                {'_id': ObjectId(group_item_id), 'Deleted': {'$ne': True}},
-                {'$set': {
-                    'Deleted': True,
-                    'DeletedAt': now,
-                    'DeletedBy': session.get('username', ''),
-                    'LastUpdated': now,
-                    'Verfuegbar': False,
-                }}
-            )
-            if result.modified_count > 0:
-                soft_deleted_items += 1
-            elif result.matched_count == 0:
-                delete_success = False
-
-        borrow_result = db['ausleihungen'].update_many(
-            {
-                'Item': {'$in': group_item_ids},
-                'Status': {'$ne': 'deleted'}
-            },
-            {'$set': {
-                'Status': 'deleted',
-                'DeletedAt': now,
-                'DeletedBy': session.get('username', ''),
-                'LastUpdated': now,
-            }}
-        )
-        soft_deleted_borrows = borrow_result.modified_count
-
-        _append_audit_event(
-            db,
-            'inventory_item_soft_deleted',
-            {
-                'root_item_id': id,
-                'group_item_ids': group_item_ids,
-                'soft_deleted_items': soft_deleted_items,
-                'soft_deleted_borrow_records': soft_deleted_borrows,
-            }
-        )
+        delete_result = _soft_delete_item_groups(db, [id], session.get('username', ''))
+        delete_success = bool(delete_result.get('success'))
+        soft_deleted_items = int(delete_result.get('soft_deleted_items', 0))
+        soft_deleted_borrows = int(delete_result.get('soft_deleted_borrows', 0))
     except Exception as e:
         app.logger.error(f"Error during soft-delete for item group {id}: {str(e)}")
         delete_success = False
@@ -4246,6 +4276,52 @@ def delete_item(id):
         flash('Fehler beim revisionssicheren Deaktivieren des Elements.', 'error')
         
     return redirect(url_for('home_admin'))
+
+
+@app.route('/bulk_delete_items', methods=['POST'])
+def bulk_delete_items():
+    """Soft-delete multiple selected item groups in one request."""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'success': False, 'message': 'Administratorrechte erforderlich'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    item_ids = payload.get('item_ids') or request.form.getlist('item_ids')
+    if isinstance(item_ids, str):
+        item_ids = [item_ids]
+    item_ids = [str(item_id).strip() for item_id in item_ids if str(item_id).strip()]
+
+    if not item_ids:
+        return jsonify({'success': False, 'message': 'Keine Elemente ausgewählt.'}), 400
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+
+        result = _soft_delete_item_groups(db, item_ids, session.get('username', ''))
+        if not result.get('success'):
+            return jsonify({
+                'success': False,
+                'message': result.get('message', 'Fehler beim Löschen.'),
+                'deleted_items': result.get('soft_deleted_items', 0),
+                'deleted_borrows': result.get('soft_deleted_borrows', 0),
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'message': f"{result.get('soft_deleted_items', 0)} Elemente revisionssicher deaktiviert.",
+            'deleted_items': result.get('soft_deleted_items', 0),
+            'deleted_borrows': result.get('soft_deleted_borrows', 0),
+            'group_item_ids': result.get('group_item_ids', []),
+        })
+    except Exception as e:
+        app.logger.error(f"Error during bulk delete: {str(e)}")
+        return jsonify({'success': False, 'message': 'Fehler beim Sammellöschen.'}), 500
+    finally:
+        if client:
+            client.close()
 
 
 @app.route('/edit_item/<id>', methods=['POST'])
