@@ -234,8 +234,24 @@ load_release_image() {
     log_message "Loading app image from release asset $image_asset"
     curl -fL "$image_url" -o "$archive"
     docker load -i "$archive" >> "$LOG_FILE" 2>&1
+    docker tag "$APP_IMAGE_REPO:$tag" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
 
     trap - RETURN
+}
+
+refresh_runtime_scripts_from_main() {
+    local start_url stop_url restart_url update_url
+    start_url="https://raw.githubusercontent.com/$REPO_SLUG/main/start.sh"
+    stop_url="https://raw.githubusercontent.com/$REPO_SLUG/main/stop.sh"
+    restart_url="https://raw.githubusercontent.com/$REPO_SLUG/main/restart.sh"
+    update_url="https://raw.githubusercontent.com/$REPO_SLUG/main/update.sh"
+
+    curl -fsSL "$start_url" -o "$PROJECT_DIR/start.sh" || log_message "WARNING: Could not refresh start.sh from main"
+    curl -fsSL "$stop_url" -o "$PROJECT_DIR/stop.sh" || log_message "WARNING: Could not refresh stop.sh from main"
+    curl -fsSL "$restart_url" -o "$PROJECT_DIR/restart.sh" || log_message "WARNING: Could not refresh restart.sh from main"
+    curl -fsSL "$update_url" -o "$PROJECT_DIR/update.sh" || log_message "WARNING: Could not refresh update.sh from main"
+
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh"
 }
 
 find_local_dist_image_archive() {
@@ -277,6 +293,7 @@ load_local_dist_image() {
 
     log_message "Loading app image from local dist artifact: $archive"
     if docker load -i "$archive" >> "$LOG_FILE" 2>&1; then
+        docker tag "$APP_IMAGE_REPO:$tag" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
         return 0
     fi
 
@@ -342,6 +359,7 @@ EOF
 
     docker compose --env-file "$ENV_FILE" pull nginx mongodb >> "$LOG_FILE" 2>&1
     docker compose --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
+    docker tag "$app_image" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
 }
 
 verify_stack_health() {
@@ -460,6 +478,7 @@ main() {
 
     log_message "Updating from release $latest_tag"
     download_and_extract_bundle "$bundle_url" "$tmp_dir"
+    refresh_runtime_scripts_from_main
     deploy "$latest_tag" "$meta_file"
     if ! verify_stack_health; then
         log_message "ERROR: Updated stack failed health check"
