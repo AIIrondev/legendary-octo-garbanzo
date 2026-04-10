@@ -1,0 +1,239 @@
+name: https://github.com/AIIrondev/legendary-octo-garbanzo
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type (major stays fixed from latest release)"
+        required: false
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release-docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUMP_TYPE: ${{ github.event.inputs.bump || 'patch' }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$REF_NAME" ]; then
+            TAG="$REF_NAME"
+          else
+            TAG="$(python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.request
+
+          repo = os.environ["REPO"]
+          token = os.environ.get("GH_TOKEN", "")
+          bump = os.environ.get("BUMP_TYPE", "patch").strip().lower()
+
+          req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/releases/latest",
+            headers={
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "legendary-octo-garbanzo-release-workflow",
+            },
+          )
+
+          latest_tag = "v3.0.0"
+          try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+              data = json.loads(resp.read().decode("utf-8"))
+              latest_tag = (data.get("tag_name") or latest_tag).strip()
+          except Exception:
+            pass
+
+          m = re.match(r"^v(\d+)\.(\d+)\.(\d+)$", latest_tag)
+          if not m:
+            major, minor, patch = 3, 0, 0
+          else:
+            major, minor, patch = map(int, m.groups())
+
+          # Keep major fixed from latest release; only bump minor/patch.
+          if bump == "minor":
+            minor += 1
+            patch = 0
+          else:
+            patch += 1
+
+          print(f"v{major}.{minor}.{patch}")
+          PY
+          )"
+          fi
+
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: tag '$TAG' is not valid semver (vX.Y.Z)"
+            exit 1
+          fi
+
+          git fetch --tags --force
+          LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v3.0.0"
+          fi
+
+          TAG_MAJOR="${TAG#v}"
+          TAG_MAJOR="${TAG_MAJOR%%.*}"
+          LATEST_MAJOR="$(echo "$LATEST_TAG" | grep -Eo '^v[0-9]+' | tr -d 'v')"
+          if [ -z "$LATEST_MAJOR" ]; then
+            LATEST_MAJOR="3"
+          fi
+
+          if [ "$TAG_MAJOR" != "$LATEST_MAJOR" ]; then
+            echo "Error: major version must stay v$LATEST_MAJOR.x.x (got $TAG)"
+            exit 1
+          fi
+
+          while git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; do
+            BASE="${TAG%.*}"
+            PATCH="${TAG##*.}"
+            PATCH="$((PATCH + 1))"
+            TAG="$BASE.$PATCH"
+          done
+
+          IMAGE="ghcr.io/aiirondev/legendary-octo-garbanzo:${TAG}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag for manual releases
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push release image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ghcr.io/aiirondev/legendary-octo-garbanzo:latest
+
+      - name: Build local image tar for offline deploy
+        run: |
+          docker pull "${{ steps.meta.outputs.image }}"
+          docker save "${{ steps.meta.outputs.image }}" | gzip > "inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz"
+
+      - name: Create release-only docker bundle
+        run: |
+          mkdir -p release-bundle
+          mkdir -p release-bundle/docker/nginx
+          cat > release-bundle/docker-compose.yml <<EOF
+          services:
+            nginx:
+              image: nginx:1.27-alpine
+              container_name: inventarsystem-nginx
+              restart: unless-stopped
+              depends_on:
+                - app
+              ports:
+                - "${INVENTAR_HTTP_PORT:-80}:80"
+                - "${INVENTAR_HTTPS_PORT:-443}:443"
+              volumes:
+                - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+                - ./certs:/etc/nginx/certs:ro
+
+            mongodb:
+              image: mongo:7.0
+              container_name: inventarsystem-mongodb
+              restart: unless-stopped
+              volumes:
+                - mongodb_data:/data/db
+              healthcheck:
+                test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+                interval: 10s
+                timeout: 5s
+                retries: 10
+
+            app:
+              image: ${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/legendary-octo-garbanzo:latest}
+              pull_policy: never
+              container_name: inventarsystem-app
+              restart: unless-stopped
+              depends_on:
+                mongodb:
+                  condition: service_healthy
+              environment:
+                INVENTAR_MONGODB_HOST: mongodb
+                INVENTAR_MONGODB_PORT: "27017"
+                INVENTAR_MONGODB_DB: Inventarsystem
+                INVENTAR_BACKUP_FOLDER: /data/backups
+                INVENTAR_LOGS_FOLDER: /data/logs
+              expose:
+                - "8000"
+              volumes:
+                - app_uploads:/app/Web/uploads
+                - app_thumbnails:/app/Web/thumbnails
+                - app_previews:/app/Web/previews
+                - app_qrcodes:/app/Web/QRCodes
+                - app_backups:/data/backups
+                - app_logs:/data/logs
+
+          volumes:
+            mongodb_data:
+            app_uploads:
+            app_thumbnails:
+            app_previews:
+            app_qrcodes:
+            app_backups:
+            app_logs:
+          EOF
+
+          cp docker/nginx/default.conf release-bundle/docker/nginx/default.conf
+          cp start.sh release-bundle/start.sh
+          cp stop.sh release-bundle/stop.sh
+          cp restart.sh release-bundle/restart.sh
+          cp backup-docker.sh release-bundle/backup-docker.sh
+          cp update.sh release-bundle/update.sh
+          cp init-admin.sh release-bundle/init-admin.sh
+
+          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup-docker.sh release-bundle/update.sh release-bundle/init-admin.sh
+          tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          files: |
+            inventarsystem-docker-bundle.tar.gz
+            inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz
+          fail_on_unmatched_files: true
+          generate_release_notes: true
