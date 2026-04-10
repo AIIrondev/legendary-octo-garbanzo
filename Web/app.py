@@ -92,6 +92,25 @@ SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
+RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
+
+
+def _get_asset_version():
+    """Return a cache-busting asset version tied to deployment state."""
+    env_version = os.getenv('INVENTAR_ASSET_VERSION', '').strip()
+    if env_version:
+        return env_version
+
+    try:
+        if os.path.exists(RELEASE_STATE_FILE):
+            with open(RELEASE_STATE_FILE, 'r', encoding='utf-8') as f:
+                release_tag = f.read().strip()
+                if release_tag:
+                    return release_tag
+    except Exception:
+        pass
+
+    return APP_VERSION
 
 
 def _parse_money_value(value):
@@ -293,6 +312,7 @@ def _prepare_invoice_pdf_payload(invoice_data, borrow_doc=None, item_doc=None):
 def inject_version():
     """Inject global template variables."""
     is_admin = False
+    asset_version = _get_asset_version()
     if 'username' in session:
         try:
             is_admin = us.check_admin(session['username'])
@@ -300,6 +320,7 @@ def inject_version():
             is_admin = False
     return {
         'APP_VERSION': APP_VERSION,
+        'ASSET_VERSION': asset_version,
         'school_periods': SCHOOL_PERIODS,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
         'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
