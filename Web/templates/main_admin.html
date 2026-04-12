@@ -3261,6 +3261,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let mainAdminItemsLoadingMore = false;
     let mainAdminItemsObserver = null;
     let mainAdminItemsSentinel = null;
+    let mainAdminItemsScrollPrefetchBound = false;
+
+    function maybePrefetchMainAdminItems() {
+        const itemsContainer = document.querySelector('#items-container');
+        if (!itemsContainer || !mainAdminItemsHasMore || mainAdminItemsLoadingMore) {
+            return;
+        }
+
+        const distanceToEnd = itemsContainer.scrollWidth - (itemsContainer.scrollLeft + itemsContainer.clientWidth);
+        const prefetchThreshold = Math.max(260, itemsContainer.clientWidth * 1.4);
+        if (distanceToEnd > prefetchThreshold) {
+            return;
+        }
+
+        mainAdminItemsLoadingMore = true;
+        loadItems(mainAdminItemsNextOffset, true).finally(() => {
+            mainAdminItemsLoadingMore = false;
+        });
+    }
 
     function loadItems(offset = 0, append = false) {
         return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}`)
@@ -3564,6 +3583,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 mainAdminItemsNextOffset = (data.offset || offset) + (data.count || pageItems.length);
                 mainAdminItemsHasMore = Boolean(data.has_more);
                 setupMainAdminItemsLazyLoading();
+                maybePrefetchMainAdminItems();
             })
             .catch(error => {
                 console.error('Error fetching items:', error);
@@ -3607,6 +3627,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
             mainAdminItemsObserver = null;
         }
 
+        if (!mainAdminItemsScrollPrefetchBound) {
+            itemsContainer.addEventListener('scroll', maybePrefetchMainAdminItems, { passive: true });
+            mainAdminItemsScrollPrefetchBound = true;
+        }
+
         if (!mainAdminItemsHasMore) return;
 
         mainAdminItemsObserver = new IntersectionObserver(entries => {
@@ -3625,7 +3650,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }, {
             root: itemsContainer,
             threshold: 0.15,
-            rootMargin: '0px 220px 0px 0px'
+            rootMargin: '0px 900px 0px 0px'
         });
 
         mainAdminItemsObserver.observe(mainAdminItemsSentinel);

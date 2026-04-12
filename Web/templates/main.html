@@ -730,6 +730,25 @@
     let mainItemsLoadingMore = false;
     let mainItemsObserver = null;
     let mainItemsSentinel = null;
+    let mainItemsScrollPrefetchBound = false;
+
+    function maybePrefetchMainItems() {
+        const itemsContainer = document.querySelector('#items-container');
+        if (!itemsContainer || !mainItemsHasMore || mainItemsLoadingMore) {
+            return;
+        }
+
+        const distanceToEnd = itemsContainer.scrollWidth - (itemsContainer.scrollLeft + itemsContainer.clientWidth);
+        const prefetchThreshold = Math.max(260, itemsContainer.clientWidth * 1.4);
+        if (distanceToEnd > prefetchThreshold) {
+            return;
+        }
+
+        mainItemsLoadingMore = true;
+        loadItems(mainItemsNextOffset, true).finally(() => {
+            mainItemsLoadingMore = false;
+        });
+    }
 
     function loadItems(offset = 0, append = false) {
         return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ITEMS_PAGE_SIZE}`)
@@ -1036,6 +1055,7 @@
                 mainItemsNextOffset = (data.offset || offset) + (data.count || pageItems.length);
                 mainItemsHasMore = Boolean(data.has_more);
                 setupMainItemsLazyLoading();
+                maybePrefetchMainItems();
             })
             .catch(error => {
                 console.error('Error fetching items:', error);
@@ -1080,6 +1100,11 @@
             mainItemsObserver = null;
         }
 
+        if (!mainItemsScrollPrefetchBound) {
+            itemsContainer.addEventListener('scroll', maybePrefetchMainItems, { passive: true });
+            mainItemsScrollPrefetchBound = true;
+        }
+
         if (!mainItemsHasMore) return;
 
         mainItemsObserver = new IntersectionObserver(entries => {
@@ -1098,7 +1123,7 @@
         }, {
             root: itemsContainer,
             threshold: 0.15,
-            rootMargin: '0px 220px 0px 0px'
+            rootMargin: '0px 900px 0px 0px'
         });
 
         mainItemsObserver.observe(mainItemsSentinel);
