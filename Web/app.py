@@ -2282,7 +2282,7 @@ def library_admin():
 @app.route('/student_cards_admin', methods=['GET', 'POST'])
 def student_cards_admin():
     """
-    Admin page for managing student library cards (Schülerausweise).
+    Admin page for managing student library cards (Bibliotheksausweis).
     Only accessible by admins and only when the student cards module is enabled.
     """
     if 'username' not in session:
@@ -2410,7 +2410,7 @@ def student_cards_admin():
 @app.route('/student_cards_print', methods=['GET'])
 def student_cards_print():
     """
-    Generate a printable template for all student library cards (Schülerausweise).
+    Generate a printable template for all student library cards (Bibliotheksausweis).
     Only accessible by admins and only when the student cards module is enabled.
     """
     if 'username' not in session:

@@ -8,7 +8,7 @@
 -->
 {% extends "base.html" %}
 
-{% block title %}Schülerausweise - Inventarsystem{% endblock %}
+{% block title %}Bibliotheksausweise - Inventarsystem{% endblock %}
 
 {% block content %}
 <style>
@@ -229,7 +229,7 @@
 <div class="container">
     <div class="student-card-header">
         <div>
-            <h1>📚 Schülerausweise (Bibliotek)</h1>
+            <h1>📚 Bibliotheksausweise (Bibliotek)</h1>
         </div>
         <div class="export-buttons">
             <a href="{{ url_for('student_card_barcode_download') }}" class="btn-print" style="background: #28a745;">📥 Alle Ausweise (PDF)</a>
@@ -342,7 +342,7 @@
             </table>
         {% else %}
             <div class="empty-state">
-                <p>Keine Schülerausweise registriert.</p>
+                <p>Keine Bibliotheksausweise registriert.</p>
                 <p>Fügen Sie ein neues Ausweis oben hinzu.</p>
             </div>
         {% endif %}
