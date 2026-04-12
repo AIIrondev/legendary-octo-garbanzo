@@ -33,7 +33,6 @@ import ausleihung as au
 import audit_log as al
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-from pymongo import MongoClient
 from bson.objectid import ObjectId
 from urllib.parse import urlparse, urlunparse
 import requests
@@ -59,6 +58,7 @@ import subprocess
 # Set base directory and centralized settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 import settings as cfg
+from settings import MongoClient
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder

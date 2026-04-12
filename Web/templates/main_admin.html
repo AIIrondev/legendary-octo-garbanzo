@@ -3256,9 +3256,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     // Function to load items from server
     const MAIN_ADMIN_ITEMS_PAGE_SIZE = 120;
+    let mainAdminItemsNextOffset = 0;
+    let mainAdminItemsHasMore = false;
+    let mainAdminItemsLoadingMore = false;
+    let mainAdminItemsObserver = null;
+    let mainAdminItemsSentinel = null;
 
     function loadItems(offset = 0, append = false) {
-        fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}`)
+        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}`)
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
@@ -3556,15 +3561,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
                 /* favorites render count removed */
 
-                if (data.has_more) {
-                    const nextOffset = (data.offset || offset) + (data.count || pageItems.length);
-                    const continueLoad = () => loadItems(nextOffset, true);
-                    if ('requestIdleCallback' in window) {
-                        requestIdleCallback(continueLoad, { timeout: 250 });
-                    } else {
-                        setTimeout(continueLoad, 0);
-                    }
-                }
+                mainAdminItemsNextOffset = (data.offset || offset) + (data.count || pageItems.length);
+                mainAdminItemsHasMore = Boolean(data.has_more);
+                setupMainAdminItemsLazyLoading();
             })
             .catch(error => {
                 console.error('Error fetching items:', error);
@@ -3579,6 +3578,57 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     itemsIndicator.textContent = 'Objekte im System: 0';
                 }
             });
+    }
+
+    function ensureMainAdminItemsSentinel() {
+        const itemsContainer = document.querySelector('#items-container');
+        if (!itemsContainer) return null;
+
+        if (!mainAdminItemsSentinel) {
+            mainAdminItemsSentinel = document.createElement('div');
+            mainAdminItemsSentinel.id = 'main-admin-items-sentinel';
+            mainAdminItemsSentinel.style.flex = '0 0 1px';
+            mainAdminItemsSentinel.style.width = '1px';
+            mainAdminItemsSentinel.style.minWidth = '1px';
+            mainAdminItemsSentinel.style.height = '1px';
+            mainAdminItemsSentinel.style.pointerEvents = 'none';
+        }
+
+        itemsContainer.appendChild(mainAdminItemsSentinel);
+        return itemsContainer;
+    }
+
+    function setupMainAdminItemsLazyLoading() {
+        const itemsContainer = ensureMainAdminItemsSentinel();
+        if (!itemsContainer) return;
+
+        if (mainAdminItemsObserver) {
+            mainAdminItemsObserver.disconnect();
+            mainAdminItemsObserver = null;
+        }
+
+        if (!mainAdminItemsHasMore) return;
+
+        mainAdminItemsObserver = new IntersectionObserver(entries => {
+            if (!entries.some(entry => entry.isIntersecting)) {
+                return;
+            }
+
+            if (mainAdminItemsLoadingMore || !mainAdminItemsHasMore) {
+                return;
+            }
+
+            mainAdminItemsLoadingMore = true;
+            loadItems(mainAdminItemsNextOffset, true).finally(() => {
+                mainAdminItemsLoadingMore = false;
+            });
+        }, {
+            root: itemsContainer,
+            threshold: 0.15,
+            rootMargin: '0px 220px 0px 0px'
+        });
+
+        mainAdminItemsObserver.observe(mainAdminItemsSentinel);
     }
 
     function searchByCode() {

@@ -10,10 +10,10 @@ Provides methods for creating, validating, and retrieving user information.
    Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
    For commercial licensing inquiries: https://github.com/AIIrondev
 '''
-from pymongo import MongoClient
 import hashlib
 from bson.objectid import ObjectId
 import settings as cfg
+from settings import MongoClient
 
 
 def normalize_student_card_id(card_id):

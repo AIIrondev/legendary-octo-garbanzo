@@ -12,6 +12,9 @@ defaults for the web application and helper modules.
 """
 import os
 import json
+from functools import lru_cache
+
+from pymongo import MongoClient as _PyMongoClient
 
 # Base directory of this Web package
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -173,3 +176,21 @@ if not os.path.isabs(BACKUP_FOLDER):
     BACKUP_FOLDER = os.path.join(PROJECT_ROOT, BACKUP_FOLDER)
 if not os.path.isabs(LOGS_FOLDER):
     LOGS_FOLDER = os.path.join(PROJECT_ROOT, LOGS_FOLDER)
+
+
+@lru_cache(maxsize=1)
+def _shared_mongo_client():
+    return _PyMongoClient(
+        MONGODB_HOST,
+        MONGODB_PORT,
+        maxPoolSize=10,
+        minPoolSize=0,
+        connectTimeoutMS=5000,
+        serverSelectionTimeoutMS=5000,
+        retryWrites=True,
+    )
+
+
+def MongoClient(*args, **kwargs):
+    """Return a shared MongoDB client configured from this settings module."""
+    return _shared_mongo_client()

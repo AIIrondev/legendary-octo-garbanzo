@@ -26,10 +26,10 @@ Collection Structure:
    Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
    For commercial licensing inquiries: https://github.com/AIIrondev
 '''
-from pymongo import MongoClient
 from bson.objectid import ObjectId
 import datetime
 import settings as cfg
+from settings import MongoClient
 
 
 LIBRARY_ITEM_TYPES = ('book', 'cd', 'dvd', 'media')

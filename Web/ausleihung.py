@@ -25,7 +25,6 @@ Sammlungsstruktur:
    Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
    For commercial licensing inquiries: https://github.com/AIIrondev
 '''
-from pymongo import MongoClient
 from bson.objectid import ObjectId
 import datetime
 import pytz
@@ -34,6 +33,7 @@ import os
 import json
 import shutil
 import settings as cfg
+from settings import MongoClient
 
 # Add this helper function after imports
 def ensure_timezone_aware(dt):
