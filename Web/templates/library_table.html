@@ -290,6 +290,20 @@
         color: #666;
     }
 
+    .library-load-row {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .library-load-hint {
+        font-size: 0.9em;
+        color: #6b7280;
+    }
+
     /* Modal styles */
     .modal {
         display: none;
@@ -501,6 +515,10 @@
                 <!-- Items will be loaded here -->
             </tbody>
         </table>
+        <div id="loadMoreRow" class="library-load-row" style="display:none;">
+            <span id="loadInfo" class="library-load-hint"></span>
+            <button id="loadMoreBtn" class="button" type="button">Mehr laden</button>
+        </div>
     </div>
 
     <!-- Empty state -->
@@ -523,6 +541,24 @@
     // State
     let libraryItems = [];
     let filteredItems = [];
+    let visibleItems = [];
+    let currentSearchTerm = '';
+    let activeFilters = {
+        author: '',
+        isbn: '',
+        type: '',
+        status: ''
+    };
+    let pagingState = {
+        offset: 0,
+        total: 0,
+        hasMore: true,
+        loading: false
+    };
+    const API_PAGE_SIZE = 120;
+    const INITIAL_RENDER_COUNT = 120;
+    const RENDER_BATCH_COUNT = 120;
+    let renderedCount = INITIAL_RENDER_COUNT;
     let filterPanelOpen = false;
     let scannerInstance = null;
     let scannerRunning = false;
@@ -531,32 +567,124 @@
     let lastScanAt = 0;
     const canEditLibraryItems = (document.getElementById('libraryTableContainer')?.dataset.canEdit === '1');
 
-    // Load items
+    async function fetchLibraryPage(offset, limit) {
+        const response = await fetch(`/api/library_items?offset=${offset}&limit=${limit}`);
+        if (!response.ok) {
+            throw new Error('Failed to load library items');
+        }
+        return response.json();
+    }
+
+    // Load items progressively: first page immediately, rest in background
     async function loadLibraryItems() {
+        if (pagingState.loading) return;
+        pagingState.loading = true;
         try {
-            const response = await fetch('/api/library_items');
-            if (!response.ok) throw new Error('Failed to load library items');
-            libraryItems = await response.json();
-            displayItems(libraryItems);
+            const firstPage = await fetchLibraryPage(0, API_PAGE_SIZE);
+            libraryItems = firstPage.items || [];
+            pagingState.offset = (firstPage.offset || 0) + (firstPage.count || libraryItems.length);
+            pagingState.total = firstPage.total || libraryItems.length;
+            pagingState.hasMore = Boolean(firstPage.has_more);
+
+            applyFiltersAndSearch(true);
+
+            if (pagingState.hasMore) {
+                loadRemainingLibraryItemsInBackground();
+            }
         } catch (error) {
             console.error('Error loading library items:', error);
             document.getElementById('itemsTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Fehler beim Laden der Bibliothekselemente.</td></tr>';
+        } finally {
+            pagingState.loading = false;
         }
     }
 
-    // Display items in table
-    function displayItems(items) {
+    async function loadRemainingLibraryItemsInBackground() {
+        while (pagingState.hasMore) {
+            try {
+                const page = await fetchLibraryPage(pagingState.offset, API_PAGE_SIZE);
+                const nextItems = page.items || [];
+                if (nextItems.length === 0) {
+                    pagingState.hasMore = false;
+                    break;
+                }
+
+                libraryItems = libraryItems.concat(nextItems);
+                pagingState.offset = (page.offset || pagingState.offset) + (page.count || nextItems.length);
+                pagingState.total = page.total || pagingState.total;
+                pagingState.hasMore = Boolean(page.has_more);
+
+                // Keep the current view reactive while avoiding a full rerender burst.
+                applyFiltersAndSearch(false);
+
+                if ('requestIdleCallback' in window) {
+                    await new Promise(resolve => requestIdleCallback(() => resolve(), { timeout: 250 }));
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            } catch (error) {
+                console.error('Error loading additional library items:', error);
+                break;
+            }
+        }
+    }
+
+    function filterItems(items) {
+        const author = activeFilters.author;
+        const isbn = activeFilters.isbn;
+        const type = activeFilters.type;
+        const status = activeFilters.status;
+
+        return items.filter(item => {
+            const authorMatch = !author || (item.Autor || item.Author || '').toLowerCase().includes(author);
+            const isbnMatch = !isbn || (item.ISBN || item.Code_4 || item.Code4 || '').toLowerCase().includes(isbn);
+            const typeMatch = !type || (item.ItemType || 'book') === type;
+            const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+            const statusMatch = !status || statusKey === status;
+            return authorMatch && isbnMatch && typeMatch && statusMatch;
+        });
+    }
+
+    function applySearch(items) {
+        if (!currentSearchTerm) return items;
+        return items.filter(item =>
+            (item.Name || '').toLowerCase().includes(currentSearchTerm) ||
+            (item.Autor || item.Author || '').toLowerCase().includes(currentSearchTerm) ||
+            (item.ISBN || item.Code_4 || item.Code4 || '').toLowerCase().includes(currentSearchTerm)
+        );
+    }
+
+    function applyFiltersAndSearch(resetRenderCount) {
+        const filteredByPanel = filterItems(libraryItems);
+        filteredItems = applySearch(filteredByPanel);
+        if (resetRenderCount) {
+            renderedCount = Math.min(INITIAL_RENDER_COUNT, filteredItems.length);
+        } else {
+            renderedCount = Math.min(Math.max(renderedCount, INITIAL_RENDER_COUNT), filteredItems.length || INITIAL_RENDER_COUNT);
+        }
+        visibleItems = filteredItems;
+        renderItems();
+    }
+
+    // Display current view with incremental rendering
+    function renderItems() {
         const tbody = document.getElementById('itemsTableBody');
         const emptyState = document.getElementById('emptyState');
+        const loadMoreRow = document.getElementById('loadMoreRow');
+        const loadInfo = document.getElementById('loadInfo');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
 
-        if (items.length === 0) {
+        if (visibleItems.length === 0) {
             tbody.innerHTML = '';
             emptyState.style.display = 'block';
+            loadMoreRow.style.display = 'none';
             return;
         }
 
         emptyState.style.display = 'none';
-        tbody.innerHTML = items.map(item => `
+        const rowsToRender = visibleItems.slice(0, renderedCount);
+
+        tbody.innerHTML = rowsToRender.map(item => `
             ${(() => {
                 const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
                 const statusClass = statusKey === 'damaged' ? 'status-damaged' : (statusKey === 'borrowed' ? 'status-borrowed' : 'status-available');
@@ -567,7 +695,7 @@
             <tr>
                 <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
                 <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
-                <td>${escapeHtml(item.ISBN || item.Code4 || '-')}</td>
+                <td>${escapeHtml(item.ISBN || item.Code_4 || item.Code4 || '-')}</td>
                 <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
                 <td>
                     <span class="table-status ${statusClass}">
@@ -585,6 +713,18 @@
                 `;
             })()}
         `).join('');
+
+        const canLoadMoreRows = renderedCount < visibleItems.length;
+        if (canLoadMoreRows) {
+            loadMoreRow.style.display = 'flex';
+            loadMoreBtn.style.display = 'inline-block';
+            loadInfo.textContent = `${renderedCount} von ${visibleItems.length} angezeigt`;
+        } else {
+            const backgroundHint = pagingState.hasMore ? `Lade weitere Medien im Hintergrund (${libraryItems.length}/${pagingState.total || '?'})...` : `${visibleItems.length} Treffer`;
+            loadMoreRow.style.display = 'flex';
+            loadMoreBtn.style.display = 'none';
+            loadInfo.textContent = backgroundHint;
+        }
     }
 
     // Filter toggle
@@ -598,21 +738,11 @@
 
     // Apply filters
     document.getElementById('applyFilterBtn').addEventListener('click', () => {
-        const author = document.getElementById('filterAuthor').value.toLowerCase();
-        const isbn = document.getElementById('filterISBN').value.toLowerCase();
-        const type = document.getElementById('filterType').value;
-        const status = document.getElementById('filterStatus').value;
-
-        filteredItems = libraryItems.filter(item => {
-            const authorMatch = !author || (item.Autor || item.Author || '').toLowerCase().includes(author);
-            const isbnMatch = !isbn || (item.ISBN || item.Code4 || '').toLowerCase().includes(isbn);
-            const typeMatch = !type || (item.ItemType || 'book') === type;
-            const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
-            const statusMatch = !status || statusKey === status;
-            return authorMatch && isbnMatch && typeMatch && statusMatch;
-        });
-
-        displayItems(filteredItems);
+        activeFilters.author = document.getElementById('filterAuthor').value.toLowerCase();
+        activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
+        activeFilters.type = document.getElementById('filterType').value;
+        activeFilters.status = document.getElementById('filterStatus').value;
+        applyFiltersAndSearch(true);
     });
 
     // Clear filters
@@ -621,19 +751,19 @@
         document.getElementById('filterISBN').value = '';
         document.getElementById('filterType').value = '';
         document.getElementById('filterStatus').value = '';
-        displayItems(libraryItems);
+        activeFilters = { author: '', isbn: '', type: '', status: '' };
+        applyFiltersAndSearch(true);
     });
 
     // Search input
     document.getElementById('librarySearch').addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        const toSearch = filteredItems.length > 0 ? filteredItems : libraryItems;
-        const results = toSearch.filter(item =>
-            (item.Name || '').toLowerCase().includes(searchTerm) ||
-            (item.Autor || item.Author || '').toLowerCase().includes(searchTerm) ||
-            (item.ISBN || item.Code4 || '').toLowerCase().includes(searchTerm)
-        );
-        displayItems(results);
+        currentSearchTerm = (e.target.value || '').toLowerCase();
+        applyFiltersAndSearch(true);
+    });
+
+    document.getElementById('loadMoreBtn').addEventListener('click', () => {
+        renderedCount = Math.min(renderedCount + RENDER_BATCH_COUNT, visibleItems.length);
+        renderItems();
     });
 
     // Helper functions

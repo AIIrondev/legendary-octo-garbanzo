@@ -1742,21 +1742,62 @@ def library_loans_admin():
 @app.route('/api/library_items')
 def api_library_items():
     """
-    API endpoint to fetch all library items (books, CDs, DVDs, media).
-    Returns JSON array suitable for table view.
+    API endpoint to fetch library items (books, CDs, DVDs, media).
+    Supports pagination via query params: offset, limit.
     """
     if 'username' not in session:
-        return jsonify([]), 401
+        return jsonify({'items': []}), 401
     
+    offset_raw = request.args.get('offset', '0')
+    limit_raw = request.args.get('limit', '120')
+
+    try:
+        offset = max(0, int(offset_raw))
+    except (TypeError, ValueError):
+        offset = 0
+
+    try:
+        limit = int(limit_raw)
+    except (TypeError, ValueError):
+        limit = 120
+    limit = min(max(limit, 1), 500)
+
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_db = db['items']
         ausleihungen_db = db['ausleihungen']
+
+        query = {
+            'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']},
+            'Deleted': {'$ne': True}
+        }
+
+        projection = {
+            'Name': 1,
+            'Autor': 1,
+            'Author': 1,
+            'ISBN': 1,
+            'Code_4': 1,
+            'Code4': 1,
+            'ItemType': 1,
+            'Verfuegbar': 1,
+            'Condition': 1,
+            'HasDamage': 1,
+            'User': 1,
+            'Ort': 1,
+            'Beschreibung': 1,
+            'Image': 1
+        }
+
+        total_count = items_db.count_documents(query)
         
-        library_items = list(items_db.find({
-            'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']}
-        }))
+        library_items = list(
+            items_db.find(query, projection)
+            .sort([('Name', 1), ('_id', 1)])
+            .skip(offset)
+            .limit(limit)
+        )
 
         item_ids = [str(item.get('_id')) for item in library_items if item.get('_id')]
         active_records = []
@@ -1782,6 +1823,8 @@ def api_library_items():
         for item in library_items:
             item_id = str(item['_id'])
             item['_id'] = item_id
+            if item.get('Code4') in (None, '') and item.get('Code_4') not in (None, ''):
+                item['Code4'] = item.get('Code_4')
 
             condition_value = str(item.get('Condition', '')).strip().lower()
             has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
@@ -1795,8 +1838,16 @@ def api_library_items():
                 item['LibraryDisplayStatus'] = 'available'
 
             item['BorrowedBy'] = active_user_by_item.get(item_id) or item.get('User', '')
-        
-        return jsonify(library_items), 200
+
+        count = len(library_items)
+        return jsonify({
+            'items': library_items,
+            'offset': offset,
+            'limit': limit,
+            'count': count,
+            'total': total_count,
+            'has_more': (offset + count) < total_count
+        }), 200
     except Exception as e:
         print(f"Error fetching library items: {e}")
         return jsonify({'error': str(e)}), 500
@@ -2882,6 +2933,7 @@ def logout():
 @app.route('/get_items', methods=['GET'])
 def get_items():
     """Return items plus merged favorites (session + DB) and per-item favorite flag."""
+    client = None
     try:
         username = session.get('username')
         # Merge DB favorites into session if logged in
@@ -2895,14 +2947,40 @@ def get_items():
                 app.logger.warning(f"Could not merge DB favorites: {fav_err}")
         favorites = set(session.get('favorites', []))
 
+        available_only = str(request.args.get('available_only', '')).strip().lower() in ('1', 'true', 'yes', 'on')
+        offset_raw = request.args.get('offset')
+        limit_raw = request.args.get('limit')
+        pagination_requested = offset_raw is not None or limit_raw is not None
+
+        if pagination_requested:
+            try:
+                offset = max(0, int(offset_raw or '0'))
+            except (TypeError, ValueError):
+                offset = 0
+            try:
+                limit = int(limit_raw or '120')
+            except (TypeError, ValueError):
+                limit = 120
+            limit = min(max(limit, 1), 500)
+        else:
+            offset = 0
+            limit = None
+
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
-        items_cur = items_col.find({
+        base_query = {
             'IsGroupedSubItem': {'$ne': True},
             'ItemType': {'$nin': LIBRARY_ITEM_TYPES},
             'Deleted': {'$ne': True},
-        })
+        }
+
+        total_count = items_col.count_documents(base_query)
+
+        items_cur = items_col.find(base_query).sort([('Name', 1), ('_id', 1)])
+        if pagination_requested:
+            items_cur = items_cur.skip(offset).limit(limit)
+
         items = []
         for itm in items_cur:
             item_id_str = str(itm['_id'])
@@ -2937,11 +3015,26 @@ def get_items():
             itm['GroupedAllCodes'] = grouped_all_codes
             if grouped_count > 1:
                 itm['Verfuegbar'] = len(available_units) > 0
+            if available_only and not itm.get('Verfuegbar', False):
+                continue
             itm['is_favorite'] = item_id_str in favorites
             items.append(itm)
-        return jsonify({'items': items, 'favorites': list(favorites)})
+
+        count = len(items)
+        return jsonify({
+            'items': items,
+            'favorites': list(favorites),
+            'offset': offset,
+            'limit': limit if limit is not None else count,
+            'count': count,
+            'total': total_count,
+            'has_more': pagination_requested and ((offset + count) < total_count)
+        })
     except Exception as e:
         return jsonify({'items': [], 'error': str(e)}), 500
+    finally:
+        if client:
+            client.close()
 
 
 @app.route('/get_item/<id>')

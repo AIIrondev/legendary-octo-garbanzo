@@ -3255,8 +3255,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
 
     // Function to load items from server
-    function loadItems() {
-        fetch("{{ url_for('get_items') }}")
+    const MAIN_ADMIN_ITEMS_PAGE_SIZE = 120;
+
+    function loadItems(offset = 0, append = false) {
+        fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}`)
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
@@ -3266,9 +3268,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 const filter1Values = new Set();
                 const filter2Values = new Set();
                 const filter3Values = new Set();
-                allItems = data.items || [];
-                itemsContainer.innerHTML = '';
-                if (!data.items || data.items.length === 0) {
+                const pageItems = data.items || [];
+                allItems = append ? allItems.concat(pageItems) : pageItems;
+                if (!append) {
+                    itemsContainer.innerHTML = '';
+                }
+                if (!append && (!pageItems || pageItems.length === 0)) {
                     itemsContainer.innerHTML = `
                         <div class="no-items-message">
                             <div>Keine Objekte gefunden</div>
@@ -3281,15 +3286,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     return;
                 }
                 if (itemsIndicator) {
-                    itemsIndicator.textContent = `Objekte im System: ${data.items.length}`;
+                    const shownCount = allItems.length;
+                    const totalCount = Number(data.total || shownCount);
+                    itemsIndicator.textContent = `Objekte im System: ${shownCount}${data.has_more ? ` / ${totalCount} (lädt...)` : ''}`;
                 }
-                data.items.sort((a, b) => {
+                pageItems.sort((a, b) => {
                     const nameA = a.Name ? a.Name.toLowerCase() : '';
                     const nameB = a.Name ? a.Name.toLowerCase() : '';
                     return nameA.localeCompare(nameB);
                 });
+
+                allItems.forEach(itemForFilters => {
+                    const f1 = Array.isArray(itemForFilters.Filter) ? itemForFilters.Filter : (itemForFilters.Filter ? [itemForFilters.Filter] : []);
+                    const f2 = Array.isArray(itemForFilters.Filter2) ? itemForFilters.Filter2 : (itemForFilters.Filter2 ? [itemForFilters.Filter2] : []);
+                    const f3 = Array.isArray(itemForFilters.Filter3) ? itemForFilters.Filter3 : (itemForFilters.Filter3 ? [itemForFilters.Filter3] : []);
+                    f1.forEach(value => { if (value && typeof value === 'string' && value.trim() !== '') filter1Values.add(value); });
+                    f2.forEach(value => { if (value && typeof value === 'string' && value.trim() !== '') filter2Values.add(value); });
+                    f3.forEach(value => { if (value && typeof value === 'string' && value.trim() !== '') filter3Values.add(value); });
+                });
+
                 const favoriteIds = new Set(data.favorites || []);
-                data.items.forEach(item => {
+                pageItems.forEach(item => {
                     try {
                         const card = document.createElement('div');
                         card.classList.add('item-card');
@@ -3521,7 +3538,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
                 
-                itemsContainer.scrollLeft = 0;
+                if (!append) {
+                    itemsContainer.scrollLeft = 0;
+                }
                 applyFilters();
                 updateBulkDeleteSummary();
                 
@@ -3536,9 +3555,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     rebuildFilter3Options();
                 }
                 /* favorites render count removed */
+
+                if (data.has_more) {
+                    const nextOffset = (data.offset || offset) + (data.count || pageItems.length);
+                    const continueLoad = () => loadItems(nextOffset, true);
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(continueLoad, { timeout: 250 });
+                    } else {
+                        setTimeout(continueLoad, 0);
+                    }
+                }
             })
             .catch(error => {
                 console.error('Error fetching items:', error);
+                if (append) {
+                    return;
+                }
                 const itemsContainer = document.querySelector('#items-container');
                 const itemsIndicator = document.getElementById('items-indicator');
                 itemsContainer.innerHTML = 
