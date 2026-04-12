@@ -415,11 +415,15 @@
     }
 
     .bulk-delete-row {
-        display: flex;
+        display: none;
         justify-content: flex-start;
         align-items: center;
         margin-bottom: 8px;
         gap: 8px;
+    }
+
+    .bulk-delete-mode-active .bulk-delete-row {
+        display: flex;
     }
 
     .bulk-delete-toggle {
@@ -3056,6 +3060,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         bulkDeleteDrawerOpen = Boolean(open);
         const drawer = document.getElementById('bulk-delete-drawer');
         const toggle = document.getElementById('bulk-delete-drawer-toggle');
+        const itemsContainer = document.querySelector('#items-container');
         if (drawer) {
             drawer.classList.toggle('open', bulkDeleteDrawerOpen);
             drawer.setAttribute('aria-hidden', bulkDeleteDrawerOpen ? 'false' : 'true');
@@ -3064,6 +3069,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
             toggle.setAttribute('aria-expanded', bulkDeleteDrawerOpen ? 'true' : 'false');
             toggle.innerHTML = bulkDeleteDrawerOpen ? '<span class="drawer-icon">✕</span>' : '<span class="drawer-icon">⚙</span>';
             toggle.title = bulkDeleteDrawerOpen ? 'Massenlöschung schließen' : 'Massenlöschung öffnen';
+        }
+        // Toggle checkbox visibility: show checkboxes only when bulk delete mode is active
+        if (itemsContainer) {
+            itemsContainer.classList.toggle('bulk-delete-mode-active', bulkDeleteDrawerOpen);
         }
     }
 

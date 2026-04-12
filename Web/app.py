@@ -2967,14 +2967,12 @@ def get_items():
             offset = 0
             limit = None
 
-        # Light mode: minimal fields for faster initial load (auto-enabled on offset=0 unless explicitly disabled)
-        # Can be manually controlled via ?light_mode=true/false parameter
         if light_mode_param in ('1', 'true', 'yes', 'on'):
             light_mode = True
         elif light_mode_param in ('0', 'false', 'no', 'off'):
             light_mode = False
         else:
-            light_mode = (offset == 0)  # Auto-enable light mode for first page
+            light_mode = (offset == 0)
 
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
@@ -2987,7 +2985,6 @@ def get_items():
 
         total_count = items_col.count_documents(base_query)
 
-        # Light projection: essentials only for fast initial render
         light_projection = {
             'Name': 1,
             'Code_4': 1,
