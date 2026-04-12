@@ -2950,6 +2950,7 @@ def get_items():
         available_only = str(request.args.get('available_only', '')).strip().lower() in ('1', 'true', 'yes', 'on')
         offset_raw = request.args.get('offset')
         limit_raw = request.args.get('limit')
+        light_mode_param = str(request.args.get('light_mode', '')).strip().lower()
         pagination_requested = offset_raw is not None or limit_raw is not None
 
         if pagination_requested:
@@ -2966,6 +2967,15 @@ def get_items():
             offset = 0
             limit = None
 
+        # Light mode: minimal fields for faster initial load (auto-enabled on offset=0 unless explicitly disabled)
+        # Can be manually controlled via ?light_mode=true/false parameter
+        if light_mode_param in ('1', 'true', 'yes', 'on'):
+            light_mode = True
+        elif light_mode_param in ('0', 'false', 'no', 'off'):
+            light_mode = False
+        else:
+            light_mode = (offset == 0)  # Auto-enable light mode for first page
+
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
@@ -2977,18 +2987,98 @@ def get_items():
 
         total_count = items_col.count_documents(base_query)
 
-        items_cur = items_col.find(base_query).sort([('Name', 1), ('_id', 1)])
+        # Light projection: essentials only for fast initial render
+        light_projection = {
+            'Name': 1,
+            'Code_4': 1,
+            'Images': 1,
+            'ThumbnailInfo': 1,
+            'Verfuegbar': 1,
+            'Filter': 1,
+            'Filter2': 1,
+            'Filter3': 1,
+            'Ort': 1,
+            'User': 1,
+            'ItemType': 1,
+        }
+
+        # Full projection: all details for detailed view
+        full_projection = {
+            'Name': 1,
+            'Ort': 1,
+            'Beschreibung': 1,
+            'Filter': 1,
+            'Filter2': 1,
+            'Filter3': 1,
+            'Code_4': 1,
+            'Images': 1,
+            'ThumbnailInfo': 1,
+            'Verfuegbar': 1,
+            'User': 1,
+            'BorrowerInfo': 1,
+            'appointments': 1,
+            'BlockedNow': 1,
+            'Reservierbar': 1,
+            'DamageReports': 1,
+            'ISBN': 1,
+            'Author': 1,
+            'Autor': 1,
+            'Anschaffungsjahr': 1,
+            'Anschaffungskosten': 1,
+            'Condition': 1,
+            'HasDamage': 1,
+            'ItemType': 1,
+            'SeriesGroupId': 1,
+            'LastUpdated': 1,
+        }
+
+        parent_projection = light_projection if light_mode else full_projection
+
+        items_cur = items_col.find(base_query, parent_projection).sort([('Name', 1), ('_id', 1)])
         if pagination_requested:
             items_cur = items_cur.skip(offset).limit(limit)
 
-        items = []
-        for itm in items_cur:
-            item_id_str = str(itm['_id'])
-            grouped_children = list(items_col.find({
-                'ParentItemId': item_id_str,
+        parent_items = list(items_cur)
+        parent_ids = [str(item.get('_id')) for item in parent_items if item.get('_id') is not None]
+
+        children_by_parent = {}
+        if parent_ids:
+            # Light mode: minimal child data for counting only
+            light_child_projection = {
+                '_id': 1,
+                'ParentItemId': 1,
+                'Code_4': 1,
+                'Verfuegbar': 1,
+                'Name': 1,
+            }
+            # Full mode: complete child data with all details
+            full_child_projection = {
+                '_id': 1,
+                'ParentItemId': 1,
+                'Code_4': 1,
+                'Verfuegbar': 1,
+                'Name': 1,
+                'Images': 1,
+                'ThumbnailInfo': 1,
+                'Beschreibung': 1,
+            }
+            child_projection = light_child_projection if light_mode else full_child_projection
+            
+            child_cursor = items_col.find({
+                'ParentItemId': {'$in': parent_ids},
                 'IsGroupedSubItem': True,
                 'Deleted': {'$ne': True},
-            }))
+            }, child_projection)
+            for child in child_cursor:
+                parent_id = str(child.get('ParentItemId') or '')
+                if not parent_id:
+                    continue
+                children_by_parent.setdefault(parent_id, []).append(child)
+
+        items = []
+        for itm in parent_items:
+            item_id_str = str(itm['_id'])
+            grouped_children = children_by_parent.get(item_id_str, [])
             grouped_count = 1 + len(grouped_children)
 
             grouped_units = [itm] + grouped_children
@@ -3028,6 +3118,7 @@ def get_items():
             'limit': limit if limit is not None else count,
             'count': count,
             'total': total_count,
+            'light_mode': light_mode,
             'has_more': pagination_requested and ((offset + count) < total_count)
         })
     except Exception as e:

@@ -3310,6 +3310,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let mainAdminItemsNextOffset = 0;
     let mainAdminItemsHasMore = false;
     let mainAdminItemsLoadingMore = false;
+    let mainAdminLightMode = true;  // Track if we're in light mode to gradually request full data
     let mainAdminItemsObserver = null;
     let mainAdminItemsSentinel = null;
     let mainAdminItemsLoadingIndicator = null;
@@ -3371,7 +3372,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function loadItems(offset = 0, append = false) {
-        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}`)
+        // Für Pages nach der ersten: Explizit vollständige Daten laden (light_mode=false)
+        // Erste Page: light_mode wird automatisch enablet
+        const lightModeParam = offset > 0 ? '&light_mode=false' : '';
+        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}${lightModeParam}`)
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
