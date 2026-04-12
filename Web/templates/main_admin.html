@@ -3262,6 +3262,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let mainAdminItemsObserver = null;
     let mainAdminItemsSentinel = null;
     let mainAdminItemsScrollPrefetchBound = false;
+    let totalItemsInSystem = 0;
 
     function maybePrefetchMainAdminItems() {
         const itemsContainer = document.querySelector('#items-container');
@@ -3294,6 +3295,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 const filter3Values = new Set();
                 const pageItems = data.items || [];
                 allItems = append ? allItems.concat(pageItems) : pageItems;
+                totalItemsInSystem = Number(data.total || totalItemsInSystem || pageItems.length || 0);
                 if (!append) {
                     itemsContainer.innerHTML = '';
                 }
@@ -3310,9 +3312,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     return;
                 }
                 if (itemsIndicator) {
-                    const shownCount = allItems.length;
-                    const totalCount = Number(data.total || shownCount);
-                    itemsIndicator.textContent = `Objekte im System: ${shownCount}${data.has_more ? ` / ${totalCount} (lädt...)` : ''}`;
+                    itemsIndicator.textContent = `Objekte im System: ${totalItemsInSystem}${data.has_more ? ' (lädt...)' : ''}`;
                 }
                 pageItems.sort((a, b) => {
                     const nameA = a.Name ? a.Name.toLowerCase() : '';
@@ -3750,7 +3750,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         });
 
         if (itemsIndicator) {
-            itemsIndicator.textContent = `Objekte im System: ${allItems.length} | Angezeigt: ${visibleCount}`;
+            itemsIndicator.textContent = `Objekte im System: ${totalItemsInSystem || allItems.length} | Angezeigt: ${visibleCount}`;
         }
         
         if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
