@@ -178,9 +178,17 @@ if not os.path.isabs(LOGS_FOLDER):
 
 def MongoClient(*args, **kwargs):
     """Return a lightweight MongoDB client configured from this settings module."""
-    kwargs.setdefault('maxPoolSize', 10)
-    kwargs.setdefault('minPoolSize', 0)
-    kwargs.setdefault('connectTimeoutMS', 5000)
-    kwargs.setdefault('serverSelectionTimeoutMS', 5000)
-    kwargs.setdefault('retryWrites', True)
-    return _PyMongoClient(MONGODB_HOST, MONGODB_PORT, *args, **kwargs)
+    client_kwargs = {
+        'maxPoolSize': 10,
+        'minPoolSize': 0,
+        'connectTimeoutMS': 5000,
+        'serverSelectionTimeoutMS': 5000,
+        'retryWrites': True,
+    }
+    client_kwargs.update(kwargs)
+
+    # Preserve caller-provided positional host/port arguments.
+    # If none are passed, use configured defaults.
+    if args:
+        return _PyMongoClient(*args, **client_kwargs)
+    return _PyMongoClient(MONGODB_HOST, MONGODB_PORT, **client_kwargs)
