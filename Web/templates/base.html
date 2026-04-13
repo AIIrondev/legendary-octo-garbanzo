@@ -410,14 +410,6 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('notifications_view') }}">
-                                    Benachrichtigungen
-                                    {% if unread_notification_count and unread_notification_count > 0 %}
-                                    <span class="notif-badge">{{ unread_notification_count }}</span>
-                                    {% endif %}
-                                </a>
-                            </li>
                             <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
@@ -488,14 +480,6 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Medien</a></li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('notifications_view') }}">
-                                    Benachrichtigungen
-                                    {% if unread_notification_count and unread_notification_count > 0 %}
-                                    <span class="notif-badge">{{ unread_notification_count }}</span>
-                                    {% endif %}
-                                </a>
-                            </li>
                             <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}

@@ -25,6 +25,11 @@
             <div>
               <div style="font-weight:800; color:#0f172a;">{{ n.title }}</div>
               <div style="font-size:0.9rem; color:#475569; margin-top:2px;">{{ n.message }}</div>
+              {% if n.type == 'damage_reported' %}
+              <div style="margin-top:8px;">
+                <a class="btn btn-sm btn-outline-danger" href="{{ url_for('admin_damaged_items') }}">Zu Defekte-Items Verwaltung</a>
+              </div>
+              {% endif %}
               <div style="font-size:0.78rem; color:#64748b; margin-top:6px;">
                 {% if n.created_at %}{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}{% else %}-{% endif %}
               </div>
