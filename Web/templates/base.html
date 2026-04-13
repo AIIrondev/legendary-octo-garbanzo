@@ -773,9 +773,9 @@
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: #2563eb;
+            background: #dc2626;
             border: 2px solid #ffffff;
-            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.35);
+            box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35);
             display: none;
         }
 
@@ -908,6 +908,7 @@
             const notificationToastTitle = document.getElementById('notification-toast-title');
             const notificationToastMessage = document.getElementById('notification-toast-message');
             let lastUnreadCount = Number({{ unread_notification_count|default(0)|int }});
+            const loginHintKey = username ? ('inventarsystem_notification_login_hint_v1_' + username) : null;
 
             const functionSearchEntries = [
                 { label: 'Artikel', keywords: ['artikel', 'inventar', 'home'], url: {{ url_for('home')|tojson }} },
@@ -1000,6 +1001,33 @@
             }
 
             bindFunctionSearchForms();
+
+            function maybeShowLoginNotificationHint() {
+                if (!username || !loginHintKey) {
+                    return;
+                }
+                if (window.location.pathname === notificationsPagePath) {
+                    return;
+                }
+
+                const alreadyShown = sessionStorage.getItem(loginHintKey);
+                if (alreadyShown) {
+                    return;
+                }
+
+                if (lastUnreadCount > 0) {
+                    const hintTitle = 'Neue Benachrichtigungen';
+                    const hintMessage =
+                        lastUnreadCount === 1
+                            ? 'Sie haben 1 neue Benachrichtigung. Im Nutzer-Menue finden Sie den Eintrag Benachrichtigungen.'
+                            : 'Sie haben ' + lastUnreadCount + ' neue Benachrichtigungen. Im Nutzer-Menue finden Sie den Eintrag Benachrichtigungen.';
+                    showInAppNotification(hintTitle, hintMessage);
+                }
+
+                sessionStorage.setItem(loginHintKey, 'shown');
+            }
+
+            maybeShowLoginNotificationHint();
 
             function updateNotificationDots(unreadCount) {
                 const hasUnread = Number(unreadCount) > 0;
