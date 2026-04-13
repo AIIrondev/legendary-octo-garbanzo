@@ -63,6 +63,9 @@
         .navbar {
             box-shadow: 0 4px 14px rgba(2, 6, 23, 0.24);
             background-color: var(--module-primary-color) !important;
+            position: sticky;
+            top: 0;
+            z-index: 1900;
         }
         
         .navbar-brand {
@@ -80,6 +83,65 @@
             font-weight: 600;
             padding: 0.6rem 0.85rem;
             border-radius: 8px;
+        }
+
+        .navbar-nav .nav-link.nav-active {
+            background-color: rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .function-search-wrap {
+            display: flex;
+            align-items: center;
+            margin-right: 10px;
+            width: min(420px, 42vw);
+        }
+
+        .function-search-form {
+            width: 100%;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .function-search-input {
+            width: 100%;
+            min-height: 38px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            padding: 8px 12px;
+            outline: none;
+        }
+
+        .function-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .function-search-input:focus {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.35);
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .function-search-btn {
+            min-height: 38px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            padding: 7px 12px;
+            font-weight: 700;
+        }
+
+        .function-search-btn:hover {
+            background: rgba(255, 255, 255, 0.26);
+        }
+
+        .quick-link-pill {
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .navbar-nav .nav-link:hover,
@@ -255,6 +317,27 @@
             .nav-item.dropdown .dropdown-toggle {
                 padding: 8px 12px;
             }
+
+            .navbar-toggler {
+                padding: 0.5rem 0.65rem;
+                border-width: 2px;
+            }
+
+            .function-search-wrap {
+                width: 100%;
+                margin: 8px 0 10px;
+            }
+
+            .navbar-nav .nav-item {
+                margin-right: 0;
+                margin-bottom: 6px;
+            }
+
+            .navbar-nav .nav-link {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
             
             /* Better touch targets for mobile */
             .dropdown-toggle::after {
@@ -363,6 +446,7 @@
     {% endblock %}
 </head>
 <body>
+    {% set current_path = request.path %}
     <!-- Module Selector Bar -->
     {% if 'username' in session %}
     <div class="module-selector-bar" id="moduleBar">
@@ -396,16 +480,29 @@
             <div class="collapse navbar-collapse" id="inventoryNavContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="inventoryNavList">
                     <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link" href="{{ url_for('home') }}">Artikel</a>
+                        <a class="nav-link {% if current_path == url_for('home') %}nav-active{% endif %}" href="{{ url_for('home') }}">Artikel</a>
                     </li>
+                    {% if 'username' in session %}
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a>
+                    </li>
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link quick-link-pill {% if current_path == url_for('notifications_view') %}nav-active{% endif %}" href="{{ url_for('notifications_view') }}">
+                            Benachrichtigungen
+                            {% if unread_notification_count and unread_notification_count > 0 %}
+                            <span class="notif-badge">{{ unread_notification_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                     <li class="nav-item">
-                        <a class="nav-link nav-priority-link" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
+                        <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
                     </li>
                     {% endif %}
                     <li class="nav-item dropdown ms-lg-auto">
-                        <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            ⋯ Mehr
+                        <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
+                            Mehr Optionen
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
                             {% if 'username' in session %}
@@ -435,6 +532,19 @@
                 </ul>
                 <div class="d-flex">
                     {% if 'username' in session %}
+                        <div class="function-search-wrap">
+                            <form class="function-search-form" data-function-search="true">
+                                <input
+                                    class="function-search-input"
+                                    type="search"
+                                    name="function_search"
+                                    placeholder="Funktion suchen..."
+                                    list="function-search-options"
+                                    autocomplete="off"
+                                >
+                                <button class="function-search-btn" type="submit">Los</button>
+                            </form>
+                        </div>
                         <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
                         <div class="dropdown me-2 user-menu-wrap">
                             <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
@@ -466,16 +576,29 @@
             <div class="collapse navbar-collapse" id="libraryNavContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="libraryNavList">
                     <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link" href="{{ url_for('library_view') }}">Medien</a>
+                        <a class="nav-link {% if current_path == url_for('library_view') %}nav-active{% endif %}" href="{{ url_for('library_view') }}">Medien</a>
                     </li>
+                    {% if 'username' in session %}
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}">Meine Medien</a>
+                    </li>
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link quick-link-pill {% if current_path == url_for('notifications_view') %}nav-active{% endif %}" href="{{ url_for('notifications_view') }}">
+                            Benachrichtigungen
+                            {% if unread_notification_count and unread_notification_count > 0 %}
+                            <span class="notif-badge">{{ unread_notification_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                     <li class="nav-item">
-                        <a class="nav-link nav-priority-link" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
+                        <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
                     </li>
                     {% endif %}
                     <li class="nav-item dropdown ms-lg-auto">
-                        <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            ⋯ Mehr
+                        <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
+                            Mehr Optionen
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
                             {% if 'username' in session %}
@@ -504,6 +627,19 @@
                 </ul>
                 <div class="d-flex">
                     {% if 'username' in session %}
+                        <div class="function-search-wrap">
+                            <form class="function-search-form" data-function-search="true">
+                                <input
+                                    class="function-search-input"
+                                    type="search"
+                                    name="function_search"
+                                    placeholder="Funktion suchen..."
+                                    list="function-search-options"
+                                    autocomplete="off"
+                                >
+                                <button class="function-search-btn" type="submit">Los</button>
+                            </form>
+                        </div>
                         <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
                         <div class="dropdown me-2 user-menu-wrap">
                             <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
@@ -704,6 +840,33 @@
         <span id="notification-toast-message"></span>
     </div>
 
+    <datalist id="function-search-options">
+        <option value="Artikel"></option>
+        <option value="Meine Ausleihen"></option>
+        <option value="Benachrichtigungen"></option>
+        <option value="Tutorial"></option>
+        <option value="Impressum"></option>
+        <option value="Lizenz"></option>
+        {% if library_module_enabled %}
+        <option value="Bibliothek"></option>
+        <option value="Meine Medien"></option>
+        {% endif %}
+        {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+        <option value="Hochladen"></option>
+        <option value="Ausleihen Verwaltung"></option>
+        <option value="Defekte Items"></option>
+        <option value="Filter verwalten"></option>
+        <option value="Orte verwalten"></option>
+        <option value="Audit Dashboard"></option>
+        <option value="Logs"></option>
+        <option value="Benutzer verwalten"></option>
+        <option value="Neuer Benutzer"></option>
+        {% if student_cards_module_enabled %}
+        <option value="Bibliotheksausweis"></option>
+        {% endif %}
+        {% endif %}
+    </datalist>
+
     <script>
         (function(){
             function getCookie(name){
@@ -745,6 +908,98 @@
             const notificationToastTitle = document.getElementById('notification-toast-title');
             const notificationToastMessage = document.getElementById('notification-toast-message');
             let lastUnreadCount = Number({{ unread_notification_count|default(0)|int }});
+
+            const functionSearchEntries = [
+                { label: 'Artikel', keywords: ['artikel', 'inventar', 'home'], url: {{ url_for('home')|tojson }} },
+                { label: 'Meine Ausleihen', keywords: ['meine ausleihen', 'ausleihen', 'borrowed'], url: {{ url_for('my_borrowed_items')|tojson }} },
+                { label: 'Benachrichtigungen', keywords: ['benachrichtigungen', 'nachrichten', 'notifications'], url: {{ url_for('notifications_view')|tojson }} },
+                { label: 'Tutorial', keywords: ['tutorial', 'hilfe', 'anleitung'], url: {{ url_for('tutorial_page')|tojson }} },
+                { label: 'Impressum', keywords: ['impressum'], url: {{ url_for('impressum')|tojson }} },
+                { label: 'Lizenz', keywords: ['lizenz', 'license'], url: {{ url_for('license')|tojson }} },
+                {% if library_module_enabled %}
+                { label: 'Bibliothek', keywords: ['bibliothek', 'medien'], url: {{ url_for('library_view')|tojson }} },
+                {% endif %}
+                {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                { label: 'Hochladen', keywords: ['hochladen', 'upload'], url: {{ url_for('upload_admin')|tojson }} },
+                { label: 'Ausleihen Verwaltung', keywords: ['ausleihen verwaltung', 'admin borrowings'], url: {{ url_for('admin_borrowings')|tojson }} },
+                { label: 'Defekte Items', keywords: ['defekte items', 'defekt', 'schaden'], url: {{ url_for('admin_damaged_items')|tojson }} },
+                { label: 'Filter verwalten', keywords: ['filter verwalten', 'filter'], url: {{ url_for('manage_filters')|tojson }} },
+                { label: 'Orte verwalten', keywords: ['orte verwalten', 'orte', 'location'], url: {{ url_for('manage_locations')|tojson }} },
+                { label: 'Audit Dashboard', keywords: ['audit', 'audit dashboard'], url: {{ url_for('admin_audit_dashboard')|tojson }} },
+                { label: 'Logs', keywords: ['logs', 'protokoll'], url: {{ url_for('logs')|tojson }} },
+                { label: 'Benutzer verwalten', keywords: ['benutzer verwalten', 'user'], url: {{ url_for('user_del')|tojson }} },
+                { label: 'Neuer Benutzer', keywords: ['neuer benutzer', 'register'], url: {{ url_for('register')|tojson }} },
+                {% if library_module_enabled %}
+                { label: 'Bibliotheks-Ausleihen', keywords: ['bibliotheks ausleihen', 'library loans'], url: {{ url_for('library_loans_admin')|tojson }} },
+                {% endif %}
+                {% if student_cards_module_enabled %}
+                { label: 'Bibliotheksausweis', keywords: ['bibliotheksausweis', 'student card'], url: {{ url_for('student_cards_admin')|tojson }} },
+                {% endif %}
+                {% endif %}
+            ];
+
+            function normalizeSearchText(value) {
+                return String(value || '')
+                    .toLowerCase()
+                    .replace(/[ä]/g, 'ae')
+                    .replace(/[ö]/g, 'oe')
+                    .replace(/[ü]/g, 'ue')
+                    .replace(/[ß]/g, 'ss')
+                    .trim();
+            }
+
+            function findFunctionRoute(rawValue) {
+                const input = normalizeSearchText(rawValue);
+                if (!input) {
+                    return null;
+                }
+
+                let exact = null;
+                for (const entry of functionSearchEntries) {
+                    const candidates = [entry.label].concat(entry.keywords || []);
+                    for (const candidate of candidates) {
+                        if (normalizeSearchText(candidate) === input) {
+                            exact = entry;
+                            break;
+                        }
+                    }
+                    if (exact) {
+                        break;
+                    }
+                }
+                if (exact) {
+                    return exact.url;
+                }
+
+                for (const entry of functionSearchEntries) {
+                    const candidates = [entry.label].concat(entry.keywords || []);
+                    for (const candidate of candidates) {
+                        if (normalizeSearchText(candidate).includes(input) || input.includes(normalizeSearchText(candidate))) {
+                            return entry.url;
+                        }
+                    }
+                }
+
+                return null;
+            }
+
+            function bindFunctionSearchForms() {
+                const forms = document.querySelectorAll('form[data-function-search="true"]');
+                forms.forEach(function(form) {
+                    form.addEventListener('submit', function(event) {
+                        event.preventDefault();
+                        const input = form.querySelector('input[name="function_search"]');
+                        const targetUrl = findFunctionRoute(input ? input.value : '');
+                        if (targetUrl) {
+                            window.location.href = targetUrl;
+                            return;
+                        }
+                        showInAppNotification('Keine Funktion gefunden', 'Bitte Suche verfeinern, z.B. "Defekte Items" oder "Benachrichtigungen".');
+                    });
+                });
+            }
+
+            bindFunctionSearchForms();
 
             function updateNotificationDots(unreadCount) {
                 const hasUnread = Number(unreadCount) > 0;
