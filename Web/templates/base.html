@@ -410,6 +410,14 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('notifications_view') }}">
+                                    Benachrichtigungen
+                                    {% if unread_notification_count and unread_notification_count > 0 %}
+                                    <span class="notif-badge">{{ unread_notification_count }}</span>
+                                    {% endif %}
+                                </a>
+                            </li>
                             <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
@@ -418,6 +426,7 @@
                             <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_audit_dashboard') }}">Audit Dashboard</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                             <li><hr class="dropdown-divider"></li>
@@ -476,12 +485,21 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Medien</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('notifications_view') }}">
+                                    Benachrichtigungen
+                                    {% if unread_notification_count and unread_notification_count > 0 %}
+                                    <span class="notif-badge">{{ unread_notification_count }}</span>
+                                    {% endif %}
+                                </a>
+                            </li>
                             <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                             <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
                             {% if student_cards_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Bibliotheksausweis</a></li>
                             {% endif %}
@@ -596,6 +614,22 @@
             font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.04em;
+        }
+
+        .notif-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            border-radius: 999px;
+            background: #dc2626;
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 0 6px;
+            margin-left: 8px;
+            line-height: 1;
         }
     </style>
     <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">

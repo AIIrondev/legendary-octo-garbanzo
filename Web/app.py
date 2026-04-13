@@ -436,16 +436,182 @@ def _prepare_invoice_pdf_payload(invoice_data, borrow_doc=None, item_doc=None):
         'amount_text': amount_text or '-',
     }
 
+
+def _create_notification(db, *, audience, notif_type, title, message, target_user=None, reference=None, unique_key=None, severity='info'):
+    """Create a notification entry with optional deduplication via unique_key."""
+    notifications_col = db['notifications']
+
+    if unique_key:
+        existing = notifications_col.find_one({'UniqueKey': unique_key}, {'_id': 1})
+        if existing:
+            return False
+
+    now = datetime.datetime.now()
+    payload = {
+        'Audience': audience,
+        'Type': notif_type,
+        'Title': title,
+        'Message': message,
+        'TargetUser': target_user,
+        'Reference': reference or {},
+        'UniqueKey': unique_key,
+        'Severity': severity,
+        'ReadBy': [],
+        'CreatedAt': now,
+        'UpdatedAt': now,
+    }
+    notifications_col.insert_one(payload)
+    return True
+
+
+def _get_notifications_for_user(db, username, is_admin=False, limit=150):
+    """Fetch notifications visible to the current user, newest first."""
+    query = {
+        '$or': [
+            {'Audience': 'user', 'TargetUser': username},
+        ]
+    }
+    if is_admin:
+        query['$or'].append({'Audience': 'admin'})
+
+    cursor = db['notifications'].find(query).sort('CreatedAt', -1).limit(limit)
+    return list(cursor)
+
+
+def _get_unread_notification_count(db, username, is_admin=False):
+    """Count unread notifications for navbar badge rendering."""
+    query = {
+        '$and': [
+            {
+                '$or': [
+                    {'Audience': 'user', 'TargetUser': username},
+                ]
+            },
+            {'ReadBy': {'$ne': username}},
+        ]
+    }
+    if is_admin:
+        query['$and'][0]['$or'].append({'Audience': 'admin'})
+
+    return db['notifications'].count_documents(query)
+
+
+def _build_reminder_message(item_name, start_dt=None, end_dt=None):
+    """Build a concise reminder text for borrowed items."""
+    start_text = start_dt.strftime('%d.%m.%Y %H:%M') if isinstance(start_dt, datetime.datetime) else '-'
+    end_text = end_dt.strftime('%d.%m.%Y %H:%M') if isinstance(end_dt, datetime.datetime) else '-'
+    return (
+        f"Bitte denke an die Rueckgabe von '{item_name}'. "
+        f"Ausleihe seit: {start_text}. "
+        f"Geplantes Ende: {end_text}."
+    )
+
+
+def create_return_reminders():
+    """Create one-time reminders for day-1 and planned-end events."""
+    now = datetime.datetime.now()
+    one_day_ago = now - datetime.timedelta(days=1)
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen_col = db['ausleihungen']
+        items_col = db['items']
+
+        candidates = list(ausleihungen_col.find(
+            {
+                'Status': {'$in': ['active', 'planned']},
+                'User': {'$exists': True, '$ne': ''},
+                '$or': [
+                    {'Start': {'$lte': one_day_ago}},
+                    {'End': {'$lte': now}},
+                ]
+            },
+            {'User': 1, 'Item': 1, 'Status': 1, 'Start': 1, 'End': 1}
+        ))
+
+        item_ids = []
+        for entry in candidates:
+            item_id = entry.get('Item')
+            if item_id:
+                item_ids.append(item_id)
+
+        item_docs = {}
+        for raw_id in item_ids:
+            try:
+                doc = items_col.find_one({'_id': ObjectId(raw_id)}, {'Name': 1, 'Code_4': 1})
+                if doc:
+                    item_docs[raw_id] = doc
+            except Exception:
+                continue
+
+        for borrow_doc in candidates:
+            borrow_id = str(borrow_doc.get('_id'))
+            username = str(borrow_doc.get('User', '')).strip()
+            if not borrow_id or not username:
+                continue
+
+            item_id = str(borrow_doc.get('Item', '')).strip()
+            item_doc = item_docs.get(item_id, {})
+            item_name = item_doc.get('Name') or f'Item {item_id}'
+
+            start_dt = borrow_doc.get('Start')
+            end_dt = borrow_doc.get('End')
+
+            if isinstance(start_dt, datetime.datetime) and start_dt <= one_day_ago:
+                _create_notification(
+                    db,
+                    audience='user',
+                    notif_type='return_day_1',
+                    title='Erinnerung: Rueckgabe nach 1 Tag',
+                    message=_build_reminder_message(item_name, start_dt=start_dt, end_dt=end_dt),
+                    target_user=username,
+                    reference={'borrow_id': borrow_id, 'item_id': item_id, 'event': 'day_1'},
+                    unique_key=f'reminder:day1:{borrow_id}',
+                    severity='warning',
+                )
+
+            if isinstance(end_dt, datetime.datetime) and end_dt <= now:
+                _create_notification(
+                    db,
+                    audience='user',
+                    notif_type='return_after_end',
+                    title='Erinnerung: Geplante Ausleihe ist beendet',
+                    message=_build_reminder_message(item_name, start_dt=start_dt, end_dt=end_dt),
+                    target_user=username,
+                    reference={'borrow_id': borrow_id, 'item_id': item_id, 'event': 'after_end'},
+                    unique_key=f'reminder:end:{borrow_id}',
+                    severity='warning',
+                )
+    except Exception as exc:
+        app.logger.warning(f"Reminder creation failed: {exc}")
+    finally:
+        if client:
+            client.close()
+
 @app.context_processor
 def inject_version():
     """Inject global template variables."""
     is_admin = False
     asset_version = _get_asset_version()
+    unread_notification_count = 0
     if 'username' in session:
         try:
             is_admin = us.check_admin(session['username'])
         except Exception:
             is_admin = False
+
+        client = None
+        try:
+            client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+            db = client[MONGODB_DB]
+            unread_notification_count = _get_unread_notification_count(db, session['username'], is_admin=is_admin)
+        except Exception:
+            unread_notification_count = 0
+        finally:
+            if client:
+                client.close()
 
     current_module = _get_current_module(request.path)
 
@@ -456,7 +622,8 @@ def inject_version():
         'school_periods': SCHOOL_PERIODS,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
         'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
-        'is_admin': is_admin
+        'is_admin': is_admin,
+        'unread_notification_count': unread_notification_count,
     }
 
 # Create necessary directories at startup
@@ -639,6 +806,7 @@ scheduler = BackgroundScheduler()
 if cfg.SCHEDULER_ENABLED:
     scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
     scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
+    scheduler.add_job(func=create_return_reminders, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
     scheduler.start()
 
 # Register shutdown handler to stop scheduler when app is terminated
@@ -4675,6 +4843,19 @@ def report_damage(id):
         updated_item = items_col.find_one({'_id': ObjectId(id)}, {'DamageReports': 1})
         damage_count = len(updated_item.get('DamageReports', [])) if updated_item else 0
 
+        _create_notification(
+            db,
+            audience='admin',
+            notif_type='damage_reported',
+            title='Defekt gemeldet',
+            message=(
+                f"Fuer das Item '{item_doc.get('Name', id)}' wurde ein Defekt gemeldet. "
+                f"Meldung von {session.get('username', '-')}: {description}"
+            ),
+            reference={'item_id': id, 'damage_count': damage_count},
+            severity='danger',
+        )
+
         # Best-effort system log entry for auditability
         try:
             logs_collection = db['system_logs']
@@ -7571,6 +7752,212 @@ def my_borrowed_items():
         planned_items=planned_items,
         user_is_admin=user_is_admin
     )
+
+
+@app.route('/notifications')
+def notifications_view():
+    """Notification center for users and admins."""
+    if 'username' not in session:
+        flash('Bitte melden Sie sich an, um Benachrichtigungen zu sehen.', 'error')
+        return redirect(url_for('login'))
+
+    username = session['username']
+    is_admin_user = False
+    try:
+        is_admin_user = us.check_admin(username)
+    except Exception:
+        is_admin_user = False
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        notifications = _get_notifications_for_user(db, username, is_admin=is_admin_user, limit=200)
+
+        user_notifications = []
+        admin_notifications = []
+        for notif in notifications:
+            is_read = username in (notif.get('ReadBy') or [])
+            row = {
+                'id': str(notif.get('_id')),
+                'title': notif.get('Title', 'Benachrichtigung'),
+                'message': notif.get('Message', ''),
+                'severity': notif.get('Severity', 'info'),
+                'type': notif.get('Type', ''),
+                'created_at': notif.get('CreatedAt'),
+                'is_read': is_read,
+                'reference': notif.get('Reference', {}) or {},
+            }
+            if notif.get('Audience') == 'admin':
+                admin_notifications.append(row)
+            else:
+                user_notifications.append(row)
+
+        return render_template(
+            'notifications.html',
+            user_notifications=user_notifications,
+            admin_notifications=admin_notifications,
+            is_admin_user=is_admin_user,
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        )
+    except Exception as exc:
+        app.logger.error(f"Error loading notifications: {exc}")
+        flash('Fehler beim Laden der Benachrichtigungen.', 'error')
+        return redirect(url_for('home'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/notifications/mark_read/<notification_id>', methods=['POST'])
+def mark_notification_read(notification_id):
+    """Mark a single notification as read for the current user."""
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    username = session['username']
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        db['notifications'].update_one(
+            {'_id': ObjectId(notification_id)},
+            {
+                '$addToSet': {'ReadBy': username},
+                '$set': {'UpdatedAt': datetime.datetime.now()}
+            }
+        )
+    except Exception as exc:
+        app.logger.warning(f"Could not mark notification as read {notification_id}: {exc}")
+    finally:
+        if client:
+            client.close()
+
+    return redirect(url_for('notifications_view'))
+
+
+@app.route('/notifications/mark_all_read', methods=['POST'])
+def mark_all_notifications_read():
+    """Mark all visible notifications as read for the current user."""
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    username = session['username']
+    is_admin_user = False
+    try:
+        is_admin_user = us.check_admin(username)
+    except Exception:
+        is_admin_user = False
+
+    query = {
+        '$or': [
+            {'Audience': 'user', 'TargetUser': username},
+        ]
+    }
+    if is_admin_user:
+        query['$or'].append({'Audience': 'admin'})
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        db['notifications'].update_many(
+            query,
+            {
+                '$addToSet': {'ReadBy': username},
+                '$set': {'UpdatedAt': datetime.datetime.now()}
+            }
+        )
+    except Exception as exc:
+        app.logger.warning(f"Could not mark all notifications as read for {username}: {exc}")
+    finally:
+        if client:
+            client.close()
+
+    return redirect(url_for('notifications_view'))
+
+
+@app.route('/admin/damaged_items')
+def admin_damaged_items():
+    """Dedicated admin management window for damaged items."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Administratorrechte erforderlich.', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
+
+        items = list(items_col.find(
+            {
+                'Deleted': {'$ne': True},
+                '$or': [
+                    {'HasDamage': True},
+                    {'Condition': 'destroyed'},
+                    {'DamageReports.0': {'$exists': True}},
+                ]
+            },
+            {
+                'Name': 1,
+                'Code_4': 1,
+                'ItemType': 1,
+                'Author': 1,
+                'ISBN': 1,
+                'Condition': 1,
+                'DamageReports': 1,
+                'DamageRepairs': 1,
+                'Verfuegbar': 1,
+                'User': 1,
+                'LastUpdated': 1,
+            }
+        ).sort('LastUpdated', -1))
+
+        damaged_rows = []
+        for item_doc in items:
+            item_id = str(item_doc.get('_id'))
+            active_borrow = ausleihungen_col.find_one(
+                {'Item': item_id, 'Status': {'$in': ['active', 'planned']}},
+                {'_id': 1, 'User': 1, 'Status': 1, 'End': 1}
+            )
+            reports = item_doc.get('DamageReports', []) or []
+            latest_report = reports[0] if reports else {}
+
+            damaged_rows.append({
+                'id': item_id,
+                'name': item_doc.get('Name', ''),
+                'code': item_doc.get('Code_4', ''),
+                'item_type': item_doc.get('ItemType', ''),
+                'author': item_doc.get('Author', ''),
+                'isbn': item_doc.get('ISBN', ''),
+                'condition': item_doc.get('Condition', ''),
+                'available': bool(item_doc.get('Verfuegbar', False)),
+                'borrow_user': item_doc.get('User', ''),
+                'damage_count': len(reports),
+                'damage_reports': reports,
+                'latest_damage_description': latest_report.get('description', ''),
+                'latest_damage_by': latest_report.get('reported_by', ''),
+                'latest_damage_at': latest_report.get('reported_at'),
+                'active_borrow': active_borrow,
+                'last_updated': item_doc.get('LastUpdated'),
+            })
+
+        return render_template(
+            'admin_damaged_items.html',
+            damaged_items=damaged_rows,
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        )
+    except Exception as exc:
+        app.logger.error(f"Error loading damaged-items admin view: {exc}")
+        flash('Fehler beim Laden der Defekte-Items-Verwaltung.', 'error')
+        return redirect(url_for('home_admin'))
+    finally:
+        if client:
+            client.close()
 
 @app.route('/favicon.ico')
 def favicon():

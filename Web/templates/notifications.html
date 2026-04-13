@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Benachrichtigungen{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1080px; margin: 18px auto 32px;">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin:0;">Benachrichtigungen</h1>
+      <p style="margin:6px 0 0; color:#64748b;">Rueckgabe-Erinnerungen und wichtige Hinweise fuer Benutzer und Verwaltung.</p>
+    </div>
+    <form method="post" action="{{ url_for('mark_all_notifications_read') }}">
+      <button class="btn btn-outline-secondary" type="submit">Alle als gelesen markieren</button>
+    </form>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr; gap:14px;">
+    <section style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px;">
+      <h2 style="margin:0 0 12px; font-size:1.15rem;">Meine Benachrichtigungen</h2>
+      {% if user_notifications %}
+      <div style="display:grid; gap:10px;">
+        {% for n in user_notifications %}
+        <article style="border:1px solid #e5e7eb; border-left:5px solid {% if n.severity == 'danger' %}#dc2626{% elif n.severity == 'warning' %}#d97706{% else %}#2563eb{% endif %}; border-radius:10px; padding:12px 12px 10px; background:{% if n.is_read %}#f8fafc{% else %}#ffffff{% endif %};">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:800; color:#0f172a;">{{ n.title }}</div>
+              <div style="font-size:0.9rem; color:#475569; margin-top:2px;">{{ n.message }}</div>
+              <div style="font-size:0.78rem; color:#64748b; margin-top:6px;">
+                {% if n.created_at %}{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}{% else %}-{% endif %}
+              </div>
+            </div>
+            {% if not n.is_read %}
+            <form method="post" action="{{ url_for('mark_notification_read', notification_id=n.id) }}">
+              <button class="btn btn-sm btn-primary" type="submit">Als gelesen</button>
+            </form>
+            {% else %}
+            <span style="font-size:0.8rem; color:#16a34a; font-weight:700;">Gelesen</span>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:#64748b; margin:0;">Keine Benachrichtigungen vorhanden.</p>
+      {% endif %}
+    </section>
+
+    {% if is_admin_user %}
+    <section style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px;">
+      <h2 style="margin:0 0 12px; font-size:1.15rem;">Admin-Benachrichtigungen</h2>
+      {% if admin_notifications %}
+      <div style="display:grid; gap:10px;">
+        {% for n in admin_notifications %}
+        <article style="border:1px solid #e5e7eb; border-left:5px solid {% if n.severity == 'danger' %}#dc2626{% elif n.severity == 'warning' %}#d97706{% else %}#2563eb{% endif %}; border-radius:10px; padding:12px 12px 10px; background:{% if n.is_read %}#f8fafc{% else %}#ffffff{% endif %};">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:800; color:#0f172a;">{{ n.title }}</div>
+              <div style="font-size:0.9rem; color:#475569; margin-top:2px;">{{ n.message }}</div>
+              <div style="font-size:0.78rem; color:#64748b; margin-top:6px;">
+                {% if n.created_at %}{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}{% else %}-{% endif %}
+              </div>
+            </div>
+            {% if not n.is_read %}
+            <form method="post" action="{{ url_for('mark_notification_read', notification_id=n.id) }}">
+              <button class="btn btn-sm btn-primary" type="submit">Als gelesen</button>
+            </form>
+            {% else %}
+            <span style="font-size:0.8rem; color:#16a34a; font-weight:700;">Gelesen</span>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:#64748b; margin:0;">Keine Admin-Benachrichtigungen vorhanden.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

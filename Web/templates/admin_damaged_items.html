@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Defekte Items verwalten{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1250px; margin: 18px auto 32px;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+    <div>
+      <h1 style="margin:0;">Defekte Items</h1>
+      <p style="margin:6px 0 0; color:#64748b;">Eigenes Verwaltungsfenster fuer gemeldete Defekte mit schneller Reparatur-Funktion.</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin_borrowings') }}">Ausleihen</a>
+      {% if library_module_enabled %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('library_loans_admin') }}">Bibliothek</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px; margin-bottom:12px;">
+    <input id="damage-search" type="text" placeholder="Suche nach Name, Code, Typ, Benutzer oder Schaden..." style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:10px;">
+  </div>
+
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:0; overflow:hidden;">
+    <table id="damage-table" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left; padding:11px; border-bottom:1px solid #e5e7eb;">Item</th>
+          <th style="text-align:left; padding:11px; border-bottom:1px solid #e5e7eb;">Status</th>
+          <th style="text-align:left; padding:11px; border-bottom:1px solid #e5e7eb;">Letzte Meldung</th>
+          <th style="text-align:left; padding:11px; border-bottom:1px solid #e5e7eb;">Ausleihe</th>
+          <th style="text-align:left; padding:11px; border-bottom:1px solid #e5e7eb;">Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in damaged_items %}
+        <tr class="damage-row" data-search="{{ (item.name ~ ' ' ~ item.code ~ ' ' ~ item.item_type ~ ' ' ~ item.borrow_user ~ ' ' ~ item.latest_damage_description)|lower }}">
+          <td style="padding:11px; border-bottom:1px solid #eef2f7; vertical-align:top;">
+            <div style="font-weight:700;">{{ item.name }}</div>
+            <div style="font-size:0.86rem; color:#64748b;">{{ item.code or '-' }} | {{ item.item_type or '-' }}</div>
+            {% if item.author %}<div style="font-size:0.82rem; color:#64748b;">{{ item.author }}</div>{% endif %}
+            {% if item.isbn %}<div style="font-size:0.82rem; color:#64748b;">ISBN: {{ item.isbn }}</div>{% endif %}
+          </td>
+          <td style="padding:11px; border-bottom:1px solid #eef2f7; vertical-align:top;">
+            <div style="display:inline-block; padding:3px 9px; border-radius:999px; background:#fee2e2; color:#991b1b; font-size:0.75rem; font-weight:700;">Defekt</div>
+            <div style="font-size:0.84rem; color:#475569; margin-top:6px;">Meldungen: {{ item.damage_count }}</div>
+            <div style="font-size:0.84rem; color:#475569;">Condition: {{ item.condition or '-' }}</div>
+            <div style="font-size:0.84rem; color:#475569;">Verfuegbar: {{ 'Ja' if item.available else 'Nein' }}</div>
+          </td>
+          <td style="padding:11px; border-bottom:1px solid #eef2f7; vertical-align:top;">
+            <div style="font-size:0.9rem; color:#1f2937;">{{ item.latest_damage_description or '-' }}</div>
+            <div style="font-size:0.82rem; color:#64748b; margin-top:4px;">
+              Gemeldet von {{ item.latest_damage_by or '-' }}
+              {% if item.latest_damage_at %} am {{ item.latest_damage_at.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+            </div>
+          </td>
+          <td style="padding:11px; border-bottom:1px solid #eef2f7; vertical-align:top;">
+            {% if item.active_borrow %}
+            <div style="display:inline-block; padding:3px 9px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:0.75rem; font-weight:700;">Aktiv/Geplant</div>
+            <div style="font-size:0.84rem; color:#475569; margin-top:6px;">User: {{ item.active_borrow.User or item.borrow_user or '-' }}</div>
+            {% if item.active_borrow.End %}
+            <div style="font-size:0.84rem; color:#475569;">Ende: {{ item.active_borrow.End.strftime('%d.%m.%Y %H:%M') }}</div>
+            {% endif %}
+            {% else %}
+            <div style="display:inline-block; padding:3px 9px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.75rem; font-weight:700;">Keine offene Ausleihe</div>
+            {% endif %}
+          </td>
+          <td style="padding:11px; border-bottom:1px solid #eef2f7; vertical-align:top;">
+            <button class="btn btn-success btn-sm" onclick="repairDamage('{{ item.id }}', this)">Als repariert markieren</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if not damaged_items %}
+    <div style="padding:24px; color:#64748b; text-align:center;">Keine defekten Items vorhanden.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  const searchInput = document.getElementById('damage-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const q = (searchInput.value || '').toLowerCase();
+      document.querySelectorAll('.damage-row').forEach(function(row) {
+        const text = row.getAttribute('data-search') || '';
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    });
+  }
+})();
+
+function repairDamage(itemId, button) {
+  if (!itemId) return;
+  if (!confirm('Alle offenen Defektmeldungen fuer dieses Item als repariert markieren?')) {
+    return;
+  }
+
+  button.disabled = true;
+  fetch('/mark_damage_repaired/' + itemId, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (!data.success) {
+        throw new Error(data.message || 'Reparatur fehlgeschlagen');
+      }
+      window.location.reload();
+    })
+    .catch(function(err) {
+      button.disabled = false;
+      alert(err.message || 'Fehler beim Markieren als repariert.');
+    });
+}
+</script>
+{% endblock %}
