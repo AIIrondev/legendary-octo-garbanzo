@@ -444,11 +444,14 @@
                 <div class="d-flex">
                     {% if 'username' in session %}
                         <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
-                        <div class="dropdown me-2">
-                            <button class="btn btn-secondary dropdown-toggle" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="dropdown me-2 user-menu-wrap">
+                            <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
                                 👤
+                                <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
@@ -518,11 +521,14 @@
                 <div class="d-flex">
                     {% if 'username' in session %}
                         <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
-                        <div class="dropdown me-2">
-                            <button class="btn btn-secondary dropdown-toggle" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="dropdown me-2 user-menu-wrap">
+                            <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
                                 👤
+                                <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libUserMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
@@ -631,6 +637,57 @@
             margin-left: 8px;
             line-height: 1;
         }
+
+        .user-menu-wrap {
+            position: relative;
+        }
+
+        .user-menu-btn {
+            position: relative;
+        }
+
+        .user-notification-dot {
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #2563eb;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.35);
+            display: none;
+        }
+
+        .user-notification-dot.visible {
+            display: block;
+        }
+
+        .notification-toast {
+            position: fixed;
+            right: 16px;
+            bottom: 18px;
+            z-index: 2300;
+            max-width: 360px;
+            background: #0f172a;
+            color: #fff;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            box-shadow: 0 18px 35px rgba(2, 6, 23, 0.4);
+            padding: 12px 14px;
+            font-size: 0.9rem;
+            line-height: 1.35;
+            display: none;
+        }
+
+        .notification-toast strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .notification-toast.show {
+            display: block;
+        }
     </style>
     <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">
         <div class="cb-inner">
@@ -656,6 +713,11 @@
                 <button type="button" class="btn btn-outline-dark btn-sm" id="onboarding-dismiss">Nicht mehr anzeigen</button>
             </div>
         </div>
+    </div>
+
+    <div id="notification-toast" class="notification-toast" role="status" aria-live="polite">
+        <strong id="notification-toast-title">Neue Benachrichtigung</strong>
+        <span id="notification-toast-message"></span>
     </div>
 
     <script>
@@ -691,8 +753,111 @@
             const username = {{ (session['username'] if 'username' in session else '')|tojson }};
             const isTutorialPage = window.location.pathname === {{ url_for('tutorial_page')|tojson }};
             const isLoginPage = window.location.pathname === {{ url_for('login')|tojson }};
+            const notificationsPagePath = {{ url_for('notifications_view')|tojson }};
             const onboardingKey = username ? ('inventarsystem_tutorial_prompt_v1_' + username) : null;
             const onboardingOverlay = document.getElementById('onboarding-overlay');
+            const notificationButtons = Array.from(document.querySelectorAll('[data-notification-button="true"]'));
+            const notificationToast = document.getElementById('notification-toast');
+            const notificationToastTitle = document.getElementById('notification-toast-title');
+            const notificationToastMessage = document.getElementById('notification-toast-message');
+            let lastUnreadCount = Number({{ unread_notification_count|default(0)|int }});
+
+            function updateNotificationDots(unreadCount) {
+                const hasUnread = Number(unreadCount) > 0;
+                notificationButtons.forEach(function(btn) {
+                    const dot = btn.querySelector('.user-notification-dot');
+                    if (!dot) {
+                        return;
+                    }
+                    if (hasUnread) {
+                        dot.classList.add('visible');
+                    } else {
+                        dot.classList.remove('visible');
+                    }
+                });
+            }
+
+            function showInAppNotification(title, message) {
+                if (!notificationToast || !notificationToastTitle || !notificationToastMessage) {
+                    return;
+                }
+                notificationToastTitle.textContent = title || 'Neue Benachrichtigung';
+                notificationToastMessage.textContent = message || '';
+                notificationToast.classList.add('show');
+                window.setTimeout(function() {
+                    notificationToast.classList.remove('show');
+                }, 5000);
+            }
+
+            function showBrowserNotification(title, message) {
+                if (!('Notification' in window)) {
+                    showInAppNotification(title, message);
+                    return;
+                }
+                if (Notification.permission === 'granted') {
+                    new Notification(title || 'Neue Benachrichtigung', {
+                        body: message || '',
+                    });
+                    return;
+                }
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(function(permission) {
+                        if (permission === 'granted') {
+                            new Notification(title || 'Neue Benachrichtigung', {
+                                body: message || '',
+                            });
+                        } else {
+                            showInAppNotification(title, message);
+                        }
+                    }).catch(function() {
+                        showInAppNotification(title, message);
+                    });
+                    return;
+                }
+                showInAppNotification(title, message);
+            }
+
+            function pollNotificationStatus() {
+                if (!username) {
+                    return;
+                }
+
+                fetch('/notifications/unread_status', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('status request failed');
+                        }
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (!data || !data.ok) {
+                            return;
+                        }
+
+                        const unreadCount = Number(data.unread_count || 0);
+                        updateNotificationDots(unreadCount);
+
+                        if (unreadCount > lastUnreadCount && window.location.pathname !== notificationsPagePath) {
+                            const latest = data.latest_unread || {};
+                            showBrowserNotification(latest.title || 'Neue Nachricht', latest.message || 'Es gibt neue Benachrichtigungen.');
+                        }
+
+                        lastUnreadCount = unreadCount;
+                    })
+                    .catch(function() {
+                        // Silent fail; polling retries automatically.
+                    });
+            }
+
+            updateNotificationDots(lastUnreadCount);
+            if (username) {
+                window.setInterval(pollNotificationStatus, 30000);
+            }
 
             function showOnboarding(){
                 if (onboardingOverlay) {

@@ -7878,6 +7878,75 @@ def mark_all_notifications_read():
     return redirect(url_for('notifications_view'))
 
 
+@app.route('/notifications/unread_status', methods=['GET'])
+def notifications_unread_status():
+    """Return unread notification count and latest unread message metadata."""
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'not_authenticated'}), 401
+
+    username = session['username']
+    is_admin_user = False
+    try:
+        is_admin_user = us.check_admin(username)
+    except Exception:
+        is_admin_user = False
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+
+        visibility_query = {
+            '$or': [
+                {'Audience': 'user', 'TargetUser': username},
+            ]
+        }
+        if is_admin_user:
+            visibility_query['$or'].append({'Audience': 'admin'})
+
+        unread_query = {
+            '$and': [
+                visibility_query,
+                {'ReadBy': {'$ne': username}},
+            ]
+        }
+
+        unread_count = db['notifications'].count_documents(unread_query)
+        latest_unread = db['notifications'].find_one(
+            unread_query,
+            {
+                'Title': 1,
+                'Message': 1,
+                'CreatedAt': 1,
+                'Type': 1,
+                'Severity': 1,
+            },
+            sort=[('CreatedAt', -1)]
+        )
+
+        latest_payload = None
+        if latest_unread:
+            latest_payload = {
+                'title': latest_unread.get('Title', 'Benachrichtigung'),
+                'message': latest_unread.get('Message', ''),
+                'created_at': latest_unread.get('CreatedAt').isoformat() if isinstance(latest_unread.get('CreatedAt'), datetime.datetime) else '',
+                'type': latest_unread.get('Type', ''),
+                'severity': latest_unread.get('Severity', 'info'),
+            }
+
+        return jsonify({
+            'ok': True,
+            'unread_count': unread_count,
+            'latest_unread': latest_payload,
+        })
+    except Exception as exc:
+        app.logger.warning(f"Could not fetch unread notification status for {username}: {exc}")
+        return jsonify({'ok': False, 'error': 'status_fetch_failed'}), 500
+    finally:
+        if client:
+            client.close()
+
+
 @app.route('/admin/damaged_items')
 def admin_damaged_items():
     """Dedicated admin management window for damaged items."""
