@@ -1141,6 +1141,236 @@ def _excel_list(value):
     return unique
 
 
+def _student_card_id_slug(value):
+    """Build a compact identifier fragment from a name or class value."""
+    normalized = _normalize_excel_header(value)
+    if not normalized:
+        return ''
+    return re.sub(r'[^a-z0-9]+', '', normalized).upper()
+
+
+def _build_student_card_excel_id(student_name, class_name, row_number, used_ids):
+    """Create a stable student-card ID when the spreadsheet does not provide one."""
+    name_slug = _student_card_id_slug(student_name)
+    class_slug = _student_card_id_slug(class_name)
+
+    base_parts = [part for part in (class_slug, name_slug) if part]
+    if base_parts:
+        base_id = f"SC-{'-'.join(base_parts[:2])}"
+    else:
+        base_id = f"SC-ROW-{row_number}"
+
+    candidate = base_id
+    suffix = 2
+    while candidate in used_ids:
+        candidate = f"{base_id}-{suffix}"
+        suffix += 1
+
+    used_ids.add(candidate)
+    return candidate
+
+
+def _upload_student_cards_excel():
+    """Bulk import student cards from Excel with automatic name/class mapping."""
+    if 'username' not in session:
+        flash('Nicht angemeldet.', 'error')
+        return redirect(url_for('login'))
+
+    if not us.check_admin(session['username']):
+        flash('Administratorrechte erforderlich.', 'error')
+        return redirect(url_for('home_admin'))
+
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    excel_file = request.files.get('student_cards_excel')
+    if not excel_file or not excel_file.filename:
+        flash('Bitte eine Excel-Datei auswählen.', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    filename_lower = excel_file.filename.lower()
+    if not filename_lower.endswith('.xlsx'):
+        flash('Nur .xlsx Dateien werden unterstützt.', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    try:
+        from openpyxl import load_workbook
+    except Exception:
+        flash('Excel-Import benötigt das Paket openpyxl. Bitte Abhängigkeiten aktualisieren.', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    try:
+        workbook = load_workbook(excel_file, data_only=True, read_only=True)
+        sheet = workbook.active
+    except Exception as exc:
+        flash(f'Excel-Datei konnte nicht gelesen werden: {exc}', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    if not header_row:
+        flash('Die Excel-Datei enthält keine Kopfzeile.', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    header_map = {}
+    for idx, raw_header in enumerate(header_row):
+        normalized = _normalize_excel_header(raw_header)
+        if normalized:
+            header_map[normalized] = idx
+
+    synonyms = {
+        'ausweis_id': ['ausweis_id', 'ausweisid', 'ausweis-id', 'karte', 'kartennummer', 'card_id', 'id'],
+        'student_name': ['student_name', 'schuelername', 'schülername', 'name', 'vollname', 'vorname_nachname', 'nachname_vorname'],
+        'first_name': ['vorname', 'first_name', 'firstname'],
+        'last_name': ['nachname', 'last_name', 'lastname'],
+        'class_name': ['klasse', 'class', 'class_name', 'jahrgang', 'jahrgangsstufe', 'stufe', 'gruppe'],
+        'notes': ['notizen', 'notes', 'bemerkungen', 'bemerkung', 'hinweis', 'hinweise'],
+        'default_borrow_days': ['standard_ausleihdauer', 'ausleihdauer', 'borrow_days', 'tage', 'leihtage', 'max_borrow_days'],
+    }
+
+    def col_index(key):
+        for candidate in synonyms.get(key, []):
+            normalized = _normalize_excel_header(candidate)
+            if normalized in header_map:
+                return header_map[normalized]
+        return None
+
+    mapped_indices = {
+        'ausweis_id': col_index('ausweis_id'),
+        'student_name': col_index('student_name'),
+        'first_name': col_index('first_name'),
+        'last_name': col_index('last_name'),
+        'class_name': col_index('class_name'),
+        'notes': col_index('notes'),
+        'default_borrow_days': col_index('default_borrow_days'),
+    }
+
+    validation_only = (request.form.get('excel_action') or '').strip().lower() == 'validate'
+    max_rows = 15000
+
+    planned_rows = []
+    validation_errors = []
+    validation_warnings = []
+    existing_ids = set()
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    try:
+        db = client[cfg.MONGODB_DB]
+        student_cards = db['student_cards']
+        existing_ids.update(
+            str(card.get('AusweisId', '')).strip().upper()
+            for card in student_cards.find({}, {'AusweisId': 1})
+            if card.get('AusweisId')
+        )
+
+        processed_rows = 0
+        for row_number, row_values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+            processed_rows += 1
+            if processed_rows > max_rows:
+                validation_errors.append((row_number, f'Maximal {max_rows} Zeilen pro Datei erlaubt'))
+                break
+
+            def val(key):
+                idx = mapped_indices.get(key)
+                if idx is None or idx >= len(row_values):
+                    return None
+                return row_values[idx]
+
+            ausweis_id = sanitize_form_value(val('ausweis_id'))
+            student_name = sanitize_form_value(val('student_name'))
+            first_name = sanitize_form_value(val('first_name'))
+            last_name = sanitize_form_value(val('last_name'))
+            class_name = sanitize_form_value(val('class_name'))
+            notes = sanitize_form_value(val('notes'))
+            default_borrow_days = _excel_int(val('default_borrow_days')) or cfg.STUDENT_DEFAULT_BORROW_DAYS
+
+            if not student_name and first_name and last_name:
+                student_name = f'{first_name} {last_name}'.strip()
+                validation_warnings.append((row_number, 'Schülername wurde aus Vorname und Nachname zusammengesetzt'))
+
+            if not ausweis_id and not student_name and not class_name:
+                continue
+
+            row_errors = []
+            if not student_name:
+                row_errors.append('Schülername fehlt')
+
+            if not ausweis_id and student_name:
+                ausweis_id = _build_student_card_excel_id(student_name, class_name, row_number, existing_ids)
+                validation_warnings.append((row_number, f'Ausweis-ID wurde automatisch erzeugt: {ausweis_id}'))
+            elif ausweis_id:
+                ausweis_id = str(ausweis_id).strip().upper()
+                if ausweis_id in existing_ids:
+                    row_errors.append(f'Ausweis-ID {ausweis_id} existiert bereits')
+                else:
+                    existing_ids.add(ausweis_id)
+
+            if row_errors:
+                validation_errors.append((row_number, '; '.join(row_errors)))
+                continue
+
+            planned_rows.append({
+                'row_number': row_number,
+                'ausweis_id': ausweis_id,
+                'student_name': student_name,
+                'class_name': class_name,
+                'notes': notes,
+                'default_borrow_days': default_borrow_days,
+            })
+    finally:
+        client.close()
+
+    if validation_errors:
+        details = '; '.join([f'Zeile {n}: {msg}' for n, msg in validation_errors[:15]])
+        flash(f'Validierung fehlgeschlagen ({len(validation_errors)} Zeilen). {details}', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+    if validation_only:
+        warning_text = ''
+        if validation_warnings:
+            warning_details = '; '.join([f'Zeile {n}: {msg}' for n, msg in validation_warnings[:10]])
+            warning_text = f' Hinweise: {warning_details}'
+        flash(f'Validierung erfolgreich: {len(planned_rows)} Ausweise würden importiert.{warning_text}', 'success')
+        return redirect(url_for('student_cards_admin'))
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    try:
+        db = client[cfg.MONGODB_DB]
+        student_cards = db['student_cards']
+
+        created_total = 0
+        for row in planned_rows:
+            encrypted_payload = encrypt_document_fields(
+                {
+                    'SchülerName': row['student_name'],
+                    'Klasse': row['class_name'],
+                    'Notizen': row['notes'],
+                },
+                STUDENT_CARD_ENCRYPTED_FIELDS
+            )
+            student_cards.insert_one({
+                'AusweisId': row['ausweis_id'],
+                'StandardAusleihdauer': int(row['default_borrow_days']),
+                'Erstellt': datetime.datetime.now(),
+                **encrypted_payload,
+            })
+            created_total += 1
+    except Exception as exc:
+        app.logger.error(f'Error importing student cards from Excel: {exc}')
+        flash(f'Fehler beim Import der Bibliotheksausweise: {exc}', 'error')
+        return redirect(url_for('student_cards_admin'))
+    finally:
+        client.close()
+
+    if validation_warnings:
+        warning_details = '; '.join([f'Zeile {n}: {msg}' for n, msg in validation_warnings[:10]])
+        flash(f'Excel-Import erfolgreich: {created_total} Ausweise importiert. Hinweise: {warning_details}', 'warning')
+    else:
+        flash(f'Excel-Import erfolgreich: {created_total} Ausweise importiert.', 'success')
+
+    return redirect(url_for('student_cards_admin'))
+
+
 def _upload_excel_items(scope='inventory'):
     """Bulk import inventory/library items from Excel with validation-first workflow."""
     if 'username' not in session:
@@ -1461,6 +1691,12 @@ def upload_inventory_excel():
 def upload_library_excel():
     """Bulk import dedicated to library items (ISBN required)."""
     return _upload_excel_items(scope='library')
+
+
+@app.route('/upload_student_cards_excel', methods=['POST'])
+def upload_student_cards_excel():
+    """Bulk import student cards from Excel."""
+    return _upload_student_cards_excel()
 
 
 @app.route('/uploads/<filename>')
