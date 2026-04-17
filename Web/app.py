@@ -145,6 +145,79 @@ _NOTIFICATION_CACHE_LOCK = threading.Lock()
 
 SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 
+PERMISSION_ACTION_OPTIONS = [
+    ('can_borrow', 'Ausleihe erlauben'),
+    ('can_insert', 'Einfügen/Hochladen erlauben'),
+    ('can_edit', 'Bearbeiten erlauben'),
+    ('can_delete', 'Löschen erlauben'),
+    ('can_manage_users', 'Benutzerverwaltung erlauben'),
+    ('can_manage_settings', 'Systemverwaltung erlauben'),
+    ('can_view_logs', 'Logs/Audit einsehen erlauben'),
+]
+
+PERMISSION_PAGE_OPTIONS = [
+    ('home', 'Artikel (Inventar)'),
+    ('tutorial_page', 'Tutorial'),
+    ('my_borrowed_items', 'Meine Ausleihen'),
+    ('notifications_view', 'Benachrichtigungen'),
+    ('impressum', 'Impressum'),
+    ('license', 'Lizenz'),
+    ('library_view', 'Bibliothek (Medien)'),
+    ('terminplan', 'Terminplan'),
+    ('home_admin', 'Admin Startseite'),
+    ('upload_admin', 'Admin Upload Inventar'),
+    ('library_admin', 'Admin Upload Bibliothek'),
+    ('admin_borrowings', 'Admin Ausleihen'),
+    ('library_loans_admin', 'Admin Bibliotheks-Ausleihen'),
+    ('admin_damaged_items', 'Admin Defekte Items'),
+    ('admin_audit_dashboard', 'Admin Audit Dashboard'),
+    ('logs', 'System-Logs'),
+    ('user_del', 'Benutzerverwaltung'),
+    ('register', 'Benutzer anlegen'),
+    ('manage_filters', 'Filter verwalten'),
+    ('manage_locations', 'Orte verwalten'),
+]
+
+PERMISSION_EXEMPT_ENDPOINTS = {
+    'static',
+    'login',
+    'logout',
+    'impressum',
+    'license',
+    'uploaded_file',
+    'thumbnail_file',
+    'preview_file',
+}
+
+PERMISSION_ACTION_ENDPOINTS = {
+    'upload_item': 'can_insert',
+    'upload_inventory_excel': 'can_insert',
+    'upload_library_excel': 'can_insert',
+    'upload_student_cards_excel': 'can_insert',
+    'edit_item': 'can_edit',
+    'api_library_item_update': 'can_edit',
+    'admin_update_user_name': 'can_edit',
+    'delete_item': 'can_delete',
+    'delete_user': 'can_delete',
+    'ausleihen': 'can_borrow',
+    'zurueckgeben': 'can_borrow',
+    'api_library_scan_action': 'can_borrow',
+    'user_del': 'can_manage_users',
+    'register': 'can_manage_users',
+    'admin_reset_user_password': 'can_manage_users',
+    'admin_update_user_permissions': 'can_manage_users',
+    'home_admin': 'can_manage_settings',
+    'upload_admin': 'can_manage_settings',
+    'library_admin': 'can_manage_settings',
+    'admin_borrowings': 'can_manage_settings',
+    'library_loans_admin': 'can_manage_settings',
+    'admin_damaged_items': 'can_manage_settings',
+    'manage_filters': 'can_manage_settings',
+    'manage_locations': 'can_manage_settings',
+    'admin_audit_dashboard': 'can_view_logs',
+    'logs': 'can_view_logs',
+}
+
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
 RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
@@ -199,6 +272,47 @@ def _enforce_csrf_protection():
     return None
 
 
+@app.before_request
+def _enforce_user_permissions():
+    endpoint = request.endpoint
+    if not endpoint:
+        return None
+
+    if endpoint == 'static' or endpoint.startswith('static'):
+        return None
+
+    if endpoint in PERMISSION_EXEMPT_ENDPOINTS:
+        return None
+
+    if 'username' not in session:
+        return None
+
+    permissions = _get_current_user_permissions()
+    if not permissions:
+        return None
+
+    if not _page_access_allowed(permissions, endpoint):
+        message = 'Diese Seite ist für Ihren Benutzer aktuell gesperrt.'
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify({'ok': False, 'message': message}), 403
+
+        flash(message, 'error')
+        fallback_endpoint = _permission_denied_fallback_endpoint(permissions)
+        return redirect(url_for(fallback_endpoint))
+
+    action_key = PERMISSION_ACTION_ENDPOINTS.get(endpoint)
+    if action_key and not _action_access_allowed(permissions, action_key):
+        message = 'Für diese Aktion fehlen Ihnen die erforderlichen Berechtigungen.'
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify({'ok': False, 'message': message}), 403
+
+        flash(message, 'error')
+        fallback_endpoint = _permission_denied_fallback_endpoint(permissions)
+        return redirect(url_for(fallback_endpoint))
+
+    return None
+
+
 def _get_asset_version():
     """Return a cache-busting asset version tied to deployment state."""
     env_version = os.getenv('INVENTAR_ASSET_VERSION', '').strip()
@@ -235,6 +349,37 @@ def _get_current_module(path):
     if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
         return 'library'
     return 'inventory'
+
+
+def _get_current_user_permissions():
+    username = session.get('username')
+    if not username:
+        return None
+    try:
+        return us.get_effective_permissions(username)
+    except Exception:
+        return us.build_default_permission_payload('standard_user')
+
+
+def _page_access_allowed(permissions, endpoint):
+    if not permissions or not endpoint:
+        return True
+    page_permissions = permissions.get('pages', {})
+    return bool(page_permissions.get(endpoint, True))
+
+
+def _action_access_allowed(permissions, action_key):
+    if not permissions or not action_key:
+        return True
+    action_permissions = permissions.get('actions', {})
+    return bool(action_permissions.get(action_key, True))
+
+
+def _permission_denied_fallback_endpoint(permissions):
+    for candidate in ('home', 'my_borrowed_items', 'tutorial_page', 'notifications_view', 'impressum'):
+        if _page_access_allowed(permissions, candidate):
+            return candidate
+    return 'logout'
 
 
 def _append_audit_event(db, event_type, payload):
@@ -845,11 +990,17 @@ def inject_version():
     asset_version = _get_asset_version()
     csrf_token = _get_csrf_token()
     unread_notification_count = 0
+    current_permissions = us.build_default_permission_payload('standard_user')
     if 'username' in session:
         try:
             is_admin = us.check_admin(session['username'])
         except Exception:
             is_admin = False
+
+        try:
+            current_permissions = us.get_effective_permissions(session['username'])
+        except Exception:
+            current_permissions = us.build_default_permission_payload('standard_user')
 
         client = None
         try:
@@ -874,6 +1025,10 @@ def inject_version():
         'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
         'is_admin': is_admin,
         'unread_notification_count': unread_notification_count,
+        'current_permissions': current_permissions,
+        'permission_action_options': PERMISSION_ACTION_OPTIONS,
+        'permission_page_options': PERMISSION_PAGE_OPTIONS,
+        'permission_presets': us.get_permission_preset_definitions(),
     }
 
 # Create necessary directories at startup
@@ -6578,6 +6733,10 @@ def user_del():
                 
         if username and username != session['username']:
             try:
+                permissions_payload = us.get_effective_permissions(username)
+            except Exception:
+                permissions_payload = us.build_default_permission_payload('standard_user')
+            try:
                 name = us.get_name(username)
                 last_name = us.get_last_name(username)
                 if name and last_name:
@@ -6597,7 +6756,10 @@ def user_del():
                 'admin': user.get('Admin', False),
                 'fullname': fullname,
                 'name': name,
-                'last_name': last_name
+                'last_name': last_name,
+                'permission_preset': permissions_payload.get('preset', 'standard_user'),
+                'action_permissions': permissions_payload.get('actions', {}),
+                'page_permissions': permissions_payload.get('pages', {}),
             })
     
     return render_template(
@@ -7611,6 +7773,41 @@ def admin_update_user_name():
     else:
         flash(f'Fehler beim Aktualisieren des Namens.', 'error')
         
+    return redirect(url_for('user_del'))
+
+
+@app.route('/admin_update_user_permissions', methods=['POST'])
+def admin_update_user_permissions():
+    """Admin route to update permission preset and per-endpoint overrides for a user."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Nicht autorisierter Zugriff', 'error')
+        return redirect(url_for('login'))
+
+    username = request.form.get('username', '').strip()
+    preset_key = request.form.get('permission_preset', 'standard_user').strip()
+
+    if not username:
+        flash('Kein Benutzer ausgewählt', 'error')
+        return redirect(url_for('user_del'))
+
+    target_user = us.get_user(username)
+    if not target_user:
+        flash(f'Benutzer {username} nicht gefunden', 'error')
+        return redirect(url_for('user_del'))
+
+    action_permissions = {}
+    for action_key, _ in PERMISSION_ACTION_OPTIONS:
+        action_permissions[action_key] = request.form.get(f'action_{action_key}') == 'on'
+
+    page_permissions = {}
+    for endpoint_name, _ in PERMISSION_PAGE_OPTIONS:
+        page_permissions[endpoint_name] = request.form.get(f'page_{endpoint_name}') == 'on'
+
+    if us.update_user_permissions(username, preset_key, action_permissions, page_permissions):
+        flash(f'Berechtigungen für {username} wurden aktualisiert.', 'success')
+    else:
+        flash('Fehler beim Aktualisieren der Berechtigungen.', 'error')
+
     return redirect(url_for('user_del'))
 
 

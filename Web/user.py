@@ -11,6 +11,7 @@ Provides methods for creating, validating, and retrieving user information.
    For commercial licensing inquiries: https://github.com/AIIrondev
 '''
 import hashlib
+import copy
 from bson.objectid import ObjectId
 import settings as cfg
 from settings import MongoClient
@@ -21,6 +22,220 @@ def normalize_student_card_id(card_id):
     if card_id is None:
         return ''
     return str(card_id).strip().upper()
+
+
+ACTION_PERMISSION_KEYS = (
+    'can_borrow',
+    'can_insert',
+    'can_edit',
+    'can_delete',
+    'can_manage_users',
+    'can_manage_settings',
+    'can_view_logs',
+)
+
+DEFAULT_ACTION_PERMISSIONS = {
+    'can_borrow': True,
+    'can_insert': False,
+    'can_edit': False,
+    'can_delete': False,
+    'can_manage_users': False,
+    'can_manage_settings': False,
+    'can_view_logs': False,
+}
+
+DEFAULT_PAGE_PERMISSIONS = {
+    'home': True,
+    'tutorial_page': True,
+    'my_borrowed_items': True,
+    'notifications_view': True,
+    'impressum': True,
+    'license': True,
+    'library_view': True,
+    'terminplan': True,
+    'home_admin': False,
+    'upload_admin': False,
+    'library_admin': False,
+    'admin_borrowings': False,
+    'library_loans_admin': False,
+    'admin_damaged_items': False,
+    'admin_audit_dashboard': False,
+    'logs': False,
+    'user_del': False,
+    'register': False,
+    'manage_filters': False,
+    'manage_locations': False,
+}
+
+PERMISSION_PRESETS = {
+    'standard_user': {
+        'label': 'Standard (Ausleihe)',
+        'actions': {
+            'can_borrow': True,
+        },
+        'pages': {
+            'home': True,
+            'tutorial_page': True,
+            'my_borrowed_items': True,
+            'notifications_view': True,
+            'impressum': True,
+            'license': True,
+            'library_view': True,
+            'terminplan': True,
+        },
+    },
+    'editor': {
+        'label': 'Editor (Einfügen/Bearbeiten)',
+        'actions': {
+            'can_borrow': True,
+            'can_insert': True,
+            'can_edit': True,
+        },
+        'pages': {
+            'home': True,
+            'tutorial_page': True,
+            'my_borrowed_items': True,
+            'notifications_view': True,
+            'impressum': True,
+            'license': True,
+            'library_view': True,
+            'terminplan': True,
+            'upload_admin': True,
+            'library_admin': True,
+        },
+    },
+    'manager': {
+        'label': 'Manager (inkl. Löschen)',
+        'actions': {
+            'can_borrow': True,
+            'can_insert': True,
+            'can_edit': True,
+            'can_delete': True,
+            'can_manage_settings': True,
+            'can_view_logs': True,
+        },
+        'pages': {
+            'home': True,
+            'tutorial_page': True,
+            'my_borrowed_items': True,
+            'notifications_view': True,
+            'impressum': True,
+            'license': True,
+            'library_view': True,
+            'terminplan': True,
+            'home_admin': True,
+            'upload_admin': True,
+            'library_admin': True,
+            'admin_borrowings': True,
+            'library_loans_admin': True,
+            'admin_damaged_items': True,
+            'admin_audit_dashboard': True,
+            'logs': True,
+            'manage_filters': True,
+            'manage_locations': True,
+        },
+    },
+    'full_access': {
+        'label': 'Vollzugriff',
+        'actions': {
+            'can_borrow': True,
+            'can_insert': True,
+            'can_edit': True,
+            'can_delete': True,
+            'can_manage_users': True,
+            'can_manage_settings': True,
+            'can_view_logs': True,
+        },
+        'pages': {
+            'home': True,
+            'tutorial_page': True,
+            'my_borrowed_items': True,
+            'notifications_view': True,
+            'impressum': True,
+            'license': True,
+            'library_view': True,
+            'terminplan': True,
+            'home_admin': True,
+            'upload_admin': True,
+            'library_admin': True,
+            'admin_borrowings': True,
+            'library_loans_admin': True,
+            'admin_damaged_items': True,
+            'admin_audit_dashboard': True,
+            'logs': True,
+            'user_del': True,
+            'register': True,
+            'manage_filters': True,
+            'manage_locations': True,
+        },
+    },
+}
+
+
+def _normalize_bool_map(source, defaults):
+    result = dict(defaults)
+    if isinstance(source, dict):
+        for key, value in source.items():
+            result[str(key)] = bool(value)
+    return result
+
+
+def get_permission_preset_definitions():
+    return copy.deepcopy(PERMISSION_PRESETS)
+
+
+def build_default_permission_payload(preset_key='standard_user'):
+    selected_key = preset_key if preset_key in PERMISSION_PRESETS else 'standard_user'
+    preset = PERMISSION_PRESETS.get(selected_key, {})
+    action_defaults = _normalize_bool_map(preset.get('actions', {}), DEFAULT_ACTION_PERMISSIONS)
+    page_defaults = _normalize_bool_map(preset.get('pages', {}), DEFAULT_PAGE_PERMISSIONS)
+    return {
+        'preset': selected_key,
+        'actions': action_defaults,
+        'pages': page_defaults,
+    }
+
+
+def get_effective_permissions(username):
+    user = get_user(username)
+    if not user:
+        return build_default_permission_payload('standard_user')
+
+    preset_key = user.get('PermissionPreset') or 'standard_user'
+    payload = build_default_permission_payload(preset_key)
+    payload['actions'] = _normalize_bool_map(user.get('ActionPermissions', {}), payload['actions'])
+    payload['pages'] = _normalize_bool_map(user.get('PagePermissions', {}), payload['pages'])
+    return payload
+
+
+def update_user_permissions(username, preset_key, action_permissions=None, page_permissions=None):
+    selected_key = preset_key if preset_key in PERMISSION_PRESETS else 'standard_user'
+    payload = build_default_permission_payload(selected_key)
+
+    if isinstance(action_permissions, dict):
+        for key, value in action_permissions.items():
+            payload['actions'][str(key)] = bool(value)
+
+    if isinstance(page_permissions, dict):
+        for key, value in page_permissions.items():
+            payload['pages'][str(key)] = bool(value)
+
+    update_data = {
+        'PermissionPreset': payload['preset'],
+        'ActionPermissions': payload['actions'],
+        'PagePermissions': payload['pages'],
+    }
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    users = db['users']
+    result = users.update_one({'Username': username}, {'$set': update_data})
+
+    if result.matched_count == 0:
+        result = users.update_one({'username': username}, {'$set': update_data})
+
+    client.close()
+    return result.matched_count > 0
 
 
 # === FAVORITES MANAGEMENT ===
@@ -144,6 +359,8 @@ def add_user(username, password, name, last_name, is_student=False, student_card
     users = db['users']
     if not check_password_strength(password):
         return False
+    permission_defaults = build_default_permission_payload('standard_user')
+
     user_doc = {
         'Username': username,
         'Password': hashing(password),
@@ -151,7 +368,10 @@ def add_user(username, password, name, last_name, is_student=False, student_card
         'active_ausleihung': None,
         'name': name,
         'last_name': last_name,
-        'IsStudent': bool(is_student)
+        'IsStudent': bool(is_student),
+        'PermissionPreset': permission_defaults['preset'],
+        'ActionPermissions': permission_defaults['actions'],
+        'PagePermissions': permission_defaults['pages'],
     }
 
     normalized_card = normalize_student_card_id(student_card_id)

@@ -62,6 +62,7 @@
                         <th>Vorname</th>
                         <th>Nachname</th>
                         <th>Administrator</th>
+                        <th>Rechte-Preset</th>
                         <th>Aktionen</th>
                     </tr>
                 </thead>
@@ -72,6 +73,7 @@
                         <td>{{ user.name if user.name else user.username }}</td>
                         <td>{{ user.last_name if user.last_name else '' }}</td>
                         <td>{{ "Ja" if user.admin else "Nein" }}</td>
+                        <td>{{ permission_presets.get(user.permission_preset, {}).get('label', user.permission_preset) }}</td>
                         <td class="actions">
                             <form method="POST" action="{{ url_for('delete_user') }}" class="d-inline">
                                 <input type="hidden" name="username" value="{{ user.username }}">
@@ -90,11 +92,75 @@
                                     onclick="openResetPasswordModal('{{ user.username }}')">
                                 Passwort zurücksetzen
                             </button>
+                            <button type="button" class="btn btn-info btn-sm"
+                                    data-username="{{ user.username }}"
+                                    data-preset="{{ user.permission_preset }}"
+                                    data-action-permissions='{{ user.action_permissions | tojson }}'
+                                    data-page-permissions='{{ user.page_permissions | tojson }}'
+                                    onclick="openPermissionsModal(this)">
+                                Berechtigungen
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Permission Modal -->
+<div class="modal fade" id="permissionsModal" tabindex="-1" aria-labelledby="permissionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="permissionsModalLabel">Berechtigungen bearbeiten</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin_update_user_permissions') }}">
+                <div class="modal-body permissions-modal-body">
+                    <input type="hidden" id="perm-username" name="username">
+                    <div class="mb-3">
+                        <label for="perm-username-display" class="form-label">Benutzer</label>
+                        <input type="text" class="form-control" id="perm-username-display" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="permission-preset" class="form-label">Preset</label>
+                        <select class="form-select" id="permission-preset" name="permission_preset">
+                            {% for preset_key, preset_value in permission_presets.items() %}
+                            <option value="{{ preset_key }}">{{ preset_value.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="permissions-grid">
+                        <div class="permissions-group">
+                            <h6>Aktionsrechte</h6>
+                            {% for action_key, action_label in permission_action_options %}
+                            <div class="form-check">
+                                <input class="form-check-input permission-action-checkbox" type="checkbox" id="action-{{ action_key }}" name="action_{{ action_key }}">
+                                <label class="form-check-label" for="action-{{ action_key }}">{{ action_label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="permissions-group">
+                            <h6>Seitenrechte</h6>
+                            {% for endpoint_name, endpoint_label in permission_page_options %}
+                            <div class="form-check">
+                                <input class="form-check-input permission-page-checkbox" type="checkbox" id="page-{{ endpoint_name }}" name="page_{{ endpoint_name }}">
+                                <label class="form-check-label" for="page-{{ endpoint_name }}">{{ endpoint_label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">Berechtigungen speichern</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -165,6 +231,24 @@
 </div>
 
 <script>
+    var permissionPresets = {{ permission_presets | tojson }};
+
+    function applyPresetToPermissionForm(presetKey) {
+        var preset = permissionPresets[presetKey] || {};
+        var actionDefaults = preset.actions || {};
+        var pageDefaults = preset.pages || {};
+
+        document.querySelectorAll('.permission-action-checkbox').forEach(function (checkbox) {
+            var key = checkbox.name.replace('action_', '');
+            checkbox.checked = !!actionDefaults[key];
+        });
+
+        document.querySelectorAll('.permission-page-checkbox').forEach(function (checkbox) {
+            var key = checkbox.name.replace('page_', '');
+            checkbox.checked = !!pageDefaults[key];
+        });
+    }
+
     function applyFilters() {
         var search = document.getElementById('filter-search').value.toLowerCase();
         var adminFilter = document.getElementById('filter-admin').value.toLowerCase();
@@ -229,6 +313,13 @@
         document.getElementById('filter-admin').addEventListener('change', applyFilters);
         document.getElementById('filter-column').addEventListener('change', applyFilters);
         document.getElementById('filter-direction').addEventListener('change', applyFilters);
+
+        var presetSelect = document.getElementById('permission-preset');
+        if (presetSelect) {
+            presetSelect.addEventListener('change', function () {
+                applyPresetToPermissionForm(this.value);
+            });
+        }
     });
 
     function openEditUserModal(button) {
@@ -251,6 +342,42 @@
         
         // Open modal using Bootstrap
         var modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+        modal.show();
+    }
+
+    function openPermissionsModal(button) {
+        var username = button.getAttribute('data-username') || '';
+        var preset = button.getAttribute('data-preset') || 'standard_user';
+        var actionPermissions = {};
+        var pagePermissions = {};
+
+        try {
+            actionPermissions = JSON.parse(button.getAttribute('data-action-permissions') || '{}');
+        } catch (err) {
+            actionPermissions = {};
+        }
+
+        try {
+            pagePermissions = JSON.parse(button.getAttribute('data-page-permissions') || '{}');
+        } catch (err) {
+            pagePermissions = {};
+        }
+
+        document.getElementById('perm-username').value = username;
+        document.getElementById('perm-username-display').value = username;
+        document.getElementById('permission-preset').value = preset;
+
+        document.querySelectorAll('.permission-action-checkbox').forEach(function (checkbox) {
+            var key = checkbox.name.replace('action_', '');
+            checkbox.checked = !!actionPermissions[key];
+        });
+
+        document.querySelectorAll('.permission-page-checkbox').forEach(function (checkbox) {
+            var key = checkbox.name.replace('page_', '');
+            checkbox.checked = !!pagePermissions[key];
+        });
+
+        var modal = new bootstrap.Modal(document.getElementById('permissionsModal'));
         modal.show();
     }
 </script>
@@ -285,6 +412,29 @@
     
     .password-requirements p {
         margin-bottom: 5px;
+    }
+
+    .permissions-modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .permissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 18px;
+    }
+
+    .permissions-group {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8fafc;
+    }
+
+    .permissions-group h6 {
+        font-weight: 700;
+        margin-bottom: 10px;
     }
 </style>
 {% endblock %}
