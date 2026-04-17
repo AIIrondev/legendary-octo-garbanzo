@@ -34,22 +34,22 @@
         <div class="form-card">
             <form method="POST" action="{{ url_for('register') }}">
                 <div class="form-group">
-                    <label for="username">Benutzername</label>
-                    <div class="input-container">
-                        <span class="input-icon">👤</span>
-                        <input type="text" id="username" name="username" placeholder="Geben Sie einen Benutzernamen ein" required>
-                    </div>
                     <label for="name">Vorname</label>
                     <div class="input-container">
                         <span class="input-icon">👤</span>
-                        <input type="text" id="name" name="name" placeholder="Geben Sie den Vornamen ein" required>
+                        <input type="text" id="name" name="name" placeholder="Geben Sie den Vornamen ein" required onchange="generateUsername()" oninput="generateUsername()">
                     </div>
                     <label for="last-name">Nachname</label>
                     <div class="input-container">
                         <span class="input-icon">👤</span>
-                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required>
+                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required onchange="generateUsername()" oninput="generateUsername()">
                     </div>
-                    <p class="anonymize-hint">Klarnamen werden nur zur Erzeugung eines Kuerzels (z.B. SimFri) verwendet und nicht als Klarname gespeichert.</p>
+                    <label for="username">Benutzername <span style="color: #9ca3af;">(wird automatisch generiert)</span></label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="username" name="username" placeholder="Automatisch aus Name und Nachname" readonly style="background-color: #f3f4f6; cursor: not-allowed;">
+                    </div>
+                    <p class="anonymize-hint">Klarnamen werden nur zur Erzeugung des Benutzernamens und eines Kuerzels (z.B. SimFri) verwendet und nicht als Klarname gespeichert.</p>
                 </div>
                 
                 <div class="form-group">
@@ -446,6 +446,46 @@ input::placeholder {
 </style>
 
 <script>
+// Function to generate username from first and last name (helper function)
+function cleanNameForUsername(text) {
+    if (!text) return '';
+    // Remove special characters, convert umlauts, lowercase
+    let cleaned = text
+        .replace(/[^a-zA-Zäöüß\s-]/g, '')
+        .trim()
+        .toLowerCase();
+    
+    // Convert German umlauts to ASCII
+    cleaned = cleaned
+        .replace(/ä/g, 'ae')
+        .replace(/ö/g, 'oe')
+        .replace(/ü/g, 'ue')
+        .replace(/ß/g, 'ss');
+    
+    return cleaned;
+}
+
+// Generate username from name and last_name fields
+function generateUsername() {
+    const firstName = cleanNameForUsername(document.getElementById('name').value || '');
+    const lastName = cleanNameForUsername(document.getElementById('last-name').value || '');
+    let username = '';
+    
+    if (firstName && lastName) {
+        username = firstName + lastName;
+    } else if (firstName) {
+        username = firstName;
+    } else if (lastName) {
+        username = lastName;
+    }
+    
+    // Set the username field
+    const usernameField = document.getElementById('username');
+    if (usernameField) {
+        usernameField.value = username || '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const permissionPresets = {{ permission_presets | tojson }};
     const presetSelect = document.getElementById('permission-preset');

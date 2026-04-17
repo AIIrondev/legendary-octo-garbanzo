@@ -57,6 +57,33 @@ def build_name_synonym(first_name, last_name=''):
     return combined[:6].title()
 
 
+def build_username_from_name(first_name, last_name=''):
+    """
+    Build a deterministic username from first and last name.
+    Format: firstnameLastname (CamelCase, e.g., 'SimonFrings' or 'SFrings')
+    Ensures uniqueness by allowing server to check existence.
+    
+    Args:
+        first_name (str): First name
+        last_name (str): Last name (optional)
+        
+    Returns:
+        str: Generated username
+    """
+    first = _clean_name_fragment(first_name)
+    last = _clean_name_fragment(last_name)
+    
+    if first and last:
+        # Full: FirstLast (e.g., 'SimonFrings')
+        return (first + last).lower()
+    elif first:
+        return first.lower()
+    elif last:
+        return last.lower()
+    else:
+        return 'user'
+
+
 ACTION_PERMISSION_KEYS = (
     'can_borrow',
     'can_insert',

@@ -6850,10 +6850,15 @@ def register():
         return redirect(url_for('login'))
     if 'username' in session:
         if request.method == 'POST':
-            username = request.form['username']
             password = request.form['password']
             name = (request.form.get('name') or '').strip()
             last_name = (request.form.get('last-name') or '').strip()
+            
+            # Generate username from name and last_name if not provided or empty
+            username = (request.form.get('username') or '').strip()
+            if not username:
+                username = us.build_username_from_name(name, last_name)
+            
             permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
             use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
             is_student = bool(request.form.get('is_student')) if cfg.STUDENT_CARDS_MODULE_ENABLED else False
