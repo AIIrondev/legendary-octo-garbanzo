@@ -15,83 +15,12 @@ APP_IMAGE_ASSET_PREFIX="inventarsystem-image-"
 ENV_FILE="$PROJECT_DIR/.docker-build.env"
 APP_IMAGE_REPO="ghcr.io/aiirondev/legendary-octo-garbanzo"
 DIST_DIR="$PROJECT_DIR/dist"
-LOCK_FILE="$PROJECT_DIR/.update.lock"
-
-DEFAULT_UPDATE_BUFFER_MINUTES="${INVENTAR_UPDATE_BUFFER_MINUTES:-90}"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
 
 log_message() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
-}
-
-safe_int() {
-    local raw="$1"
-    if [[ "$raw" =~ ^[0-9]+$ ]]; then
-        echo "$raw"
-    else
-        echo "0"
-    fi
-}
-
-acquire_update_lock() {
-    exec 9>"$LOCK_FILE"
-    if ! flock -n 9; then
-        log_message "Another update process is already running. Exiting."
-        exit 0
-    fi
-}
-
-compute_update_buffer_seconds() {
-    if [ "${INVENTAR_SKIP_UPDATE_BUFFER:-0}" = "1" ]; then
-        echo "0"
-        return 0
-    fi
-
-    # Manual interactive runs should not wait by default.
-    if [ -t 1 ] && [ "${INVENTAR_FORCE_UPDATE_BUFFER:-0}" != "1" ]; then
-        echo "0"
-        return 0
-    fi
-
-    local explicit_seconds
-    explicit_seconds="$(safe_int "${INVENTAR_UPDATE_BUFFER_SECONDS:-0}")"
-    if [ "$explicit_seconds" -gt 0 ]; then
-        echo "$explicit_seconds"
-        return 0
-    fi
-
-    local window_minutes window_seconds
-    window_minutes="$(safe_int "$DEFAULT_UPDATE_BUFFER_MINUTES")"
-    if [ "$window_minutes" -le 0 ]; then
-        echo "0"
-        return 0
-    fi
-
-    window_seconds=$((window_minutes * 60))
-
-    local machine_id instance_id seed hash_hex hash_dec
-    machine_id="$(cat /etc/machine-id 2>/dev/null || hostname)"
-    instance_id="${INVENTAR_INSTANCE_ID:-${HOSTNAME:-unknown}}"
-    seed="$machine_id|$instance_id|$PROJECT_DIR|update-buffer"
-
-    hash_hex="$(printf '%s' "$seed" | sha256sum | awk '{print $1}')"
-    hash_dec=$((16#${hash_hex:0:8}))
-
-    echo $((hash_dec % window_seconds))
-}
-
-apply_update_buffer_if_needed() {
-    local delay_seconds
-    delay_seconds="$(compute_update_buffer_seconds)"
-    if [ "$delay_seconds" -le 0 ]; then
-        log_message "Update buffer: no delay applied"
-        return 0
-    fi
-
-    log_message "Update buffer active: delaying start by ${delay_seconds}s to reduce cross-instance peak load"
-    sleep "$delay_seconds"
 }
 
 require_cmd() {
@@ -466,9 +395,6 @@ verify_stack_health() {
 }
 
 main() {
-    acquire_update_lock
-    apply_update_buffer_if_needed
-
     ensure_runtime_dependencies
     ensure_tls_certificates
     ensure_nginx_config_mount_source

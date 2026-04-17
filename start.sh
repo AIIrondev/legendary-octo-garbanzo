@@ -191,29 +191,7 @@ setup_scheduled_jobs() {
     fi
 
     local update_line backup_line
-    local slot_seed slot_hash slot_bucket slot_hour slot_minute
-    local update_window_minutes update_window_hours
-
-    update_window_minutes="${INVENTAR_UPDATE_WINDOW_MINUTES:-120}"
-    if ! [[ "$update_window_minutes" =~ ^[0-9]+$ ]]; then
-        update_window_minutes="120"
-    fi
-    if [ "$update_window_minutes" -lt 15 ]; then
-        update_window_minutes="15"
-    fi
-
-    update_window_hours=$(( (update_window_minutes + 59) / 60 ))
-    if [ "$update_window_hours" -lt 1 ]; then
-        update_window_hours=1
-    fi
-
-    slot_seed="$(cat /etc/machine-id 2>/dev/null || hostname)|${INVENTAR_INSTANCE_ID:-${HOSTNAME:-unknown}}|$SCRIPT_DIR|nightly-update"
-    slot_hash="$(printf '%s' "$slot_seed" | sha256sum | awk '{print $1}')"
-    slot_bucket=$((16#${slot_hash:0:8} % update_window_minutes))
-    slot_hour=$((3 + (slot_bucket / 60)))
-    slot_minute=$((slot_bucket % 60))
-
-    update_line="$slot_minute $slot_hour * * * cd $SCRIPT_DIR && INVENTAR_UPDATE_MODE=auto ./update.sh >> $SCRIPT_DIR/logs/update.log 2>&1"
+    update_line="0 3 * * * cd $SCRIPT_DIR && ./update.sh >> $SCRIPT_DIR/logs/update.log 2>&1"
     backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup.sh --mode auto >> $SCRIPT_DIR/logs/backup.log 2>&1"
 
     local existing_cron
@@ -234,7 +212,7 @@ setup_scheduled_jobs() {
     fi
 
     echo "Nightly backup scheduled at 02:30"
-    printf 'Nightly auto-update scheduled at %02d:%02d (deterministic instance slot, %s-minute window)\n' "$slot_hour" "$slot_minute" "$update_window_minutes"
+    echo "Nightly auto-update scheduled at 03:00"
 }
 
 ensure_tls_certificates() {
