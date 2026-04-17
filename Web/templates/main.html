@@ -843,7 +843,7 @@
                 
                 const favoriteIds = new Set(data.favorites || []);
                 window.currentFavorites = favoriteIds;
-                try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(favoriteIds))); } catch(e){}
+                try { sessionStorage.setItem('favoritesCache:' + ({{ session.get('username', '') | tojson }} || 'anon'), JSON.stringify(Array.from(favoriteIds))); } catch(e){}
                 pageItems.forEach(item => {
                     try {
                         const card = document.createElement('div');
@@ -4233,6 +4233,7 @@
 <script>
 let favoritesOnly = false;
 let tableViewMode = false;
+const favoritesCacheKey = 'favoritesCache:' + ({{ session.get('username', '') | tojson }} || 'anon');
 
 function setViewModeState() {
     document.body.classList.toggle('table-view', tableViewMode);
@@ -4263,7 +4264,7 @@ function toggleFavorite(id, btn, card){
             }
             if(!window.currentFavorites) window.currentFavorites = new Set();
             if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
-            try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
+            try { sessionStorage.setItem(favoritesCacheKey, JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
         })
         .catch(err=>console.error('Netzwerkfehler Favoriten', err));
 }
@@ -4271,7 +4272,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Initialize favorites cache set if stored
     try {
         if(!window.currentFavorites){
-            const cached = sessionStorage.getItem('favoritesCache');
+            const cached = sessionStorage.getItem(favoritesCacheKey);
             if(cached){ window.currentFavorites = new Set(JSON.parse(cached)); }
         }
     } catch(e){}
@@ -4310,7 +4311,7 @@ function openItemQuick(id){
         if(item && !item.error){
             // ensure favorites set available
             if(!window.currentFavorites){
-                window.currentFavorites = new Set(JSON.parse(sessionStorage.getItem('favoritesCache')||'[]'));
+                window.currentFavorites = new Set(JSON.parse(sessionStorage.getItem(favoritesCacheKey)||'[]'));
             }
             openItemModal(item);
         }

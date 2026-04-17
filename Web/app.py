@@ -3733,6 +3733,13 @@ def login():
             is_admin_user = bool(user.get('Admin', False))
             session['admin'] = is_admin_user
             session['is_admin'] = is_admin_user
+            # Bind session favorites to the authenticated user to avoid cross-user leakage.
+            try:
+                session['favorites_owner'] = username
+                session['favorites'] = list(dict.fromkeys([str(f) for f in us.get_favorites(username)]))
+            except Exception:
+                session['favorites_owner'] = username
+                session['favorites'] = []
             if is_admin_user:
                 permissions = us.get_effective_permissions(username)
                 if _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings'):
@@ -3827,6 +3834,8 @@ def logout():
     session.pop('username', None)
     session.pop('admin', None)
     session.pop('is_admin', None)
+    session.pop('favorites', None)
+    session.pop('favorites_owner', None)
     return redirect(url_for('login'))
 
 
@@ -3835,6 +3844,7 @@ def get_items():
     """Return items plus merged favorites (session + DB) and per-item favorite flag."""
     client = None
     try:
+        _ensure_session_favs()
         username = session.get('username')
         # Merge DB favorites into session if logged in
         if username:
@@ -4081,8 +4091,23 @@ def api_booking_conflicts():
 
 """Favorites management endpoints (persistent + session cache)."""
 def _ensure_session_favs():
-    if 'favorites' not in session:
+    username = session.get('username')
+    owner = session.get('favorites_owner')
+
+    if not username:
+        if 'favorites' not in session or not isinstance(session.get('favorites'), list):
+            session['favorites'] = []
+        return
+
+    if owner != username:
+        session['favorites_owner'] = username
         session['favorites'] = []
+        session.modified = True
+        return
+
+    if 'favorites' not in session or not isinstance(session.get('favorites'), list):
+        session['favorites'] = []
+        session.modified = True
 
 @app.route('/favorites', methods=['GET'])
 def list_favorites():
@@ -4169,6 +4194,7 @@ def toggle_fav(item_id):
 @app.route('/debug/favorites')
 def debug_favorites():
     """Diagnostic endpoint: shows session favorites, DB favorites and merged output."""
+    _ensure_session_favs()
     username = session.get('username')
     session_favs = list(session.get('favorites', []))
     db_favs = []
