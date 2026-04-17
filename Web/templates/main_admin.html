@@ -369,6 +369,22 @@
         animation: items-loader-slide 1.05s ease-in-out infinite;
     }
 
+    @media (max-width: 768px) {
+        .items-loading-indicator {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            min-height: 120px;
+            height: auto;
+            padding: 14px 10px;
+            scroll-snap-align: none;
+        }
+
+        .items-loading-indicator .loading-track {
+            width: min(240px, 82%);
+        }
+    }
+
     @keyframes items-loader-slide {
         0% { transform: translateX(-100%); }
         100% { transform: translateX(260%); }
@@ -3366,8 +3382,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return;
         }
 
-        const distanceToEnd = itemsContainer.scrollWidth - (itemsContainer.scrollLeft + itemsContainer.clientWidth);
-        const prefetchThreshold = Math.max(260, itemsContainer.clientWidth * 1.4);
+        const styles = window.getComputedStyle(itemsContainer);
+        const isMobileLayout =
+            window.matchMedia('(max-width: 768px)').matches ||
+            styles.display === 'grid' ||
+            styles.flexDirection === 'column';
+
+        const distanceToEnd = isMobileLayout
+            ? itemsContainer.scrollHeight - (itemsContainer.scrollTop + itemsContainer.clientHeight)
+            : itemsContainer.scrollWidth - (itemsContainer.scrollLeft + itemsContainer.clientWidth);
+        const prefetchThreshold = isMobileLayout
+            ? Math.max(220, itemsContainer.clientHeight * 0.9)
+            : Math.max(260, itemsContainer.clientWidth * 1.4);
         if (distanceToEnd > prefetchThreshold) {
             return;
         }
@@ -3729,6 +3755,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const itemsContainer = ensureMainAdminItemsSentinel();
         if (!itemsContainer) return;
 
+        const styles = window.getComputedStyle(itemsContainer);
+        const isMobileLayout =
+            window.matchMedia('(max-width: 768px)').matches ||
+            styles.display === 'grid' ||
+            styles.flexDirection === 'column';
+
         if (mainAdminItemsObserver) {
             mainAdminItemsObserver.disconnect();
             mainAdminItemsObserver = null;
@@ -3759,7 +3791,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }, {
             root: itemsContainer,
             threshold: 0.15,
-            rootMargin: '0px 900px 0px 0px'
+            rootMargin: isMobileLayout ? '0px 0px 900px 0px' : '0px 900px 0px 0px'
         });
 
         mainAdminItemsObserver.observe(mainAdminItemsSentinel);
