@@ -6853,11 +6853,9 @@ def register():
             password = request.form['password']
             name = (request.form.get('name') or '').strip()
             last_name = (request.form.get('last-name') or '').strip()
-            
-            # Generate username from name and last_name if not provided or empty
-            username = (request.form.get('username') or '').strip()
-            if not username:
-                username = us.build_username_from_name(name, last_name)
+
+            # Always generate username from abbreviation logic and auto-extend on collisions.
+            username = us.build_unique_username_from_name(name, last_name)
             
             permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
             use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
@@ -6866,9 +6864,6 @@ def register():
             max_borrow_days_raw = request.form.get('max_borrow_days') if cfg.STUDENT_CARDS_MODULE_ENABLED else None
             if not username or not password or not name or not last_name:
                 flash('Bitte füllen Sie alle Felder aus', 'error')
-                return redirect(url_for('register'))
-            if us.get_user(username):
-                flash('Benutzer existiert bereits', 'error')
                 return redirect(url_for('register'))
             if not us.check_password_strength(password):
                 flash('Passwort ist zu schwach', 'error')

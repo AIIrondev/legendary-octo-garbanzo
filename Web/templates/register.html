@@ -49,7 +49,7 @@
                         <span class="input-icon">👤</span>
                         <input type="text" id="username" name="username" placeholder="Automatisch aus Name und Nachname" readonly style="background-color: #f3f4f6; cursor: not-allowed;">
                     </div>
-                    <p class="anonymize-hint">Klarnamen werden nur zur Erzeugung des Benutzernamens und eines Kuerzels (z.B. SimFri) verwendet und nicht als Klarname gespeichert.</p>
+                    <p class="anonymize-hint">Klarnamen werden nur zur Erzeugung des Benutzernamens als Kürzel (z.B. SimFri) verwendet; bei Kollision wird automatisch ein Buchstabe mehr genommen.</p>
                 </div>
                 
                 <div class="form-group">
@@ -472,11 +472,11 @@ function generateUsername() {
     let username = '';
     
     if (firstName && lastName) {
-        username = firstName + lastName;
+        username = (firstName.slice(0, 3) + lastName.slice(0, 3));
     } else if (firstName) {
-        username = firstName;
+        username = firstName.slice(0, 6);
     } else if (lastName) {
-        username = lastName;
+        username = lastName.slice(0, 6);
     }
     
     // Set the username field

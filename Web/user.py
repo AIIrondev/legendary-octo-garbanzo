@@ -59,9 +59,8 @@ def build_name_synonym(first_name, last_name=''):
 
 def build_username_from_name(first_name, last_name=''):
     """
-    Build a deterministic username from first and last name.
-    Format: firstnameLastname (CamelCase, e.g., 'SimonFrings' or 'SFrings')
-    Ensures uniqueness by allowing server to check existence.
+    Build a deterministic username abbreviation from first and last name.
+    Uses the same short alias logic (e.g. SimFri) and stores it lowercase.
     
     Args:
         first_name (str): First name
@@ -70,18 +69,38 @@ def build_username_from_name(first_name, last_name=''):
     Returns:
         str: Generated username
     """
+    alias = build_name_synonym(first_name, last_name)
+    return alias.lower()
+
+
+def build_unique_username_from_name(first_name, last_name=''):
+    """
+    Build a unique username based on the abbreviation logic.
+    If a collision occurs, increase the username by one additional letter
+    from the combined cleaned name until it is unique.
+    """
     first = _clean_name_fragment(first_name)
     last = _clean_name_fragment(last_name)
-    
-    if first and last:
-        # Full: FirstLast (e.g., 'SimonFrings')
-        return (first + last).lower()
-    elif first:
-        return first.lower()
-    elif last:
-        return last.lower()
-    else:
-        return 'user'
+    combined = (first + last).lower()
+
+    base_username = build_username_from_name(first_name, last_name)
+    if not combined:
+        combined = base_username or 'user'
+
+    start_len = len(base_username) if base_username else min(6, len(combined))
+    start_len = max(1, min(start_len, len(combined)))
+
+    # Main strategy: take one more letter on each collision.
+    for length in range(start_len, len(combined) + 1):
+        candidate = combined[:length]
+        if not get_user(candidate):
+            return candidate
+
+    # Fallback if full combined name is already taken repeatedly.
+    suffix = 2
+    while get_user(f"{combined}{suffix}"):
+        suffix += 1
+    return f"{combined}{suffix}"
 
 
 ACTION_PERMISSION_KEYS = (
