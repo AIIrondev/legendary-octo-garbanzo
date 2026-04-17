@@ -39,16 +39,7 @@
                         <span class="input-icon">👤</span>
                         <input type="text" id="username" name="username" placeholder="Geben Sie einen Benutzernamen ein" required>
                     </div>
-                    <label for="name">Name</label>
-                    <div class="input-container">
-                        <span class="input-icon">👤</span>
-                        <input type="text" id="name" name="name" placeholder="Geben Sie den Namen ein" required>
-                    </div>
-                    <label for="last-name">Nachname</label>
-                    <div class="input-container">
-                        <span class="input-icon">👤</span>
-                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required>
-                    </div>
+                    <p class="anonymize-hint">Klarnamen werden nicht gespeichert. Ein anonymes Kürzel wird automatisch aus dem Benutzernamen erzeugt.</p>
                 </div>
                 
                 <div class="form-group">
@@ -80,6 +71,43 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <div class="form-group">
+                    <label for="permission-preset">Berechtigungs-Preset</label>
+                    <select id="permission-preset" name="permission_preset" class="form-select">
+                        {% for preset_key, preset in permission_presets.items() %}
+                        <option value="{{ preset_key }}">{{ preset.label }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label style="display:flex; align-items:center; gap:8px; margin-top:12px; color:#1f2937;">
+                        <input type="checkbox" id="use-custom-permissions" name="use_custom_permissions" style="width:auto;">
+                        Individuelle Berechtigungen statt Preset setzen
+                    </label>
+
+                    <div id="custom-permissions" style="display:none; margin-top:12px;">
+                        <div class="permission-panels">
+                            <div class="permission-panel">
+                                <h4>Aktionsrechte</h4>
+                                {% for action_key, action_label in permission_action_options %}
+                                <label class="permission-check">
+                                    <input type="checkbox" class="permission-action-checkbox" name="action_{{ action_key }}">
+                                    <span>{{ action_label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="permission-panel">
+                                <h4>Seitenrechte</h4>
+                                {% for endpoint_name, endpoint_label in permission_page_options %}
+                                <label class="permission-check">
+                                    <input type="checkbox" class="permission-page-checkbox" name="page_{{ endpoint_name }}">
+                                    <span>{{ endpoint_label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="form-group form-actions">
                     <button type="submit" class="action-button register-button">Benutzer registrieren</button>
@@ -174,7 +202,8 @@ body {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+.form-select {
     width: 100%;
     padding: 0.8rem 1rem 0.8rem 3rem;
     border: 1px solid #ddd;
@@ -185,10 +214,15 @@ input[type="password"] {
 }
 
 input[type="text"]:focus,
-input[type="password"]:focus {
+input[type="password"]:focus,
+.form-select:focus {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
     outline: none;
+}
+
+.form-select {
+    padding-left: 1rem;
 }
 
 input::placeholder {
@@ -311,11 +345,89 @@ input::placeholder {
 .richtlinen{
     color: #ec0920;
 }
+
+.anonymize-hint {
+    margin-top: 10px;
+    margin-bottom: 0;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #0c4a6e;
+    font-size: 0.92rem;
+}
+
+.permission-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.permission-panel {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 10px;
+    background: #f8fafc;
+}
+
+.permission-panel h4 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    color: #1f2937;
+}
+
+.permission-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+    color: #1f2937;
+}
 </style>
 
-{% if student_cards_module_enabled %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const permissionPresets = {{ permission_presets | tojson }};
+    const presetSelect = document.getElementById('permission-preset');
+    const useCustomPermissions = document.getElementById('use-custom-permissions');
+    const customPermissions = document.getElementById('custom-permissions');
+
+    function applyPresetToPermissionForm(presetKey) {
+        const preset = permissionPresets[presetKey] || {};
+        const actionDefaults = preset.actions || {};
+        const pageDefaults = preset.pages || {};
+
+        document.querySelectorAll('.permission-action-checkbox').forEach(function (checkbox) {
+            const key = checkbox.name.replace('action_', '');
+            checkbox.checked = !!actionDefaults[key];
+        });
+
+        document.querySelectorAll('.permission-page-checkbox').forEach(function (checkbox) {
+            const key = checkbox.name.replace('page_', '');
+            checkbox.checked = !!pageDefaults[key];
+        });
+    }
+
+    function toggleCustomPermissions() {
+        if (!useCustomPermissions || !customPermissions) {
+            return;
+        }
+        customPermissions.style.display = useCustomPermissions.checked ? 'block' : 'none';
+    }
+
+    if (presetSelect) {
+        presetSelect.addEventListener('change', function () {
+            applyPresetToPermissionForm(this.value);
+        });
+        applyPresetToPermissionForm(presetSelect.value);
+    }
+
+    if (useCustomPermissions) {
+        useCustomPermissions.addEventListener('change', toggleCustomPermissions);
+        toggleCustomPermissions();
+    }
+
+    {% if student_cards_module_enabled %}
     const studentCheckbox = document.getElementById('is-student');
     const studentFields = document.getElementById('student-fields');
     const studentCardInput = document.getElementById('student-card-id');
@@ -332,7 +444,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     studentCheckbox.addEventListener('change', toggleStudentFields);
     toggleStudentFields();
+    {% endif %}
 });
 </script>
-{% endif %}
 {% endblock %}

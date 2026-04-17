@@ -380,7 +380,18 @@ def check_nm_pwd(username, password):
     return user
 
 
-def add_user(username, password, name, last_name, is_student=False, student_card_id=None, max_borrow_days=None):
+def add_user(
+    username,
+    password,
+    name='',
+    last_name='',
+    is_student=False,
+    student_card_id=None,
+    max_borrow_days=None,
+    permission_preset='standard_user',
+    action_permissions=None,
+    page_permissions=None,
+):
     """
     Add a new user to the database.
     
@@ -396,9 +407,16 @@ def add_user(username, password, name, last_name, is_student=False, student_card
     users = db['users']
     if not check_password_strength(password):
         return False
-    permission_defaults = build_default_permission_payload('standard_user')
+    permission_defaults = build_default_permission_payload(permission_preset)
+    if isinstance(action_permissions, dict):
+        for key, value in action_permissions.items():
+            permission_defaults['actions'][str(key)] = bool(value)
+    if isinstance(page_permissions, dict):
+        for key, value in page_permissions.items():
+            permission_defaults['pages'][str(key)] = bool(value)
 
-    name_alias = build_name_synonym(name, last_name)
+    alias_source = name if str(name or '').strip() else username
+    name_alias = build_name_synonym(alias_source, '')
 
     user_doc = {
         'Username': username,

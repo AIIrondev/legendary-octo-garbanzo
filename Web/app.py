@@ -6688,8 +6688,8 @@ def register():
         if request.method == 'POST':
             username = request.form['username']
             password = request.form['password']
-            name = request.form['name']
-            last_name = request.form['last-name']
+            permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
+            use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
             is_student = bool(request.form.get('is_student')) if cfg.STUDENT_CARDS_MODULE_ENABLED else False
             student_card_id = us.normalize_student_card_id(request.form.get('student_card_id')) if cfg.STUDENT_CARDS_MODULE_ENABLED else ''
             max_borrow_days_raw = request.form.get('max_borrow_days') if cfg.STUDENT_CARDS_MODULE_ENABLED else None
@@ -6702,6 +6702,17 @@ def register():
             if not us.check_password_strength(password):
                 flash('Passwort ist zu schwach', 'error')
                 return redirect(url_for('register'))
+
+            action_permissions = None
+            page_permissions = None
+            if use_custom_permissions:
+                action_permissions = {}
+                for action_key, _ in PERMISSION_ACTION_OPTIONS:
+                    action_permissions[action_key] = request.form.get(f'action_{action_key}') == 'on'
+
+                page_permissions = {}
+                for endpoint_name, _ in PERMISSION_PAGE_OPTIONS:
+                    page_permissions[endpoint_name] = request.form.get(f'page_{endpoint_name}') == 'on'
 
             max_borrow_days = None
             if is_student:
@@ -6720,11 +6731,14 @@ def register():
             us.add_user(
                 username,
                 password,
-                name,
-                last_name,
+                username,
+                '',
                 is_student=is_student,
                 student_card_id=student_card_id if is_student else None,
-                max_borrow_days=max_borrow_days
+                max_borrow_days=max_borrow_days,
+                permission_preset=permission_preset,
+                action_permissions=action_permissions,
+                page_permissions=page_permissions,
             )
             return redirect(url_for('home'))
         return render_template(
