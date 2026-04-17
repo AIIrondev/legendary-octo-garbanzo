@@ -3609,9 +3609,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 :
                                     `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
-                                <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
-                                    <button class="delete-button">Löschen</button>
-                                </a>
+                                <form method="POST" action="{{ url_for('delete_item', id='') }}${item._id}" style="display:inline;" onsubmit="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
+                                    <button class="delete-button" type="submit">Löschen</button>
+                                </form>
                                 <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-card-${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                                 ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
@@ -4420,9 +4420,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                 ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
                 ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
-                <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
-                    <button class="delete-button">Löschen</button>
-                </a>
+                <form method="POST" action="/delete_item/${item._id}" style="display:inline;" onsubmit="return confirm('Sind Sie sicher?')">
+                    <button class="delete-button" type="submit">Löschen</button>
+                </form>
             </div>
         `;
         

@@ -239,9 +239,9 @@
 
     <div style="border:1px solid #dbe4ee; border-radius:8px; padding:14px; margin-bottom:16px; background:#f8fbff;">
         <h3 style="margin:0 0 8px 0;">Excel-Import Bibliotheksausweise</h3>
-        <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>-Datei hoch, zum Beispiel aus <strong>ASV (Amtliche Schuldaten)</strong>. Erkannt werden automatisch Spalten wie <strong>Name</strong>, <strong>Klasse</strong>, <strong>Ausweis-ID</strong>, <strong>Notizen</strong> und <strong>Standard-Ausleihdauer</strong>. Fehlt die Ausweis-ID, wird sie automatisch aus Name und Klasse erzeugt.</p>
+        <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>- oder <strong>.csv</strong>-Datei hoch, zum Beispiel aus <strong>ASV (Amtliche Schuldaten)</strong>. Erkannt werden automatisch Spalten wie <strong>Name</strong>, <strong>Klasse</strong>, <strong>Ausweis-ID</strong>, <strong>Notizen</strong> und <strong>Standard-Ausleihdauer</strong>. Fehlt die Ausweis-ID, wird sie automatisch aus Name und Klasse erzeugt.</p>
         <form method="POST" action="{{ url_for('upload_student_cards_excel') }}" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <input type="file" name="student_cards_excel" accept=".xlsx" required>
+            <input type="file" name="student_cards_excel" accept=".xlsx,.csv" required>
             <button type="submit" class="btn btn-secondary" name="excel_action" value="validate">Nur validieren</button>
             <button type="submit" class="btn btn-primary" name="excel_action" value="import">Ausweise importieren</button>
         </form>

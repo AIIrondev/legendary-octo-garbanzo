@@ -79,7 +79,18 @@ def check_password_strength(password):
     Returns:
         bool: True if password is strong enough, False otherwise
     """
-    if len(password) < 6:
+    if password is None:
+        return False
+
+    if len(password) < 12:
+        return False
+
+    has_lower = any(char.islower() for char in password)
+    has_upper = any(char.isupper() for char in password)
+    has_digit = any(char.isdigit() for char in password)
+    has_symbol = any(not char.isalnum() for char in password)
+
+    if not (has_lower and has_upper and has_digit and has_symbol):
         return False
     return True
 

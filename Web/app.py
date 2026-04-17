@@ -37,15 +37,19 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
 from urllib.parse import urlparse, urlunparse
 import requests
+import csv
+import ipaddress
 import os
 import json
 import datetime
 import time
 import traceback
 import re
+import socket
 import io
 import html
 import logging
+import secrets
 # QR Code functionality deactivated
 # import qrcode
 # from qrcode.constants import ERROR_CORRECT_L
@@ -141,6 +145,45 @@ def _set_security_headers(response):
     if cfg.SSL_ENABLED:
         response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     return response
+
+
+def _get_csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+def _is_csrf_exempt_request():
+    return request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
+
+
+def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
+    if request.is_json or request.path.startswith('/api/') or request.path in {'/download_book_cover', '/proxy_image', '/log_mobile_issue'}:
+        return jsonify({'error': message}), 400
+    flash(message, 'error')
+    return redirect(request.referrer or url_for('home'))
+
+
+@app.before_request
+def _enforce_csrf_protection():
+    if _is_csrf_exempt_request():
+        _get_csrf_token()
+        return None
+
+    expected_token = _get_csrf_token()
+    provided_token = (
+        request.headers.get('X-CSRFToken')
+        or request.headers.get('X-CSRF-Token')
+        or request.form.get('csrf_token')
+        or request.args.get('csrf_token')
+    )
+
+    if not provided_token or not secrets.compare_digest(provided_token, expected_token):
+        return _csrf_error_response()
+
+    return None
 
 
 def _get_asset_version():
@@ -642,6 +685,7 @@ def inject_version():
     """Inject global template variables."""
     is_admin = False
     asset_version = _get_asset_version()
+    csrf_token = _get_csrf_token()
     unread_notification_count = 0
     if 'username' in session:
         try:
@@ -665,6 +709,7 @@ def inject_version():
     return {
         'APP_VERSION': APP_VERSION,
         'ASSET_VERSION': asset_version,
+        'csrf_token': csrf_token,
         'CURRENT_MODULE': current_module,
         'school_periods': SCHOOL_PERIODS,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
@@ -1141,6 +1186,87 @@ def _excel_list(value):
     return unique
 
 
+def _load_tabular_upload(uploaded_file):
+    """Load a CSV or XLSX upload and return header row plus data rows."""
+    filename = (getattr(uploaded_file, 'filename', '') or '').lower()
+    file_bytes = uploaded_file.read()
+    uploaded_file.stream.seek(0)
+
+    if filename.endswith('.csv'):
+        for encoding in ('utf-8-sig', 'utf-8', 'latin-1'):
+            try:
+                text = file_bytes.decode(encoding)
+                break
+            except Exception:
+                text = None
+        if text is None:
+            raise ValueError('CSV-Datei konnte nicht dekodiert werden.')
+
+        sample = text[:4096]
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=';,\t,|')
+        except Exception:
+            dialect = csv.excel
+            dialect.delimiter = ';' if sample.count(';') >= sample.count(',') else ','
+
+        reader = csv.reader(io.StringIO(text), dialect)
+        rows = [row for row in reader if any(str(cell).strip() for cell in row)]
+        if not rows:
+            raise ValueError('CSV-Datei enthält keine Daten.')
+        return rows[0], rows[1:]
+
+    try:
+        from openpyxl import load_workbook
+    except Exception as exc:
+        raise ValueError(f'Excel-Import benötigt openpyxl: {exc}') from exc
+
+    workbook = load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+    sheet = workbook.active
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    if not header_row:
+        workbook.close()
+        raise ValueError('Die Datei enthält keine Kopfzeile.')
+
+    data_rows = list(sheet.iter_rows(min_row=2, values_only=True))
+    workbook.close()
+    return header_row, data_rows
+
+
+def _is_public_host(hostname):
+    """Return True only for hosts that resolve to public IPs."""
+    if not hostname:
+        return False
+
+    hostname = hostname.strip().lower()
+    if hostname in {'localhost', '127.0.0.1', '::1'}:
+        return False
+
+    try:
+        resolved_infos = socket.getaddrinfo(hostname, None)
+    except Exception:
+        return False
+
+    public_seen = False
+    for info in resolved_infos:
+        address = info[4][0]
+        try:
+            ip_obj = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified:
+            return False
+        public_seen = True
+
+    return public_seen
+
+
+def _deny_if_unauthenticated_file_access():
+    """Block file-serving routes unless a user is logged in."""
+    if 'username' not in session:
+        return Response('Forbidden', status=403)
+    return None
+
+
 def _student_card_id_slug(value):
     """Build a compact identifier fragment from a name or class value."""
     normalized = _normalize_excel_header(value)
@@ -1190,26 +1316,14 @@ def _upload_student_cards_excel():
         return redirect(url_for('student_cards_admin'))
 
     filename_lower = excel_file.filename.lower()
-    if not filename_lower.endswith('.xlsx'):
-        flash('Nur .xlsx Dateien werden unterstützt.', 'error')
+    if not filename_lower.endswith(('.xlsx', '.csv')):
+        flash('Nur .xlsx oder .csv Dateien werden unterstützt.', 'error')
         return redirect(url_for('student_cards_admin'))
 
     try:
-        from openpyxl import load_workbook
-    except Exception:
-        flash('Excel-Import benötigt das Paket openpyxl. Bitte Abhängigkeiten aktualisieren.', 'error')
-        return redirect(url_for('student_cards_admin'))
-
-    try:
-        workbook = load_workbook(excel_file, data_only=True, read_only=True)
-        sheet = workbook.active
+        header_row, data_rows = _load_tabular_upload(excel_file)
     except Exception as exc:
-        flash(f'Excel-Datei konnte nicht gelesen werden: {exc}', 'error')
-        return redirect(url_for('student_cards_admin'))
-
-    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
-    if not header_row:
-        flash('Die Excel-Datei enthält keine Kopfzeile.', 'error')
+        flash(f'Datei konnte nicht gelesen werden: {exc}', 'error')
         return redirect(url_for('student_cards_admin'))
 
     header_map = {}
@@ -1264,7 +1378,7 @@ def _upload_student_cards_excel():
         )
 
         processed_rows = 0
-        for row_number, row_values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        for row_number, row_values in enumerate(data_rows, start=2):
             processed_rows += 1
             if processed_rows > max_rows:
                 validation_errors.append((row_number, f'Maximal {max_rows} Zeilen pro Datei erlaubt'))
@@ -1396,26 +1510,14 @@ def _upload_excel_items(scope='inventory'):
         return redirect(url_for(fallback_route))
 
     filename_lower = excel_file.filename.lower()
-    if not filename_lower.endswith('.xlsx'):
-        flash('Nur .xlsx Dateien werden unterstützt.', 'error')
+    if not filename_lower.endswith(('.xlsx', '.csv')):
+        flash('Nur .xlsx oder .csv Dateien werden unterstützt.', 'error')
         return redirect(url_for(fallback_route))
 
     try:
-        from openpyxl import load_workbook
-    except Exception:
-        flash('Excel-Import benötigt das Paket openpyxl. Bitte Abhängigkeiten aktualisieren.', 'error')
-        return redirect(url_for(fallback_route))
-
-    try:
-        workbook = load_workbook(excel_file, data_only=True, read_only=True)
-        sheet = workbook.active
+        header_row, data_rows = _load_tabular_upload(excel_file)
     except Exception as exc:
-        flash(f'Excel-Datei konnte nicht gelesen werden: {exc}', 'error')
-        return redirect(url_for(fallback_route))
-
-    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
-    if not header_row:
-        flash('Die Excel-Datei enthält keine Kopfzeile.', 'error')
+        flash(f'Datei konnte nicht gelesen werden: {exc}', 'error')
         return redirect(url_for(fallback_route))
 
     header_map = {}
@@ -1504,7 +1606,7 @@ def _upload_excel_items(scope='inventory'):
     planned_item_total = 0
     row_limit_exceeded = False
 
-    for row_number, row_values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+    for row_number, row_values in enumerate(data_rows, start=2):
         processed_rows += 1
         if processed_rows > max_rows:
             row_limit_exceeded = True
@@ -1711,6 +1813,10 @@ def uploaded_file(filename):
         flask.Response: The requested file or placeholder image if not found
     """
     try:
+        denied = _deny_if_unauthenticated_file_access()
+        if denied:
+            return denied
+
         # Check production path first (deployed environment)
         prod_path = "/opt/Inventarsystem/Web/uploads"
         dev_path = app.config['UPLOAD_FOLDER']
@@ -1748,6 +1854,10 @@ def thumbnail_file(filename):
         flask.Response: The requested thumbnail file or placeholder image if not found
     """
     try:
+        denied = _deny_if_unauthenticated_file_access()
+        if denied:
+            return denied
+
         # Check production path first
         prod_path = "/var/Inventarsystem/Web/thumbnails"
         dev_path = app.config['THUMBNAIL_FOLDER']
@@ -1783,6 +1893,10 @@ def preview_file(filename):
         flask.Response: The requested preview file or placeholder image if not found
     """
     try:
+        denied = _deny_if_unauthenticated_file_access()
+        if denied:
+            return denied
+
         # Check production path first
         prod_path = "/var/Inventarsystem/Web/previews"
         dev_path = app.config['PREVIEW_FOLDER']
@@ -1854,6 +1968,10 @@ def catch_all_files(filename):
         flask.Response: The requested file or placeholder image if not found
     """
     try:
+        denied = _deny_if_unauthenticated_file_access()
+        if denied:
+            return denied
+
         # Check if the file exists in any of our directories
         possible_dirs = [
             app.config['UPLOAD_FOLDER'],
@@ -1912,7 +2030,9 @@ def test_connection():
     Returns:
         dict: Status information including version and status code
     """
-    return {'status': 'success', 'message': 'Connection successful', 'version': __version__, 'status_code': 200}
+    if 'username' not in session or not us.check_admin(session['username']):
+        return {'status': 'forbidden'}, 403
+    return {'status': 'success', 'message': 'Connection successful', 'status_code': 200}
 
 
 @app.route('/user_status')
@@ -4865,7 +4985,7 @@ def _soft_delete_item_groups(db, root_item_ids, username):
     }
 
 
-@app.route('/delete_item/<id>', methods=['POST', 'GET'])
+@app.route('/delete_item/<id>', methods=['POST'])
 def delete_item(id):
     """
     Route for deleting inventory items.
@@ -7783,9 +7903,17 @@ def download_book_cover():
         
         if not image_url:
             return jsonify({"error": "No image URL provided"}), 400
+
+        parsed_url = urlparse(image_url)
+        if parsed_url.scheme != 'https' or not parsed_url.netloc:
+            return jsonify({"error": "Only public HTTPS URLs are allowed"}), 400
+
+        hostname = parsed_url.hostname or ''
+        if not _is_public_host(hostname):
+            return jsonify({"error": "Target host is not allowed"}), 400
         
         # Download the image
-        response = requests.get(image_url, stream=True, timeout=10)
+        response = requests.get(image_url, stream=True, timeout=10, allow_redirects=False)
         
         if response.status_code != 200:
             return jsonify({"error": f"Failed to download image: Status {response.status_code}"}), 400
@@ -7798,6 +7926,14 @@ def download_book_cover():
             return jsonify({
                 "error": f"Nicht unterstütztes Bildformat: {content_type}. Erlaubte Formate: JPG, JPEG, PNG, GIF"
             }), 400
+
+        content_length = response.headers.get('Content-Length')
+        if content_length:
+            try:
+                if int(content_length) > 5 * 1024 * 1024:
+                    return jsonify({"error": "Image is too large"}), 413
+            except ValueError:
+                pass
         
         # Generate a fully unique filename using UUID
         import uuid
@@ -7819,7 +7955,11 @@ def download_book_cover():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         with open(filepath, 'wb') as f:
+            written = 0
             for chunk in response.iter_content(chunk_size=8192):
+                written += len(chunk)
+                if written > 5 * 1024 * 1024:
+                    return jsonify({"error": "Image is too large"}), 413
                 f.write(chunk)
         
         return jsonify({
@@ -7845,10 +7985,18 @@ def proxy_image():
     url = request.args.get('url')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
+
+    parsed_url = urlparse(url)
+    if parsed_url.scheme != 'https' or not parsed_url.netloc:
+        return jsonify({"error": "Only public HTTPS URLs are allowed"}), 400
+
+    hostname = parsed_url.hostname or ''
+    if not _is_public_host(hostname):
+        return jsonify({"error": "Target host is not allowed"}), 400
     
     try:
         # Fetch the image from the external source
-        response = requests.get(url, stream=True, timeout=5)
+        response = requests.get(url, stream=True, timeout=5, allow_redirects=False)
         
         # Check if the request was successful
         if response.status_code != 200:
@@ -7856,10 +8004,28 @@ def proxy_image():
         
         # Get the content type
         content_type = response.headers.get('Content-Type', 'image/jpeg')
+        if not content_type.lower().startswith('image/'):
+            return jsonify({"error": "Target URL did not return an image"}), 400
+
+        content_length = response.headers.get('Content-Length')
+        if content_length:
+            try:
+                if int(content_length) > 5 * 1024 * 1024:
+                    return jsonify({"error": "Image is too large"}), 413
+            except ValueError:
+                pass
+
+        payload = bytearray()
+        for chunk in response.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            payload.extend(chunk)
+            if len(payload) > 5 * 1024 * 1024:
+                return jsonify({"error": "Image is too large"}), 413
         
         # Return the image data with appropriate headers
         return Response(
-            response=response.content,
+            response=bytes(payload),
             status=200,
             headers={
                 'Content-Type': content_type

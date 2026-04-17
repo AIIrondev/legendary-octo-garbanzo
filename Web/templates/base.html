@@ -14,6 +14,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Inventarsystem{% endblock %}</title>
     {% block head %}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -24,6 +25,74 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/planned_appointments.css', v=ASSET_VERSION) }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function () {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.content : '';
+            if (!csrfToken) {
+                return;
+            }
+
+            const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+
+            function sameOrigin(url) {
+                try {
+                    return new URL(url, window.location.href).origin === window.location.origin;
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            function ensureFormToken(form) {
+                const method = (form.getAttribute('method') || 'GET').toUpperCase();
+                if (safeMethods.has(method)) {
+                    return;
+                }
+
+                const action = form.getAttribute('action') || window.location.href;
+                if (!sameOrigin(action)) {
+                    return;
+                }
+
+                let tokenInput = form.querySelector('input[name="csrf_token"]');
+                if (!tokenInput) {
+                    tokenInput = document.createElement('input');
+                    tokenInput.type = 'hidden';
+                    tokenInput.name = 'csrf_token';
+                    form.appendChild(tokenInput);
+                }
+                tokenInput.value = csrfToken;
+            }
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target;
+                if (form && form.tagName === 'FORM') {
+                    ensureFormToken(form);
+                }
+            }, true);
+
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = function (resource, init) {
+                const options = init ? { ...init } : {};
+                const method = (options.method || 'GET').toUpperCase();
+                const targetUrl = resource instanceof Request ? resource.url : String(resource);
+                if (!safeMethods.has(method) && sameOrigin(targetUrl)) {
+                    const headers = new Headers(resource instanceof Request ? resource.headers : undefined);
+                    if (options.headers) {
+                        new Headers(options.headers).forEach((value, key) => headers.set(key, value));
+                    }
+                    headers.set('X-CSRFToken', csrfToken);
+                    headers.set('X-Requested-With', 'fetch');
+                    options.headers = headers;
+                }
+                return originalFetch(resource, options);
+            };
+
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(ensureFormToken);
+            });
+        })();
+    </script>
     <style>
         /* ===== MODULE DETECTION & SETUP ===== */
         :root {
