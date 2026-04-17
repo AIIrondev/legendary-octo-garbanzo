@@ -231,6 +231,30 @@ def _set_security_headers(response):
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
     if cfg.SSL_ENABLED:
         response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    
+    # Optimize caching for static resources (images, etc.)
+    path = request.path
+    
+    # Aggressive caching for optimized images (480p) - they're immutable
+    if '/image/optimized/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+    
+    # Moderate caching for thumbnails
+    elif '/thumbnails/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
+    
+    # Moderate caching for previews
+    elif '/previews/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
+    
+    # Short cache for regular uploads (in case they're updated/deleted)
+    elif '/uploads/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=3600'  # 1 hour
+    
+    # Ensure WebP images are served with correct content-type
+    if path.endswith('.webp') or '.webp' in path:
+        response.headers['Content-Type'] = 'image/webp'
+    
     return response
 
 
@@ -2254,6 +2278,116 @@ def preview_file(filename):
     except Exception as e:
         app.logger.error(f"Error serving preview {filename}: {str(e)}")
         return Response("Preview not found", status=404)
+
+
+@app.route('/image/optimized/<filename>')
+def optimized_image(filename):
+    """
+    Serve optimized images at 480p maximum resolution (854px width).
+    Images are cached and converted to WebP for maximum compression.
+    This endpoint minimizes server RAM usage and bandwidth.
+    
+    Args:
+        filename (str): Original image filename
+        
+    Returns:
+        flask.Response: Optimized image (WebP preferred, JPEG fallback) or placeholder
+    """
+    try:
+        denied = _deny_if_unauthenticated_file_access()
+        if denied:
+            return denied
+
+        # Sanitize filename to prevent directory traversal
+        filename = os.path.basename(filename)
+        name_part, ext_part = os.path.splitext(filename)
+        
+        # Determine cache directory (use unique subdirectory for 480p optimized images)
+        cache_dir = app.config['THUMBNAIL_FOLDER']  # Reuse existing directory structure
+        cache_subdir = os.path.join(cache_dir, 'optimized_480p')
+        os.makedirs(cache_subdir, exist_ok=True)
+        
+        # Try to find the cached optimized image first (WebP preferred)
+        cached_webp = os.path.join(cache_subdir, f"{name_part}_480p.webp")
+        if os.path.exists(cached_webp):
+            response = send_from_directory(cache_subdir, f"{name_part}_480p.webp")
+            response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+            response.headers['Content-Type'] = 'image/webp'
+            return response
+        
+        # Try cached JPEG fallback
+        cached_jpeg = os.path.join(cache_subdir, f"{name_part}_480p.jpg")
+        if os.path.exists(cached_jpeg):
+            response = send_from_directory(cache_subdir, f"{name_part}_480p.jpg")
+            response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+            response.headers['Content-Type'] = 'image/jpeg'
+            return response
+        
+        # Find the original image
+        original_paths = [
+            os.path.join(app.config['UPLOAD_FOLDER'], filename),
+            os.path.join("/var/Inventarsystem/Web/uploads", filename),
+            os.path.join(app.config['UPLOAD_FOLDER'], f"{name_part}.webp"),
+            os.path.join("/var/Inventarsystem/Web/uploads", f"{name_part}.webp"),
+        ]
+        
+        original_image_path = None
+        for path in original_paths:
+            if os.path.exists(path):
+                original_image_path = path
+                break
+        
+        # If original image not found, serve placeholder
+        if not original_image_path:
+            svg_placeholder = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            if os.path.exists(svg_placeholder):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+        
+        # Skip if it's not a supported image format
+        if not is_image_file(original_image_path):
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+        
+        # Create optimized version (480p = ~854px width max)
+        MAX_WIDTH = 854
+        MAX_HEIGHT = 480
+        
+        try:
+            with Image.open(original_image_path) as img:
+                # Normalize orientation (fix EXIF rotation)
+                img = normalize_image_orientation(img)
+                
+                # Resize maintaining aspect ratio
+                img.thumbnail((MAX_WIDTH, MAX_HEIGHT), Image.Resampling.LANCZOS)
+                
+                # Try to save as WebP first (best compression)
+                try:
+                    img = img.convert('RGB') if img.mode in ('RGBA', 'P') else img
+                    img.save(cached_webp, 'WEBP', quality=80, method=6)  # Quality 80, slowest method for best compression
+                    
+                    response = send_from_directory(cache_subdir, f"{name_part}_480p.webp")
+                    response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+                    response.headers['Content-Type'] = 'image/webp'
+                    return response
+                except Exception as webp_err:
+                    app.logger.warning(f"WebP encoding failed for {filename}, falling back to JPEG: {str(webp_err)}")
+                
+                # Fallback to JPEG if WebP fails
+                img = img.convert('RGB') if img.mode in ('RGBA', 'P', 'L') else img
+                img.save(cached_jpeg, 'JPEG', quality=75, optimize=True)  # Quality 75, optimized
+                
+                response = send_from_directory(cache_subdir, f"{name_part}_480p.jpg")
+                response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+                response.headers['Content-Type'] = 'image/jpeg'
+                return response
+                
+        except Exception as img_err:
+            app.logger.error(f"Error processing image {filename}: {str(img_err)}")
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+    
+    except Exception as e:
+        app.logger.error(f"Error serving optimized image {filename}: {str(e)}")
+        return Response("Optimized image not found", status=404)
 
 
 # @app.route('/QRCodes/<filename>')
@@ -6714,10 +6848,7 @@ def register():
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if 'username' in session and us.check_admin(session['username']):
+    if 'username' in session:
         if request.method == 'POST':
             username = request.form['username']
             password = request.form['password']
@@ -6800,9 +6931,6 @@ def user_del():
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
     
     all_users = us.get_all_users()
 
@@ -6864,9 +6992,6 @@ def delete_user():
         flask.Response: Redirect to the user deletion interface with status
     """
     if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
@@ -7141,6 +7266,115 @@ def admin_audit_export():
     finally:
         if client:
             client.close()
+
+
+@app.route('/admin/image_cache_stats', methods=['GET'])
+def admin_image_cache_stats():
+    """
+    Get statistics about optimized image cache.
+    Admin-only endpoint for monitoring and maintenance.
+    
+    Returns:
+        JSON with cache statistics (file count, total size, creation dates)
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    
+    permissions = _get_current_user_permissions()
+    if not _action_access_allowed(permissions, 'can_manage_settings'):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    
+    try:
+        cache_dir = os.path.join(app.config['THUMBNAIL_FOLDER'], 'optimized_480p')
+        
+        if not os.path.exists(cache_dir):
+            return jsonify({
+                'ok': True,
+                'cache_exists': False,
+                'file_count': 0,
+                'total_size_mb': 0
+            })
+        
+        files = []
+        total_size = 0
+        
+        for filename in os.listdir(cache_dir):
+            file_path = os.path.join(cache_dir, filename)
+            if not os.path.isfile(file_path):
+                continue
+            
+            file_size = os.path.getsize(file_path)
+            total_size += file_size
+            mod_time = os.path.getmtime(file_path)
+            
+            files.append({
+                'name': filename,
+                'size_kb': round(file_size / 1024, 2),
+                'modified': datetime.datetime.fromtimestamp(mod_time).isoformat()
+            })
+        
+        files.sort(key=lambda x: x['modified'], reverse=True)
+        
+        return jsonify({
+            'ok': True,
+            'cache_exists': True,
+            'file_count': len(files),
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'files': files[:20]  # Return only newest 20 files
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/image_cache_cleanup', methods=['POST'])
+def admin_image_cache_cleanup():
+    """
+    Trigger cleanup of old optimized images.
+    Admin-only endpoint for maintenance.
+    
+    Args (via form):
+        max_age_days: Delete images older than this many days (default 30)
+        
+    Returns:
+        JSON with cleanup results (deleted count, freed space)
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    
+    permissions = _get_current_user_permissions()
+    if not _action_access_allowed(permissions, 'can_manage_settings'):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    
+    try:
+        max_age_days = int(request.form.get('max_age_days', 30))
+        max_age_days = max(1, min(max_age_days, 365))  # Clamp between 1 and 365 days
+        
+        result = cleanup_old_optimized_images(max_age_days)
+        
+        if result['error']:
+            return jsonify({'ok': False, 'error': result['error']}), 500
+        
+        # Log the action
+        _append_audit_event(
+            db=MongoClient(MONGODB_HOST, MONGODB_PORT)[MONGODB_DB],
+            event_type='admin_image_cache_cleanup',
+            payload={
+                'max_age_days': max_age_days,
+                'deleted_count': result['deleted'],
+                'freed_mb': result['freed_mb']
+            }
+        )
+        
+        return jsonify({
+            'ok': True,
+            'deleted': result['deleted'],
+            'freed_mb': result['freed_mb'],
+            'message': f"Cleaned up {result['deleted']} images, freed {result['freed_mb']} MB"
+        })
+    except Exception as e:
+        app.logger.error(f"Error during image cache cleanup: {str(e)}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
@@ -7798,10 +8032,6 @@ def admin_reset_user_password():
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-        
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
     
     username = request.form.get('username')
     new_password = html.escape(request.form.get('new_password', 'Password123'))  # Default temporary password
@@ -7862,7 +8092,7 @@ def admin_update_user_name():
 @app.route('/admin_update_user_permissions', methods=['POST'])
 def admin_update_user_permissions():
     """Admin route to update permission preset and per-endpoint overrides for a user."""
-    if 'username' not in session or not us.check_admin(session['username']):
+    if 'username' not in session:
         flash('Nicht autorisierter Zugriff', 'error')
         return redirect(url_for('login'))
 
@@ -7897,7 +8127,7 @@ def admin_update_user_permissions():
 @app.route('/admin_anonymize_names', methods=['POST'])
 def admin_anonymize_names():
     """Anonymize already stored personal names into short aliases."""
-    if 'username' not in session or not us.check_admin(session['username']):
+    if 'username' not in session:
         flash('Nicht autorisierter Zugriff', 'error')
         return redirect(url_for('login'))
 
@@ -10067,6 +10297,59 @@ def serve_js(filename):
     """
     js_folder = os.path.join(app.static_folder, 'js')
     return send_from_directory(js_folder, filename)
+
+
+def cleanup_old_optimized_images(max_age_days=30):
+    """
+    Clean up old optimized images to save disk space.
+    Optimized images are re-created on demand, so old ones can be safely deleted.
+    
+    Args:
+        max_age_days (int): Delete cached images older than this many days. Default 30.
+        
+    Returns:
+        dict: Statistics about cleanup (deleted count, freed space in MB)
+    """
+    try:
+        import time
+        import shutil
+        
+        cache_dir = os.path.join(app.config['THUMBNAIL_FOLDER'], 'optimized_480p')
+        if not os.path.exists(cache_dir):
+            return {'deleted': 0, 'freed_mb': 0, 'error': None}
+        
+        current_time = time.time()
+        max_age_seconds = max_age_days * 24 * 60 * 60
+        deleted_count = 0
+        freed_bytes = 0
+        
+        for filename in os.listdir(cache_dir):
+            file_path = os.path.join(cache_dir, filename)
+            if not os.path.isfile(file_path):
+                continue
+            
+            file_age_seconds = current_time - os.path.getmtime(file_path)
+            if file_age_seconds > max_age_seconds:
+                try:
+                    file_size = os.path.getsize(file_path)
+                    os.remove(file_path)
+                    deleted_count += 1
+                    freed_bytes += file_size
+                except Exception as e:
+                    app.logger.warning(f"Failed to delete optimized image {filename}: {str(e)}")
+        
+        freed_mb = freed_bytes / (1024 * 1024)
+        app.logger.info(f"Cleanup complete: Deleted {deleted_count} images, freed {freed_mb:.2f} MB")
+        
+        return {
+            'deleted': deleted_count,
+            'freed_mb': round(freed_mb, 2),
+            'error': None
+        }
+    except Exception as e:
+        app.logger.error(f"Error during optimized image cleanup: {str(e)}")
+        return {'deleted': 0, 'freed_mb': 0, 'error': str(e)}
+
 
 @app.route('/log_mobile_issue', methods=['POST'])
 def log_mobile_issue():

@@ -943,8 +943,14 @@
                                             </div>`;
                                 }
                             } else {
-                                // For images, use thumbnail if available
-                                // Always ensure consistent URL construction for all image types, including PNG
+                                // For images, use optimized 480p version for performance
+                                // Extract filename from full path for optimization endpoint
+                                const imageFilename = image.split('/').pop();
+                                
+                                // Generate optimized image URL (480p max, WebP or JPEG)
+                                let optimizedSrc = `{{ url_for('optimized_image', filename='') }}${imageFilename}`;
+                                
+                                // Fallback to original/thumbnail if optimization fails
                                 let baseSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
                                     ? thumbnailInfo.thumbnail_url 
                                     : (image.startsWith('/uploads/') || image.startsWith('http') ? 
@@ -954,8 +960,9 @@
                                 // Use our PNG to JPG conversion helper function
                                 const imageSrc = getImageSrc(baseSrc);
                                     
-                                return `<img src="${imageSrc.primary}" alt="${item.Name}" class="item-image" data-index="${index}" 
-                                        data-original="${image}" onerror="if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
+                                return `<img src="${optimizedSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${image}" loading="lazy"
+                                        onerror="if(this.src !== '${imageSrc.primary}') this.src='${imageSrc.primary}'; else if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
                             }
                         }).join('') : '';
                         
@@ -1428,7 +1435,12 @@
                          Your browser does not support the video tag.
                          </video>`;
             } else {
-                // For images, ensure URL construction is consistent for all image types, including PNG
+                // For images, use optimized 480p version for performance
+                // Extract filename for optimization endpoint
+                const imageFilename = file.split('/').pop();
+                let optimizedSrc = `{{ url_for('optimized_image', filename='') }}${imageFilename}`;
+                
+                // Fallback to original if optimization fails
                 const baseSrc = file.startsWith('/uploads/') || file.startsWith('http') ? 
                                file : 
                                `{{ url_for('uploaded_file', filename='') }}${file}`;
@@ -1436,8 +1448,8 @@
                 // Use our PNG to JPG conversion helper function
                 const imageSrc = getImageSrc(baseSrc);
                 
-                return `<img src="${imageSrc.primary}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" 
-                         onerror="if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
+                return `<img src="${optimizedSrc}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" 
+                         onerror="if(this.src !== '${imageSrc.primary}') this.src='${imageSrc.primary}'; else if(this.src !== '${imageSrc.fallback}') this.src='${imageSrc.fallback}'; else this.src='{{ url_for('static', filename='img/no-image.png') }}';">`;
             }
         }).join('') : '';
         
