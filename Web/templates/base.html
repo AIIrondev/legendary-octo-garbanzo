@@ -152,6 +152,51 @@
             font-weight: 600;
             padding: 0.6rem 0.85rem;
             border-radius: 8px;
+            transition: padding .18s ease, font-size .18s ease;
+        }
+
+        .navbar.nav-compact .navbar-brand {
+            font-size: 1.18rem;
+        }
+
+        .navbar.nav-compact .navbar-nav .nav-link {
+            font-size: 0.93rem;
+            padding: 0.48rem 0.62rem;
+        }
+
+        .navbar.nav-compact .function-search-wrap {
+            width: min(320px, 34vw);
+        }
+
+        .navbar.nav-compact .function-search-input,
+        .navbar.nav-compact .function-search-btn {
+            min-height: 34px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+        }
+
+        .navbar.nav-ultra-compact .navbar-brand {
+            font-size: 1.04rem;
+        }
+
+        .navbar.nav-ultra-compact .navbar-nav .nav-link {
+            font-size: 0.86rem;
+            padding: 0.4rem 0.52rem;
+        }
+
+        .navbar.nav-ultra-compact .function-search-wrap {
+            width: min(270px, 30vw);
+        }
+
+        .navbar.nav-ultra-compact .function-search-btn {
+            padding-left: 9px;
+            padding-right: 9px;
+            font-size: 0.82rem;
+        }
+
+        .navbar.nav-ultra-compact .navbar-text {
+            margin-right: 0.45rem !important;
+            font-size: 0.86rem;
         }
 
         .navbar-nav .nav-link.nav-active {
@@ -1233,6 +1278,27 @@
             function initNavbarOverflow(navList, navOverflowAnchor) {
                 if (!navList || !navOverflowAnchor) return;
 
+                const navRoot = navList.closest('nav.navbar');
+                const navCollapse = navList.closest('.navbar-collapse');
+                const navContainer = navList.closest('.container-fluid') || navList.parentElement;
+
+                function applyCompactMode() {
+                    if (!navRoot || !navContainer) return;
+                    const width = navContainer.clientWidth || window.innerWidth;
+                    navRoot.classList.remove('nav-compact', 'nav-ultra-compact');
+
+                    if (window.innerWidth < 992) {
+                        return;
+                    }
+
+                    if (width < 1220) {
+                        navRoot.classList.add('nav-compact');
+                    }
+                    if (width < 1080) {
+                        navRoot.classList.add('nav-ultra-compact');
+                    }
+                }
+
                 function collectTopLevelNavSources() {
                     if (!navList) return [];
                     return Array.from(navList.children).filter(function(li){
@@ -1267,11 +1333,65 @@
                     li.className = 'nav-item dropdown';
                     li.dataset.overflowControl = 'true';
 
+                    const toggleId = navOverflowAnchor.id + '-toggle';
+                    const menuId = navOverflowAnchor.id + '-menu';
+
                     li.innerHTML =
-                        '<a class="nav-link dropdown-toggle" href="#" id="overflowMenuToggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">⋮ Weitere</a>' +
-                        '<ul class="dropdown-menu" aria-labelledby="overflowMenuToggle" id="overflowMenu"></ul>';
+                        '<a class="nav-link dropdown-toggle" href="#" id="' + toggleId + '" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="' + menuId + '">⋮ Weitere</a>' +
+                        '<ul class="dropdown-menu" aria-labelledby="' + toggleId + '" id="' + menuId + '"></ul>';
 
                     return li;
+                }
+
+                function getNavCandidatePriority(item) {
+                    if (!(item instanceof HTMLElement)) {
+                        return -1;
+                    }
+
+                    const topLink = item.querySelector(':scope > a.nav-link');
+                    if (!topLink) {
+                        return 10;
+                    }
+
+                    if (topLink.classList.contains('nav-active')) {
+                        return 1000;
+                    }
+
+                    if (topLink.classList.contains('nav-priority-link')) {
+                        return 900;
+                    }
+
+                    if (topLink.classList.contains('quick-link-pill')) {
+                        return 700;
+                    }
+
+                    if (item.classList.contains('dropdown')) {
+                        return 300;
+                    }
+
+                    return 500;
+                }
+
+                function pickNextNavItemToHide(candidates) {
+                    if (!Array.isArray(candidates) || candidates.length === 0) {
+                        return null;
+                    }
+
+                    let selected = candidates[0];
+                    let selectedIndex = 0;
+                    let selectedPriority = getNavCandidatePriority(selected);
+
+                    for (let i = 1; i < candidates.length; i += 1) {
+                        const candidate = candidates[i];
+                        const candidatePriority = getNavCandidatePriority(candidate);
+                        if (candidatePriority < selectedPriority || (candidatePriority === selectedPriority && i > selectedIndex)) {
+                            selected = candidate;
+                            selectedIndex = i;
+                            selectedPriority = candidatePriority;
+                        }
+                    }
+
+                    return selected;
                 }
 
                 function appendSourceToOverflowMenu(sourceItem, menu) {
@@ -1309,6 +1429,10 @@
 
                     const control = createOverflowControl();
                     const menu = control.querySelector('ul.dropdown-menu');
+                    const controlLink = control.querySelector(':scope > a.nav-link');
+                    if (controlLink) {
+                        controlLink.textContent = '⋮ Weitere (' + hiddenSources.length + ')';
+                    }
 
                     hiddenSources.forEach(function(source){
                         appendSourceToOverflowMenu(source, menu);
@@ -1325,6 +1449,8 @@
                 function adaptNavbarByWidth() {
                     if (!navList || !navOverflowAnchor) return;
 
+                    applyCompactMode();
+
                     if (window.innerWidth < 992) {
                         restoreAllNavItems();
                         return;
@@ -1336,7 +1462,10 @@
                     let candidates = collectTopLevelNavSources();
 
                     while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
-                        const toHide = candidates[candidates.length - 1];
+                        const toHide = pickNextNavItemToHide(candidates);
+                        if (!toHide) {
+                            break;
+                        }
                         toHide.style.display = 'none';
                         hiddenSources.unshift(toHide);
                         candidates = collectTopLevelNavSources();
@@ -1346,7 +1475,10 @@
 
                     candidates = collectTopLevelNavSources();
                     while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
-                        const toHide = candidates[candidates.length - 1];
+                        const toHide = pickNextNavItemToHide(candidates);
+                        if (!toHide) {
+                            break;
+                        }
                         toHide.style.display = 'none';
                         hiddenSources.unshift(toHide);
                         rebuildOverflowControl(hiddenSources);
@@ -1364,6 +1496,18 @@
 
                 adaptNavbarByWidth();
                 window.addEventListener('resize', debounceAdapt);
+
+                if (navCollapse) {
+                    navCollapse.addEventListener('shown.bs.collapse', debounceAdapt);
+                    navCollapse.addEventListener('hidden.bs.collapse', debounceAdapt);
+                }
+
+                if ('ResizeObserver' in window && navContainer) {
+                    const resizeObserver = new ResizeObserver(function() {
+                        debounceAdapt();
+                    });
+                    resizeObserver.observe(navContainer);
+                }
             }
 
             // Initialize overflow control for inventory navbar
