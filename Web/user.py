@@ -234,6 +234,10 @@ def get_effective_permissions(username):
     if not user:
         return build_default_permission_payload('standard_user')
 
+    # Admin users always have full access, independent of custom presets.
+    if bool(user.get('Admin', False)):
+        return build_default_permission_payload('full_access')
+
     preset_key = user.get('PermissionPreset') or 'standard_user'
     payload = build_default_permission_payload(preset_key)
     payload['actions'] = _normalize_bool_map(user.get('ActionPermissions', {}), payload['actions'])
