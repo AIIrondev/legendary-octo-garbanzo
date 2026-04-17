@@ -1220,10 +1220,10 @@ def _upload_student_cards_excel():
 
     synonyms = {
         'ausweis_id': ['ausweis_id', 'ausweisid', 'ausweis-id', 'karte', 'kartennummer', 'card_id', 'id'],
-        'student_name': ['student_name', 'schuelername', 'schülername', 'name', 'vollname', 'vorname_nachname', 'nachname_vorname'],
+        'student_name': ['student_name', 'schuelername', 'schülername', 'schueler', 'schüler', 'name', 'vollname', 'vorname_nachname', 'nachname_vorname'],
         'first_name': ['vorname', 'first_name', 'firstname'],
         'last_name': ['nachname', 'last_name', 'lastname'],
-        'class_name': ['klasse', 'class', 'class_name', 'jahrgang', 'jahrgangsstufe', 'stufe', 'gruppe'],
+        'class_name': ['klasse', 'class', 'class_name', 'jahrgang', 'jahrgangsstufe', 'stufe', 'gruppe', 'asv_klasse'],
         'notes': ['notizen', 'notes', 'bemerkungen', 'bemerkung', 'hinweis', 'hinweise'],
         'default_borrow_days': ['standard_ausleihdauer', 'ausleihdauer', 'borrow_days', 'tage', 'leihtage', 'max_borrow_days'],
     }
