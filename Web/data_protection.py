@@ -92,6 +92,27 @@ def _candidate_media_paths(filename):
     ]
 
 
+def _iter_item_image_names(item):
+    """Yield image names from current and legacy item schema fields."""
+    images_field = item.get("Images", []) or []
+    if isinstance(images_field, (list, tuple, set)):
+        for value in images_field:
+            text = str(value).strip()
+            if text:
+                yield text
+    elif isinstance(images_field, str):
+        text = images_field.strip()
+        if text:
+            yield text
+
+    # Legacy schema support: single image name in `Image`.
+    legacy_image = item.get("Image")
+    if legacy_image:
+        text = str(legacy_image).strip()
+        if text:
+            yield text
+
+
 def encrypt_soft_deleted_media_pack(item_docs, *, actor="system"):
     """
     Archive media files referenced by item docs, encrypt the archive, and delete originals.
@@ -103,7 +124,7 @@ def encrypt_soft_deleted_media_pack(item_docs, *, actor="system"):
 
     for item in item_docs:
         item_id = str(item.get("_id", "unknown"))
-        for image_name in item.get("Images", []) or []:
+        for image_name in _iter_item_image_names(item):
             for abs_path, bucket in _candidate_media_paths(str(image_name)):
                 if abs_path in seen_paths:
                     continue
