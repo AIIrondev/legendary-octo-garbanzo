@@ -711,31 +711,25 @@
                 width: 100%;
             }
 
-            .navbar-mobile-arranged .navbar-collapse {
-                display: block;
-            }
+            @media (max-width: 520px) {
+                .function-search-form {
+                    flex-direction: column;
+                }
 
-            .navbar-mobile-arranged .navbar-nav {
-                flex-direction: column;
-            }
+                .function-search-input,
+                .function-search-btn,
+                .user-menu-btn,
+                .module-selector-bar .module-tab {
+                    width: 100%;
+                }
 
-            body.nav-mobile-tight .function-search-form {
-                flex-direction: column;
-            }
+                .module-selector-bar .module-tabs {
+                    flex-direction: column;
+                }
 
-            body.nav-mobile-tight .function-search-input,
-            body.nav-mobile-tight .function-search-btn,
-            body.nav-mobile-tight .user-menu-btn,
-            body.nav-mobile-tight .module-selector-bar .module-tab {
-                width: 100%;
-            }
-
-            body.nav-mobile-tight .module-selector-bar .module-tabs {
-                flex-direction: column;
-            }
-
-            body.nav-mobile-tight .navbar-text {
-                font-size: 0.88rem;
+                .navbar-text {
+                    font-size: 0.88rem;
+                }
             }
         }
     </style>
@@ -1468,13 +1462,6 @@
                     if (!navRoot || !navContainer) return;
                     const width = navContainer.clientWidth || window.innerWidth;
                     navRoot.classList.remove('nav-compact', 'nav-ultra-compact');
-                    navRoot.classList.toggle('nav-mobile-arranged', window.innerWidth < 992);
-                    navRoot.classList.toggle('nav-mobile-tight', window.innerWidth < 520);
-
-                    if (document.body) {
-                        document.body.classList.toggle('nav-mobile-arranged', window.innerWidth < 992);
-                        document.body.classList.toggle('nav-mobile-tight', window.innerWidth < 520);
-                    }
 
                     if (window.innerWidth < 992) {
                         return;
