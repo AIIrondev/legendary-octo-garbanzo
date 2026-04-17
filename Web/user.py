@@ -12,6 +12,7 @@ Provides methods for creating, validating, and retrieving user information.
 '''
 import hashlib
 import copy
+import re
 from bson.objectid import ObjectId
 import settings as cfg
 from settings import MongoClient
@@ -22,6 +23,38 @@ def normalize_student_card_id(card_id):
     if card_id is None:
         return ''
     return str(card_id).strip().upper()
+
+
+def _clean_name_fragment(value):
+    cleaned = re.sub(r'[^A-Za-zÄÖÜäöüß]', '', str(value or '').strip())
+    if not cleaned:
+        return ''
+    replacements = {
+        'ä': 'ae',
+        'ö': 'oe',
+        'ü': 'ue',
+        'ß': 'ss',
+        'Ä': 'Ae',
+        'Ö': 'Oe',
+        'Ü': 'Ue',
+    }
+    for old_char, new_char in replacements.items():
+        cleaned = cleaned.replace(old_char, new_char)
+    return cleaned
+
+
+def build_name_synonym(first_name, last_name=''):
+    """Build a deterministic, non-personalized short alias like 'SimFri'."""
+    first = _clean_name_fragment(first_name)
+    last = _clean_name_fragment(last_name)
+
+    if first and last:
+        return (first[:3] + last[:3]).title()
+
+    combined = (first + last)
+    if not combined:
+        return 'User'
+    return combined[:6].title()
 
 
 ACTION_PERMISSION_KEYS = (
@@ -361,13 +394,15 @@ def add_user(username, password, name, last_name, is_student=False, student_card
         return False
     permission_defaults = build_default_permission_payload('standard_user')
 
+    name_alias = build_name_synonym(name, last_name)
+
     user_doc = {
         'Username': username,
         'Password': hashing(password),
         'Admin': False,
         'active_ausleihung': None,
-        'name': name,
-        'last_name': last_name,
+        'name': name_alias,
+        'last_name': '',
         'IsStudent': bool(is_student),
         'PermissionPreset': permission_defaults['preset'],
         'ActionPermissions': permission_defaults['actions'],
@@ -714,13 +749,14 @@ def update_user_name(username, name, last_name):
         bool: True if updated successfully, False otherwise
     """
     try:
+        name_alias = build_name_synonym(name, last_name)
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         users = db['users']
         
         result = users.update_one(
             {'Username': username}, 
-            {'$set': {'name': name, 'last_name': last_name}}
+            {'$set': {'name': name_alias, 'last_name': ''}}
         )
         
         client.close()

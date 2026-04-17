@@ -17,6 +17,16 @@
     <div class="user-management-container">
         <h2>Benutzer</h2>
 
+        <form method="POST" action="{{ url_for('admin_anonymize_names') }}" class="mb-3">
+            <button
+                type="submit"
+                class="btn btn-outline-danger"
+                onclick="return confirm('Sollen alle gespeicherten Klarnamen dauerhaft in Synonym-Kuerzel umgewandelt werden?')"
+            >
+                Gespeicherte Namen anonymisieren
+            </button>
+        </form>
+
         <div class="filter-bar mb-3">
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">

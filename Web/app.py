@@ -206,6 +206,7 @@ PERMISSION_ACTION_ENDPOINTS = {
     'register': 'can_manage_users',
     'admin_reset_user_password': 'can_manage_users',
     'admin_update_user_permissions': 'can_manage_users',
+    'admin_anonymize_names': 'can_manage_users',
     'home_admin': 'can_manage_settings',
     'upload_admin': 'can_manage_settings',
     'library_admin': 'can_manage_settings',
@@ -1588,14 +1589,25 @@ def _student_card_id_slug(value):
     return re.sub(r'[^a-z0-9]+', '', normalized).upper()
 
 
+def _name_to_alias(full_name):
+    """Convert clear names to deterministic aliases, e.g. Simon Frings -> SimFri."""
+    text = sanitize_form_value(full_name)
+    if not text:
+        return 'User'
+
+    parts = [p for p in re.split(r'\s+', text) if p]
+    if len(parts) >= 2:
+        return us.build_name_synonym(parts[0], parts[-1])
+    return us.build_name_synonym(parts[0], '')
+
+
 def _build_student_card_excel_id(student_name, class_name, row_number, used_ids):
-    """Create a stable student-card ID when the spreadsheet does not provide one."""
-    name_slug = _student_card_id_slug(student_name)
+    """Create a stable student-card ID without embedding personal names."""
     class_slug = _student_card_id_slug(class_name)
 
-    base_parts = [part for part in (class_slug, name_slug) if part]
+    base_parts = [part for part in (class_slug,) if part]
     if base_parts:
-        base_id = f"SC-{'-'.join(base_parts[:2])}"
+        base_id = f"SC-{'-'.join(base_parts[:1])}-ROW-{row_number}"
     else:
         base_id = f"SC-ROW-{row_number}"
 
@@ -1715,6 +1727,8 @@ def _upload_student_cards_excel():
                 student_name = f'{first_name} {last_name}'.strip()
                 validation_warnings.append((row_number, 'Schülername wurde aus Vorname und Nachname zusammengesetzt'))
 
+            student_name_alias = _name_to_alias(student_name)
+
             if not ausweis_id and not student_name and not class_name:
                 continue
 
@@ -1739,7 +1753,7 @@ def _upload_student_cards_excel():
             planned_rows.append({
                 'row_number': row_number,
                 'ausweis_id': ausweis_id,
-                'student_name': student_name,
+                'student_name': student_name_alias,
                 'class_name': class_name,
                 'notes': notes,
                 'default_borrow_days': default_borrow_days,
@@ -3172,6 +3186,7 @@ def student_cards_admin():
         action = request.form.get('action', 'add')
         ausweis_id = request.form.get('ausweis_id', '').strip().upper()
         student_name = request.form.get('student_name', '').strip()
+        student_name_alias = _name_to_alias(student_name)
         default_borrow_days = request.form.get('default_borrow_days', 14)
         class_name = request.form.get('class_name', '').strip()
         notes = request.form.get('notes', '').strip()
@@ -3198,7 +3213,7 @@ def student_cards_admin():
                     else:
                         encrypted_payload = encrypt_document_fields(
                             {
-                                'SchülerName': student_name,
+                                'SchülerName': student_name_alias,
                                 'Klasse': class_name,
                                 'Notizen': notes,
                             },
@@ -3231,7 +3246,7 @@ def student_cards_admin():
                     try:
                         encrypted_payload = encrypt_document_fields(
                             {
-                                'SchülerName': student_name,
+                                'SchülerName': student_name_alias,
                                 'Klasse': class_name,
                                 'Notizen': notes,
                             },
@@ -7807,6 +7822,72 @@ def admin_update_user_permissions():
         flash(f'Berechtigungen für {username} wurden aktualisiert.', 'success')
     else:
         flash('Fehler beim Aktualisieren der Berechtigungen.', 'error')
+
+    return redirect(url_for('user_del'))
+
+
+@app.route('/admin_anonymize_names', methods=['POST'])
+def admin_anonymize_names():
+    """Anonymize already stored personal names into short aliases."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Nicht autorisierter Zugriff', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        users_col = db['users']
+        student_cards_col = db['student_cards']
+
+        users_updated = 0
+        cards_updated = 0
+
+        for user_doc in users_col.find({}, {'name': 1, 'last_name': 1, 'Username': 1, 'username': 1}):
+            first = str(user_doc.get('name') or '').strip()
+            last = str(user_doc.get('last_name') or '').strip()
+            fallback = str(user_doc.get('Username') or user_doc.get('username') or '').strip()
+
+            alias = us.build_name_synonym(first or fallback, last)
+            result = users_col.update_one(
+                {'_id': user_doc['_id']},
+                {'$set': {'name': alias, 'last_name': ''}}
+            )
+            if result.modified_count > 0:
+                users_updated += 1
+
+        for card_doc in student_cards_col.find({}, {'SchülerName': 1, 'Klasse': 1, 'Notizen': 1}):
+            decrypted = _decrypt_student_card_doc(card_doc)
+            alias = _name_to_alias(decrypted.get('SchülerName', ''))
+            class_name = sanitize_form_value(decrypted.get('Klasse', ''))
+            notes = sanitize_form_value(decrypted.get('Notizen', ''))
+
+            encrypted_payload = encrypt_document_fields(
+                {
+                    'SchülerName': alias,
+                    'Klasse': class_name,
+                    'Notizen': notes,
+                },
+                STUDENT_CARD_ENCRYPTED_FIELDS,
+            )
+
+            result = student_cards_col.update_one(
+                {'_id': card_doc['_id']},
+                {'$set': {'Aktualisiert': datetime.datetime.now(), **encrypted_payload}}
+            )
+            if result.modified_count > 0:
+                cards_updated += 1
+
+        flash(
+            f'Anonymisierung abgeschlossen: {users_updated} Benutzer und {cards_updated} Ausweise aktualisiert.',
+            'success'
+        )
+    except Exception as exc:
+        app.logger.error(f'Error anonymizing names: {exc}')
+        flash('Fehler bei der Anonymisierung der Namen.', 'error')
+    finally:
+        if client:
+            client.close()
 
     return redirect(url_for('user_del'))
 
