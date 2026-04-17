@@ -786,7 +786,7 @@
                     </li>
                     {% endif %}
                     {% endif %}
-                    {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.pages.get('upload_admin', True) and current_permissions.actions.get('can_manage_settings', True) %}
+                    {% if 'username' in session and current_permissions.pages.get('upload_admin', True) and current_permissions.actions.get('can_insert', True) %}
                     <li class="nav-item">
                         <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
                     </li>
@@ -907,7 +907,7 @@
                     </li>
                     {% endif %}
                     {% endif %}
-                    {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) and current_permissions.pages.get('library_admin', True) %}
+                    {% if 'username' in session and current_permissions.actions.get('can_insert', True) and current_permissions.pages.get('library_admin', True) %}
                     <li class="nav-item">
                         <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
                     </li>

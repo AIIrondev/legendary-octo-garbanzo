@@ -208,8 +208,8 @@ PERMISSION_ACTION_ENDPOINTS = {
     'admin_update_user_permissions': 'can_manage_users',
     'admin_anonymize_names': 'can_manage_users',
     'home_admin': 'can_manage_settings',
-    'upload_admin': 'can_manage_settings',
-    'library_admin': 'can_manage_settings',
+    'upload_admin': 'can_insert',
+    'library_admin': 'can_insert',
     'admin_borrowings': 'can_manage_settings',
     'library_loans_admin': 'can_manage_settings',
     'admin_damaged_items': 'can_manage_settings',
@@ -1826,8 +1826,9 @@ def _upload_excel_items(scope='inventory'):
         flash('Nicht angemeldet.', 'error')
         return redirect(url_for('login'))
 
-    if not us.check_admin(session['username']):
-        flash('Administratorrechte erforderlich.', 'error')
+    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+    if not _action_access_allowed(permissions, 'can_insert'):
+        flash('Einfüge-Rechte erforderlich.', 'error')
         return redirect(url_for('home'))
 
     is_library_scope = scope == 'library'
@@ -1837,7 +1838,7 @@ def _upload_excel_items(scope='inventory'):
     if is_library_scope:
         if not cfg.LIBRARY_MODULE_ENABLED:
             flash('Bibliotheks-Modul ist deaktiviert.', 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for('home'))
 
     excel_file = request.files.get(file_field)
     if not excel_file or not excel_file.filename:
@@ -3017,8 +3018,8 @@ def api_library_item_update(item_id):
 @app.route('/upload_admin')
 def upload_admin():
     """
-    Admin upload page route.
-    Only accessible by users with admin privileges.
+    Upload page route for inventory items.
+    Accessible to users with insert permission.
     Supports duplication by passing duplicate_from parameter.
     
     Returns:
@@ -3027,7 +3028,8 @@ def upload_admin():
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
+    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+    if not _action_access_allowed(permissions, 'can_insert'):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
@@ -3091,13 +3093,14 @@ def upload_admin():
 @app.route('/library_admin')
 def library_admin():
     """
-    Dedicated admin page for library/book uploads with ISBN scanning.
-    Only accessible by admins and only when the library module is enabled.
+    Dedicated page for library/book uploads with ISBN scanning.
+    Accessible to users with insert permission when the library module is enabled.
     """
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
+    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+    if not _action_access_allowed(permissions, 'can_insert'):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     if not cfg.LIBRARY_MODULE_ENABLED:
@@ -4192,11 +4195,15 @@ def upload_item():
     if 'username' not in session:
         return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
         
-    # Check if user is an admin
+    # Check if user may insert items
     username = session['username']
-    if not us.check_admin(username):
-        return jsonify({'success': False, 'message': 'Administratorrechte erforderlich'}), 403
+    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+    if not _action_access_allowed(permissions, 'can_insert'):
+        return jsonify({'success': False, 'message': 'Einfüge-Rechte erforderlich'}), 403
         
+    can_access_admin_home = _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings')
+    success_redirect_endpoint = 'home_admin' if can_access_admin_home else 'home'
+
     # Detect if request is from mobile device
     is_mobile = 'Mobile' in request.headers.get('User-Agent', '')
     is_ios = 'iPhone' in request.headers.get('User-Agent', '') or 'iPad' in request.headers.get('User-Agent', '')
@@ -4277,7 +4284,7 @@ def upload_item():
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
             flash('Fehler beim Verarbeiten der Formulardaten. Bitte versuchen Sie es erneut.', 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
     # Expand special "all values" selections for predefined filters.
     filter_upload = expand_filter_selection(filter_upload, 1)
@@ -4290,7 +4297,7 @@ def upload_item():
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
     item_isbn = ''
     item_type = 'general'
@@ -4301,7 +4308,7 @@ def upload_item():
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
         if item_isbn:
             item_type = 'book'
 
@@ -4311,7 +4318,7 @@ def upload_item():
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
         if not item_isbn:
             error_msg = 'Für Bücher ist eine gültige ISBN erforderlich.'
             if is_mobile:
@@ -4328,7 +4335,7 @@ def upload_item():
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
     # Check if base code is unique for single-item uploads
     if code_4 and item_count == 1 and not it.is_code_unique(code_4[0]):
@@ -4337,7 +4344,7 @@ def upload_item():
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
     # Validate optional per-item codes
     if individual_codes:
@@ -4346,14 +4353,14 @@ def upload_item():
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
         if len(set(individual_codes)) != len(individual_codes):
             error_msg = 'Doppelte Einzelcodes erkannt. Bitte alle Codes eindeutig eintragen.'
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
         for specific_code in individual_codes:
             if not it.is_code_unique(specific_code):
@@ -4361,7 +4368,7 @@ def upload_item():
                 if is_mobile:
                     return jsonify({'success': False, 'message': error_msg}), 400
                 flash(error_msg, 'error')
-                return redirect(url_for('home_admin'))
+                return redirect(url_for(success_redirect_endpoint))
 
     def generate_unique_batch_code(base_code, position):
         """Generate a unique code for every item in a batch."""
@@ -5054,7 +5061,7 @@ def upload_item():
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
         parent_item_id = str(created_item_ids[0]) if created_item_ids else None
         item_id = it.add_item(
@@ -5081,7 +5088,7 @@ def upload_item():
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 500
         flash(error_msg, 'error')
-        return redirect(url_for('home_admin'))
+        return redirect(url_for(success_redirect_endpoint))
 
     item_id = created_item_ids[0] if created_item_ids else None
     
@@ -5105,14 +5112,14 @@ def upload_item():
             })
         else:
             flash(success_msg, 'success')
-            return redirect(url_for('home_admin', highlight_item=str(item_id)))
+            return redirect(url_for(success_redirect_endpoint, highlight_item=str(item_id)))
     else:
         error_msg = 'Fehler beim Hinzufügen des Elements'
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 500
         else:
             flash(error_msg, 'error')
-            return redirect(url_for('home_admin'))
+            return redirect(url_for(success_redirect_endpoint))
 
 
 @app.route('/duplicate_item', methods=['POST'])
@@ -6688,12 +6695,14 @@ def register():
         if request.method == 'POST':
             username = request.form['username']
             password = request.form['password']
+            name = (request.form.get('name') or '').strip()
+            last_name = (request.form.get('last-name') or '').strip()
             permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
             use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
             is_student = bool(request.form.get('is_student')) if cfg.STUDENT_CARDS_MODULE_ENABLED else False
             student_card_id = us.normalize_student_card_id(request.form.get('student_card_id')) if cfg.STUDENT_CARDS_MODULE_ENABLED else ''
             max_borrow_days_raw = request.form.get('max_borrow_days') if cfg.STUDENT_CARDS_MODULE_ENABLED else None
-            if not username or not password:
+            if not username or not password or not name or not last_name:
                 flash('Bitte füllen Sie alle Felder aus', 'error')
                 return redirect(url_for('register'))
             if us.get_user(username):
@@ -6731,8 +6740,8 @@ def register():
             us.add_user(
                 username,
                 password,
-                username,
-                '',
+                name,
+                last_name,
                 is_student=is_student,
                 student_card_id=student_card_id if is_student else None,
                 max_borrow_days=max_borrow_days,

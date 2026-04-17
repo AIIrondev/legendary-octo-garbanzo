@@ -39,12 +39,31 @@
                         <span class="input-icon">👤</span>
                         <input type="text" id="username" name="username" placeholder="Geben Sie einen Benutzernamen ein" required>
                     </div>
-                    <p class="anonymize-hint">Klarnamen werden nicht gespeichert. Ein anonymes Kürzel wird automatisch aus dem Benutzernamen erzeugt.</p>
+                    <label for="name">Vorname</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="name" name="name" placeholder="Geben Sie den Vornamen ein" required>
+                    </div>
+                    <label for="last-name">Nachname</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required>
+                    </div>
+                    <p class="anonymize-hint">Klarnamen werden nur zur Erzeugung eines Kuerzels (z.B. SimFri) verwendet und nicht als Klarname gespeichert.</p>
                 </div>
                 
                 <div class="form-group">
                     <label for="password">Passwort</label>
-                    <a class="richtlinen">Das Password muss mindestens 6 Zeichen beinhalten mit Sonderzeichen, groß und klein Buchstaben sowie Zahlen!</a>
+                    <div class="password-rules" id="password-rules" aria-live="polite">
+                        <p class="password-rules-title">Passwort-Anforderungen (live):</p>
+                        <ul>
+                            <li id="pw-rule-length" class="pw-rule">Mindestens 12 Zeichen</li>
+                            <li id="pw-rule-lower" class="pw-rule">Mindestens ein Kleinbuchstabe</li>
+                            <li id="pw-rule-upper" class="pw-rule">Mindestens ein Grossbuchstabe</li>
+                            <li id="pw-rule-digit" class="pw-rule">Mindestens eine Zahl</li>
+                            <li id="pw-rule-symbol" class="pw-rule">Mindestens ein Sonderzeichen</li>
+                        </ul>
+                    </div>
                     <div class="input-container">
                         <span class="input-icon">🔒</span>
                         <input type="password" id="password" name="password" placeholder="Geben Sie ein sicheres Passwort ein" required>
@@ -342,8 +361,49 @@ input::placeholder {
     }
 }
 
-.richtlinen{
-    color: #ec0920;
+.password-rules {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.password-rules-title {
+    margin: 0 0 8px;
+    font-weight: 700;
+    color: #1f2937;
+    font-size: 0.92rem;
+}
+
+.password-rules ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pw-rule {
+    position: relative;
+    padding-left: 22px;
+    margin: 5px 0;
+    color: #b91c1c;
+    font-size: 0.9rem;
+}
+
+.pw-rule::before {
+    content: '✗';
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-weight: 700;
+}
+
+.pw-rule.ok {
+    color: #166534;
+}
+
+.pw-rule.ok::before {
+    content: '✓';
 }
 
 .anonymize-hint {
@@ -425,6 +485,41 @@ document.addEventListener('DOMContentLoaded', function () {
     if (useCustomPermissions) {
         useCustomPermissions.addEventListener('change', toggleCustomPermissions);
         toggleCustomPermissions();
+    }
+
+    const passwordInput = document.getElementById('password');
+    const passwordRules = {
+        length: document.getElementById('pw-rule-length'),
+        lower: document.getElementById('pw-rule-lower'),
+        upper: document.getElementById('pw-rule-upper'),
+        digit: document.getElementById('pw-rule-digit'),
+        symbol: document.getElementById('pw-rule-symbol')
+    };
+
+    function setRuleState(node, ok) {
+        if (!node) {
+            return;
+        }
+        node.classList.toggle('ok', !!ok);
+    }
+
+    function updatePasswordRules() {
+        if (!passwordInput) {
+            return;
+        }
+
+        const value = String(passwordInput.value || '');
+        setRuleState(passwordRules.length, value.length >= 12);
+        setRuleState(passwordRules.lower, /[a-z]/.test(value));
+        setRuleState(passwordRules.upper, /[A-Z]/.test(value));
+        setRuleState(passwordRules.digit, /[0-9]/.test(value));
+        setRuleState(passwordRules.symbol, /[^A-Za-z0-9]/.test(value));
+    }
+
+    if (passwordInput) {
+        passwordInput.addEventListener('input', updatePasswordRules);
+        passwordInput.addEventListener('blur', updatePasswordRules);
+        updatePasswordRules();
     }
 
     {% if student_cards_module_enabled %}
