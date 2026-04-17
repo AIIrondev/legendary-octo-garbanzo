@@ -298,7 +298,7 @@ def _enforce_user_permissions():
             return jsonify({'ok': False, 'message': message}), 403
 
         flash(message, 'error')
-        fallback_endpoint = _permission_denied_fallback_endpoint(permissions)
+        fallback_endpoint = _permission_denied_fallback_endpoint(permissions, current_endpoint=endpoint)
         return redirect(url_for(fallback_endpoint))
 
     action_key = PERMISSION_ACTION_ENDPOINTS.get(endpoint)
@@ -308,7 +308,7 @@ def _enforce_user_permissions():
             return jsonify({'ok': False, 'message': message}), 403
 
         flash(message, 'error')
-        fallback_endpoint = _permission_denied_fallback_endpoint(permissions)
+        fallback_endpoint = _permission_denied_fallback_endpoint(permissions, current_endpoint=endpoint)
         return redirect(url_for(fallback_endpoint))
 
     return None
@@ -376,8 +376,16 @@ def _action_access_allowed(permissions, action_key):
     return bool(action_permissions.get(action_key, True))
 
 
-def _permission_denied_fallback_endpoint(permissions):
-    for candidate in ('home', 'my_borrowed_items', 'tutorial_page', 'notifications_view', 'impressum'):
+def _permission_denied_fallback_endpoint(permissions, current_endpoint=None):
+    username = session.get('username')
+    is_admin_user = bool(username and us.check_admin(username))
+    admin_home_allowed = _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings')
+
+    for candidate in ('my_borrowed_items', 'tutorial_page', 'notifications_view', 'impressum', 'home'):
+        if current_endpoint and candidate == current_endpoint:
+            continue
+        if candidate == 'home' and is_admin_user and not admin_home_allowed:
+            continue
         if _page_access_allowed(permissions, candidate):
             return candidate
     return 'logout'
@@ -2407,7 +2415,14 @@ def home():
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
         )
     else:
-        return redirect(url_for('home_admin'))
+        permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+        if _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings'):
+            return redirect(url_for('home_admin'))
+
+        fallback_endpoint = _permission_denied_fallback_endpoint(permissions, current_endpoint='home')
+        if fallback_endpoint == 'logout':
+            flash('Für diesen Benutzer sind aktuell keine Seiten freigegeben.', 'error')
+        return redirect(url_for(fallback_endpoint))
 
 
 @app.route('/home_admin')
@@ -3716,7 +3731,11 @@ def login():
             session['admin'] = is_admin_user
             session['is_admin'] = is_admin_user
             if is_admin_user:
-                return redirect(url_for('home_admin'))
+                permissions = us.get_effective_permissions(username)
+                if _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings'):
+                    return redirect(url_for('home_admin'))
+                fallback_endpoint = _permission_denied_fallback_endpoint(permissions, current_endpoint='login')
+                return redirect(url_for(fallback_endpoint))
             else:
                 return redirect(url_for('home'))
         else:
