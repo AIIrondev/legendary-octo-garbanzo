@@ -1237,9 +1237,11 @@
         
         /* Mobile-responsive styles for admin interface */
         .admin-content-container {
-            width: 95% !important;
-            margin: 10px auto !important;
-            padding: 15px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 12px 12px 18px !important;
+            box-sizing: border-box !important;
             overflow-x: hidden !important;
         }
         
@@ -1363,11 +1365,12 @@
         
         /* Modal improvements for admin */
         .modal-content {
-            width: 95% !important;
-            max-width: 500px !important;
-            margin: 20px auto !important;
+            width: calc(100vw - 16px) !important;
+            max-width: none !important;
+            margin: 8px auto !important;
             max-height: 85vh !important;
             overflow-y: auto !important;
+            padding: 16px !important;
         }
         
         /* Admin card improvements */
@@ -1526,9 +1529,11 @@
     /* Mobile-responsive styles for admin interface */
     @media screen and (max-width: 768px) {
         .admin-content-container {
-            width: 95% !important;
-            margin: 10px auto !important;
-            padding: 15px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 12px 12px 18px !important;
+            box-sizing: border-box !important;
         }
         
         h1, h2 {
@@ -1615,12 +1620,12 @@
         
         /* Modal improvements for admin */
         .modal-content {
-            width: 95% !important;
-            max-width: 500px !important;
-            margin: 20px auto !important;
+            width: calc(100vw - 16px) !important;
+            max-width: none !important;
+            margin: 8px auto !important;
             max-height: 85vh !important;
             overflow-y: auto !important;
-            padding: 20px !important;
+            padding: 16px !important;
         }
         
         /* Button improvements */
@@ -1808,9 +1813,11 @@
         }
         
         .admin-content-container {
-            width: 95%;
-            margin: 10px auto;
-            padding: 15px;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 12px 12px 18px;
+            box-sizing: border-box;
             overflow-x: hidden;
         }
         
@@ -1824,12 +1831,13 @@
         
         /* Better modal sizing for mobile */
         .modal-content {
-            width: 95% !important;
+            width: calc(100vw - 16px) !important;
             max-width: none !important;
-            margin: 10px auto !important;
+            margin: 8px auto !important;
             max-height: 90vh !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
+            padding: 16px !important;
         }
     }
 

@@ -155,10 +155,12 @@ select:focus {
 
 @media (max-width: 900px) {
     .container {
-        width: calc(100% - 18px);
-        padding: 14px;
-        margin: 10px auto;
-        border-radius: 10px;
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 12px 18px;
+        margin: 0;
+        border-radius: 0;
+        box-sizing: border-box;
     }
 }
 
