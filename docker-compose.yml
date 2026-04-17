@@ -24,6 +24,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: inventarsystem-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   app:
     build:
       context: .
@@ -35,10 +48,16 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       INVENTAR_MONGODB_HOST: mongodb
       INVENTAR_MONGODB_PORT: "27017"
       INVENTAR_MONGODB_DB: Inventarsystem
+      INVENTAR_REDIS_HOST: redis
+      INVENTAR_REDIS_PORT: "6379"
+      INVENTAR_REDIS_CACHE_DB: "1"
+      INVENTAR_NOTIFICATION_STATUS_CACHE_TTL: "8"
       INVENTAR_BACKUP_FOLDER: /data/backups
       INVENTAR_LOGS_FOLDER: /data/logs
       INVENTAR_DELETED_ARCHIVE_FOLDER: /data/deleted-archives
@@ -64,3 +83,4 @@ volumes:
   app_backups:
   app_logs:
   app_deleted_archives:
+  redis_data:

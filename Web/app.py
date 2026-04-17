@@ -50,6 +50,11 @@ import io
 import html
 import logging
 import secrets
+import importlib
+try:
+    redis = importlib.import_module('redis')
+except Exception:
+    redis = None
 # QR Code functionality deactivated
 # import qrcode
 # from qrcode.constants import ERROR_CORRECT_L
@@ -128,6 +133,14 @@ SSL_KEY = cfg.SSL_KEY
 
 LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media']
 INVOICE_CURRENCY = 'EUR'
+
+NOTIFICATION_STATUS_CACHE_TTL = max(3, int(os.getenv('INVENTAR_NOTIFICATION_STATUS_CACHE_TTL', '8')))
+_NOTIFICATION_CACHE_PREFIX = 'inventar:notif'
+_NOTIFICATION_REDIS_CLIENT = None
+_NOTIFICATION_REDIS_FAILED = False
+_NOTIFICATION_LOCAL_CACHE = {}
+_NOTIFICATION_LOCAL_VERSIONS = {'admin': 0}
+_NOTIFICATION_CACHE_LOCK = threading.Lock()
 
 
 SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
@@ -551,7 +564,152 @@ def _create_notification(db, *, audience, notif_type, title, message, target_use
         'UpdatedAt': now,
     }
     notifications_col.insert_one(payload)
+
+    if audience == 'user' and target_user:
+        _bump_notification_version(f'user:{target_user}')
+    elif audience == 'admin':
+        _bump_notification_version('admin')
+
     return True
+
+
+def _get_notification_cache_client():
+    """Return shared Redis client for distributed notification cache if available."""
+    global _NOTIFICATION_REDIS_CLIENT, _NOTIFICATION_REDIS_FAILED
+    if _NOTIFICATION_REDIS_CLIENT is not None:
+        return _NOTIFICATION_REDIS_CLIENT
+    if _NOTIFICATION_REDIS_FAILED or redis is None:
+        return None
+
+    try:
+        redis_host = os.getenv('INVENTAR_REDIS_HOST', 'redis')
+        redis_port = int(os.getenv('INVENTAR_REDIS_PORT', 6379))
+        redis_db = int(os.getenv('INVENTAR_REDIS_CACHE_DB', 1))
+        client = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            decode_responses=True,
+            socket_keepalive=True,
+            socket_timeout=1,
+            socket_connect_timeout=1,
+        )
+        client.ping()
+        _NOTIFICATION_REDIS_CLIENT = client
+        app.logger.info(f'Notification cache backend enabled: {redis_host}:{redis_port}/db{redis_db}')
+        return _NOTIFICATION_REDIS_CLIENT
+    except Exception as exc:
+        _NOTIFICATION_REDIS_FAILED = True
+        app.logger.warning(f'Notification cache backend unavailable, using local cache fallback: {exc}')
+        return None
+
+
+def _notification_scope_key(scope):
+    return f'{_NOTIFICATION_CACHE_PREFIX}:ver:{scope}'
+
+
+def _notification_status_key(username, is_admin, version_tag):
+    role = 'admin' if is_admin else 'user'
+    return f'{_NOTIFICATION_CACHE_PREFIX}:status:{role}:{username}:{version_tag}'
+
+
+def _get_notification_version_tag(username, is_admin=False):
+    user_scope = f'user:{username}'
+    cache_client = _get_notification_cache_client()
+
+    if cache_client:
+        user_version = cache_client.get(_notification_scope_key(user_scope)) or '0'
+        if is_admin:
+            admin_version = cache_client.get(_notification_scope_key('admin')) or '0'
+            return f'u{user_version}-a{admin_version}'
+        return f'u{user_version}'
+
+    with _NOTIFICATION_CACHE_LOCK:
+        user_version = _NOTIFICATION_LOCAL_VERSIONS.get(user_scope, 0)
+        if is_admin:
+            admin_version = _NOTIFICATION_LOCAL_VERSIONS.get('admin', 0)
+            return f'u{user_version}-a{admin_version}'
+        return f'u{user_version}'
+
+
+def _bump_notification_version(scope):
+    cache_client = _get_notification_cache_client()
+    if cache_client:
+        try:
+            cache_client.incr(_notification_scope_key(scope))
+            return
+        except Exception as exc:
+            app.logger.warning(f'Could not bump notification cache version for {scope}: {exc}')
+
+    with _NOTIFICATION_CACHE_LOCK:
+        current = int(_NOTIFICATION_LOCAL_VERSIONS.get(scope, 0))
+        _NOTIFICATION_LOCAL_VERSIONS[scope] = current + 1
+        # Prevent stale local payload reuse after version bump.
+        _NOTIFICATION_LOCAL_CACHE.clear()
+
+
+def _get_cached_unread_status(username, is_admin=False):
+    version_tag = _get_notification_version_tag(username, is_admin=is_admin)
+    key = _notification_status_key(username, is_admin, version_tag)
+    cache_client = _get_notification_cache_client()
+
+    if cache_client:
+        try:
+            cached = cache_client.get(key)
+            if cached:
+                return json.loads(cached), version_tag
+        except Exception as exc:
+            app.logger.warning(f'Could not read notification status cache for {username}: {exc}')
+        return None, version_tag
+
+    now = time.time()
+    with _NOTIFICATION_CACHE_LOCK:
+        cached = _NOTIFICATION_LOCAL_CACHE.get(key)
+        if not cached:
+            return None, version_tag
+        if cached.get('expires_at', 0) <= now:
+            _NOTIFICATION_LOCAL_CACHE.pop(key, None)
+            return None, version_tag
+        return cached.get('payload'), version_tag
+
+
+def _set_cached_unread_status(username, is_admin, version_tag, payload):
+    key = _notification_status_key(username, is_admin, version_tag)
+    cache_client = _get_notification_cache_client()
+
+    if cache_client:
+        try:
+            cache_client.setex(key, NOTIFICATION_STATUS_CACHE_TTL, json.dumps(payload, default=str))
+            return
+        except Exception as exc:
+            app.logger.warning(f'Could not write notification status cache for {username}: {exc}')
+
+    with _NOTIFICATION_CACHE_LOCK:
+        _NOTIFICATION_LOCAL_CACHE[key] = {
+            'expires_at': time.time() + NOTIFICATION_STATUS_CACHE_TTL,
+            'payload': payload,
+        }
+
+
+def _build_unread_status_etag(version_tag, payload):
+    unread_count = int(payload.get('unread_count', 0))
+    latest = payload.get('latest_unread') or {}
+    latest_created = latest.get('created_at') or ''
+    latest_type = latest.get('type') or ''
+    return f'W/"notif-{version_tag}-{unread_count}-{latest_type}-{latest_created}"'
+
+
+def _build_cached_json_response(payload, etag_value):
+    incoming_etag = (request.headers.get('If-None-Match') or '').strip()
+    if incoming_etag and incoming_etag == etag_value:
+        response = make_response('', 304)
+    else:
+        response = jsonify(payload)
+
+    response.headers['Cache-Control'] = f'private, max-age={NOTIFICATION_STATUS_CACHE_TTL}, must-revalidate'
+    response.headers['ETag'] = etag_value
+    response.headers['Vary'] = 'Cookie'
+    return response
 
 
 def _get_notifications_for_user(db, username, is_admin=False, limit=150):
@@ -8284,13 +8442,15 @@ def mark_notification_read(notification_id):
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-        db['notifications'].update_one(
+        result = db['notifications'].update_one(
             {'_id': ObjectId(notification_id)},
             {
                 '$addToSet': {'ReadBy': username},
                 '$set': {'UpdatedAt': datetime.datetime.now()}
             }
         )
+        if result.modified_count > 0:
+            _bump_notification_version(f'user:{username}')
     except Exception as exc:
         app.logger.warning(f"Could not mark notification as read {notification_id}: {exc}")
     finally:
@@ -8325,13 +8485,15 @@ def mark_all_notifications_read():
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-        db['notifications'].update_many(
+        result = db['notifications'].update_many(
             query,
             {
                 '$addToSet': {'ReadBy': username},
                 '$set': {'UpdatedAt': datetime.datetime.now()}
             }
         )
+        if result.modified_count > 0:
+            _bump_notification_version(f'user:{username}')
     except Exception as exc:
         app.logger.warning(f"Could not mark all notifications as read for {username}: {exc}")
     finally:
@@ -8353,6 +8515,11 @@ def notifications_unread_status():
         is_admin_user = us.check_admin(username)
     except Exception:
         is_admin_user = False
+
+    cached_payload, version_tag = _get_cached_unread_status(username, is_admin=is_admin_user)
+    if cached_payload is not None:
+        cached_etag = _build_unread_status_etag(version_tag, cached_payload)
+        return _build_cached_json_response(cached_payload, cached_etag)
 
     client = None
     try:
@@ -8397,11 +8564,15 @@ def notifications_unread_status():
                 'severity': latest_unread.get('Severity', 'info'),
             }
 
-        return jsonify({
+        payload = {
             'ok': True,
             'unread_count': unread_count,
             'latest_unread': latest_payload,
-        })
+        }
+
+        _set_cached_unread_status(username, is_admin_user, version_tag, payload)
+        etag_value = _build_unread_status_etag(version_tag, payload)
+        return _build_cached_json_response(payload, etag_value)
     except Exception as exc:
         app.logger.warning(f"Could not fetch unread notification status for {username}: {exc}")
         return jsonify({'ok': False, 'error': 'status_fetch_failed'}), 500

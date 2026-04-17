@@ -8,6 +8,7 @@ apscheduler
 python-dateutil
 pytz
 requests
+redis
 reportlab
 python-barcode
 openpyxl
