@@ -41,6 +41,7 @@ services:
       INVENTAR_MONGODB_DB: Inventarsystem
       INVENTAR_BACKUP_FOLDER: /data/backups
       INVENTAR_LOGS_FOLDER: /data/logs
+      INVENTAR_DELETED_ARCHIVE_FOLDER: /data/deleted-archives
     expose:
       - "8000"
     volumes:
@@ -52,6 +53,7 @@ services:
       - app_qrcodes:/app/Web/QRCodes
       - app_backups:/data/backups
       - app_logs:/data/logs
+      - app_deleted_archives:/data/deleted-archives
 
 volumes:
   mongodb_data:
@@ -61,3 +63,4 @@ volumes:
   app_qrcodes:
   app_backups:
   app_logs:
+  app_deleted_archives:

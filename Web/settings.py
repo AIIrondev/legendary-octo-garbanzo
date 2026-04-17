@@ -58,6 +58,7 @@ DEFAULTS = {
     'paths': {
         'backups': os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'backups'),
         'logs': os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'logs'),
+        'deleted_archives': os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'deleted_archives'),
     },
     'schoolPeriods': {
         "1": {"start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)"},
@@ -188,10 +189,12 @@ PREVIEW_SIZE = (int(PREVIEW_SIZE_LIST[0]), int(PREVIEW_SIZE_LIST[1])) if isinsta
 
 BACKUP_FOLDER = _get(_conf, ['paths', 'backups'], DEFAULTS['paths']['backups'])
 LOGS_FOLDER = _get(_conf, ['paths', 'logs'], DEFAULTS['paths']['logs'])
+DELETED_ARCHIVE_FOLDER = _get(_conf, ['paths', 'deleted_archives'], DEFAULTS['paths']['deleted_archives'])
 
 # Optional environment overrides for writable storage mounts.
 BACKUP_FOLDER = os.getenv('INVENTAR_BACKUP_FOLDER', BACKUP_FOLDER)
 LOGS_FOLDER = os.getenv('INVENTAR_LOGS_FOLDER', LOGS_FOLDER)
+DELETED_ARCHIVE_FOLDER = os.getenv('INVENTAR_DELETED_ARCHIVE_FOLDER', DELETED_ARCHIVE_FOLDER)
 
 # Normalize backup and logs paths to absolute paths (similar to upload folders) to avoid
 # permission issues caused by relative paths resolving to unintended working dirs.
@@ -200,6 +203,11 @@ if not os.path.isabs(BACKUP_FOLDER):
     BACKUP_FOLDER = os.path.join(PROJECT_ROOT, BACKUP_FOLDER)
 if not os.path.isabs(LOGS_FOLDER):
     LOGS_FOLDER = os.path.join(PROJECT_ROOT, LOGS_FOLDER)
+if not os.path.isabs(DELETED_ARCHIVE_FOLDER):
+    DELETED_ARCHIVE_FOLDER = os.path.join(PROJECT_ROOT, DELETED_ARCHIVE_FOLDER)
+
+# Optional key for field/file encryption at application level.
+DATA_ENCRYPTION_KEY = os.getenv('INVENTAR_DATA_ENCRYPTION_KEY', '').strip()
 
 
 _MONGO_CLIENT_CACHE = {}

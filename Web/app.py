@@ -56,6 +56,11 @@ import uuid
 from PIL import Image, ImageOps
 import mimetypes
 import subprocess
+from data_protection import (
+    decrypt_document_fields,
+    encrypt_document_fields,
+    encrypt_soft_deleted_media_pack,
+)
 
 # Set base directory and centralized settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -92,6 +97,15 @@ def print(*args, **kwargs):
         app.logger.error(message)
     else:
         app.logger.info(message)
+
+
+STUDENT_CARD_ENCRYPTED_FIELDS = ('SchülerName', 'Klasse', 'Notizen')
+
+
+def _decrypt_student_card_doc(card_doc):
+    if not card_doc:
+        return card_doc
+    return decrypt_document_fields(card_doc, STUDENT_CARD_ENCRYPTED_FIELDS)
 
 # Thumbnail sizes
 THUMBNAIL_SIZE = cfg.THUMBNAIL_SIZE
@@ -2058,6 +2072,7 @@ def api_library_scan_action():
         card_doc = student_cards_col.find_one({'AusweisId': student_card_id})
         if not card_doc:
             return jsonify({'ok': False, 'message': 'Ungültige Schülerausweis-ID.'}), 404
+        card_doc = _decrypt_student_card_doc(card_doc)
 
         query_or = [
             {'Code_4': item_code_raw},
@@ -2469,6 +2484,7 @@ def student_cards_admin():
         try:
             card = student_cards.find_one({'_id': ObjectId(edit_id)})
             if card:
+                card = _decrypt_student_card_doc(card)
                 edit_mode = True
                 form_data = {
                     'card_id': str(card['_id']),
@@ -2511,15 +2527,21 @@ def student_cards_admin():
                     if existing:
                         flash('Diese Ausweis-ID existiert bereits.', 'error')
                     else:
+                        encrypted_payload = encrypt_document_fields(
+                            {
+                                'SchülerName': student_name,
+                                'Klasse': class_name,
+                                'Notizen': notes,
+                            },
+                            STUDENT_CARD_ENCRYPTED_FIELDS
+                        )
                         student_cards.update_one(
                             {'_id': ObjectId(card_id)},
                             {'$set': {
                                 'AusweisId': ausweis_id,
-                                'SchülerName': student_name,
                                 'StandardAusleihdauer': int(default_borrow_days),
-                                'Klasse': class_name,
-                                'Notizen': notes,
-                                'Aktualisiert': datetime.datetime.now()
+                                'Aktualisiert': datetime.datetime.now(),
+                                **encrypted_payload
                             }}
                         )
                         flash('Ausweis wurde aktualisiert.', 'success')
@@ -2538,13 +2560,19 @@ def student_cards_admin():
                     flash('Diese Ausweis-ID existiert bereits.', 'error')
                 else:
                     try:
+                        encrypted_payload = encrypt_document_fields(
+                            {
+                                'SchülerName': student_name,
+                                'Klasse': class_name,
+                                'Notizen': notes,
+                            },
+                            STUDENT_CARD_ENCRYPTED_FIELDS
+                        )
                         student_cards.insert_one({
                             'AusweisId': ausweis_id,
-                            'SchülerName': student_name,
                             'StandardAusleihdauer': int(default_borrow_days),
-                            'Klasse': class_name,
-                            'Notizen': notes,
-                            'Erstellt': datetime.datetime.now()
+                            'Erstellt': datetime.datetime.now(),
+                            **encrypted_payload,
                         })
                         flash('Neuer Ausweis wurde hinzugefügt.', 'success')
                         return redirect(url_for('student_cards_admin'))
@@ -2554,6 +2582,7 @@ def student_cards_admin():
 
     # Get all student cards
     all_cards = list(student_cards.find().sort('AusweisId', 1))
+    all_cards = [_decrypt_student_card_doc(card) for card in all_cards]
     client.close()
 
     return render_template(
@@ -2590,6 +2619,7 @@ def student_cards_print():
 
     # Get all student cards sorted by ID
     all_cards = list(student_cards.find().sort('AusweisId', 1))
+    all_cards = [_decrypt_student_card_doc(card) for card in all_cards]
     client.close()
 
     return render_template(
@@ -2621,6 +2651,7 @@ def student_card_barcode_print():
 
     # Get all student cards sorted by ID
     all_cards = list(student_cards.find().sort('AusweisId', 1))
+    all_cards = [_decrypt_student_card_doc(card) for card in all_cards]
     client.close()
 
     return render_template(
@@ -2660,6 +2691,7 @@ def student_card_barcode_download():
         db = client[cfg.MONGODB_DB]
         student_cards = db['student_cards']
         all_cards = list(student_cards.find().sort('AusweisId', 1))
+        all_cards = [_decrypt_student_card_doc(card) for card in all_cards]
         client.close()
 
         pdf_buffer = BytesIO()
@@ -2834,6 +2866,7 @@ def student_card_single_barcode_download(card_id):
         db = client[cfg.MONGODB_DB]
         student_cards = db['student_cards']
         card = student_cards.find_one({'_id': ObjectId(card_id)})
+        card = _decrypt_student_card_doc(card)
         client.close()
         
         if not card:
@@ -4509,7 +4542,27 @@ def _soft_delete_item_groups(db, root_item_ids, username):
             'soft_deleted_items': 0,
             'soft_deleted_borrows': 0,
             'group_item_ids': [],
+            'archive': {
+                'archive_created': False,
+                'archived_files': 0,
+                'deleted_files': 0,
+                'archive_path': None,
+            },
         }
+
+    object_ids = []
+    for group_item_id in unique_group_item_ids:
+        try:
+            object_ids.append(ObjectId(group_item_id))
+        except Exception:
+            continue
+
+    item_docs_for_archive = []
+    if object_ids:
+        item_docs_for_archive = list(db['items'].find(
+            {'_id': {'$in': object_ids}},
+            {'_id': 1, 'Images': 1}
+        ))
 
     delete_success = True
     soft_deleted_items = 0
@@ -4543,6 +4596,17 @@ def _soft_delete_item_groups(db, root_item_ids, username):
         }}
     )
 
+    archive_result = {
+        'archive_created': False,
+        'archived_files': 0,
+        'deleted_files': 0,
+        'archive_path': None,
+    }
+    try:
+        archive_result = encrypt_soft_deleted_media_pack(item_docs_for_archive, actor=username)
+    except Exception as archive_err:
+        app.logger.warning(f"Soft-delete media archive failed: {archive_err}")
+
     _append_audit_event(
         db,
         'inventory_item_soft_deleted',
@@ -4551,6 +4615,7 @@ def _soft_delete_item_groups(db, root_item_ids, username):
             'group_item_ids': unique_group_item_ids,
             'soft_deleted_items': soft_deleted_items,
             'soft_deleted_borrow_records': borrow_result.modified_count,
+            'soft_delete_archive': archive_result,
         }
     )
 
@@ -4559,6 +4624,7 @@ def _soft_delete_item_groups(db, root_item_ids, username):
         'soft_deleted_items': soft_deleted_items,
         'soft_deleted_borrows': borrow_result.modified_count,
         'group_item_ids': unique_group_item_ids,
+        'archive': archive_result,
         'message': 'OK' if delete_success else 'Fehler beim revisionssicheren Deaktivieren des Elements.',
     }
 
@@ -4605,15 +4671,20 @@ def delete_item(id):
         delete_success = bool(delete_result.get('success'))
         soft_deleted_items = int(delete_result.get('soft_deleted_items', 0))
         soft_deleted_borrows = int(delete_result.get('soft_deleted_borrows', 0))
+        archived_files = int((delete_result.get('archive') or {}).get('archived_files', 0))
     except Exception as e:
         app.logger.error(f"Error during soft-delete for item group {id}: {str(e)}")
         delete_success = False
+        archived_files = 0
     finally:
         if client:
             client.close()
 
     if delete_success:
-        flash(f'Elementgruppe revisionssicher deaktiviert ({soft_deleted_items}/{len(group_item_ids)} Versionen).', 'success')
+        flash(
+            f'Elementgruppe revisionssicher deaktiviert ({soft_deleted_items}/{len(group_item_ids)} Versionen, {archived_files} Mediendateien verschlüsselt archiviert).',
+            'success'
+        )
     else:
         flash('Fehler beim revisionssicheren Deaktivieren des Elements.', 'error')
         
@@ -4656,6 +4727,8 @@ def bulk_delete_items():
             'message': f"{result.get('soft_deleted_items', 0)} Elemente revisionssicher deaktiviert.",
             'deleted_items': result.get('soft_deleted_items', 0),
             'deleted_borrows': result.get('soft_deleted_borrows', 0),
+            'archived_files': (result.get('archive') or {}).get('archived_files', 0),
+            'archive_created': (result.get('archive') or {}).get('archive_created', False),
             'group_item_ids': result.get('group_item_ids', []),
         })
     except Exception as e:
