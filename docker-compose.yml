@@ -30,6 +30,8 @@ services:
       dockerfile: Dockerfile
     container_name: inventarsystem-app
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       mongodb:
         condition: service_healthy
@@ -43,7 +45,7 @@ services:
       - "8000"
     volumes:
       - ./config.json:/app/config.json:ro
-      - ./Web:/app/Web
+      - ./Web:/app/Web:ro
       - app_uploads:/app/Web/uploads
       - app_thumbnails:/app/Web/thumbnails
       - app_previews:/app/Web/previews

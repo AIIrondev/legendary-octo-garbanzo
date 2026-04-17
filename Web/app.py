@@ -27,6 +27,7 @@ Features:
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response, send_file
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 import user as us
 import items as it
 import ausleihung as au
@@ -44,6 +45,7 @@ import traceback
 import re
 import io
 import html
+import logging
 # QR Code functionality deactivated
 # import qrcode
 # from qrcode.constants import ERROR_CORRECT_L
@@ -62,13 +64,34 @@ from settings import MongoClient
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
+app.logger.setLevel(logging.WARNING)
 app.secret_key = cfg.SECRET_KEY
 app.debug = cfg.DEBUG
 app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
 app.config['THUMBNAIL_FOLDER'] = cfg.THUMBNAIL_FOLDER
 app.config['PREVIEW_FOLDER'] = cfg.PREVIEW_FOLDER
 app.config['ALLOWED_EXTENSIONS'] = set(cfg.ALLOWED_EXTENSIONS)
+app.config['MAX_CONTENT_LENGTH'] = max(cfg.MAX_UPLOAD_MB, cfg.IMAGE_MAX_UPLOAD_MB, cfg.VIDEO_MAX_UPLOAD_MB) * 1024 * 1024
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = cfg.SSL_ENABLED if os.getenv('INVENTAR_SESSION_COOKIE_SECURE') is None else os.getenv('INVENTAR_SESSION_COOKIE_SECURE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+app.config['PREFERRED_URL_SCHEME'] = 'https' if app.config['SESSION_COOKIE_SECURE'] else 'http'
 # app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+
+def print(*args, **kwargs):
+    if not args:
+        return None
+
+    message = " ".join(str(arg) for arg in args)
+    stripped = message.lstrip()
+    if stripped.startswith(('Error', 'Fehler', 'Warning', 'Warnung', '[WARN]', '[KONFLIKT]', 'Failed', 'Fehl')):
+        app.logger.warning(message)
+    elif stripped.startswith(('Exception', 'Traceback')):
+        app.logger.error(message)
+    else:
+        app.logger.info(message)
 
 # Thumbnail sizes
 THUMBNAIL_SIZE = cfg.THUMBNAIL_SIZE
@@ -94,6 +117,16 @@ SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
 RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
+
+
+@app.after_request
+def _set_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if cfg.SSL_ENABLED:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    return response
 
 
 def _get_asset_version():
@@ -653,14 +686,11 @@ def create_daily_backup():
     Erstellt täglich ein Backup der Ausleihungsdatenbank
     """
     try:
-        print(f"[{datetime.datetime.now()}] Erstelle Backup der Ausleihungsdatenbank...")
         result = au.create_backup_database()
-        if result:
-            print(f"[{datetime.datetime.now()}] Backup erfolgreich erstellt")
-        else:
-            print(f"[{datetime.datetime.now()}] Fehler beim Erstellen des Backups")
+        if not result:
+            app.logger.warning("Daily backup creation returned false")
     except Exception as e:
-        print(f"[{datetime.datetime.now()}] Ausnahme beim Erstellen des Backups: {str(e)}")
+        app.logger.error(f"Daily backup creation failed: {e}")
 
 def update_appointment_statuses():
     """
@@ -670,17 +700,8 @@ def update_appointment_statuses():
     - Aktive Termine, die beendet werden sollten
     """
     current_time = datetime.datetime.now()
-    # Prepare logging early so it's available in exception paths
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, 'scheduler.log')
 
     try:
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(f"[{current_time}] Starte automatische Statusaktualisierung...\n")
-
-        print(f"[{current_time}] Starte automatische Statusaktualisierung...")
-
         # Hole alle Termine mit Status 'planned' oder 'active'
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
@@ -742,16 +763,15 @@ def update_appointment_statuses():
                                         f"  [KONFLIKT] Termin {appointment['_id']}: "
                                         f"planned → active, aber {conflict_note}"
                                     )
-                                    print(conflict_log)
-                                    with open(log_file, 'a', encoding='utf-8') as f:
-                                        f.write(f"[{current_time}] {conflict_log}\n")
+                                    app.logger.warning(conflict_log)
                                 else:
                                     # No conflict — clear any previously stored conflict flag
                                     extra_fields['ConflictDetected'] = False
                                     extra_fields['ConflictNote'] = ''
                         except Exception as conflict_err:
-                            print(f"  [WARN] Konfliktprüfung fehlgeschlagen für Termin "
-                                  f"{appointment['_id']}: {conflict_err}")
+                            app.logger.warning(
+                                f"Conflict check failed for appointment {appointment['_id']}: {conflict_err}"
+                            )
 
                 result = ausleihungen.update_one(
                     {'_id': appointment['_id']},
@@ -769,37 +789,15 @@ def update_appointment_statuses():
                     elif new_status == 'completed':
                         completed_count += 1
 
-                    log_msg = f"  - Termin {appointment['_id']}: {old_status} → {new_status}"
-                    print(log_msg)
-                    with open(log_file, 'a', encoding='utf-8') as f:
-                        f.write(f"[{current_time}] {log_msg}\n")
-
         client.close()
 
         if updated_count > 0:
-            result_msg = f"Statusaktualisierung abgeschlossen: {updated_count} Termine aktualisiert"
-            detail_msg = f"  - {activated_count} aktiviert, {completed_count} abgeschlossen"
-            print(f"[{current_time}] {result_msg}")
-            print(f"[{current_time}] {detail_msg}")
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"[{current_time}] {result_msg}\n")
-                f.write(f"[{current_time}] {detail_msg}\n")
-        else:
-            result_msg = "Statusaktualisierung abgeschlossen: Keine Änderungen erforderlich"
-            print(f"[{current_time}] {result_msg}")
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"[{current_time}] {result_msg}\n")
+            app.logger.warning(
+                f"Appointment status update finished: {updated_count} changed ({activated_count} active, {completed_count} completed)"
+            )
 
     except Exception as e:
-        error_msg = f"Fehler bei der automatischen Statusaktualisierung: {str(e)}"
-        print(f"[{datetime.datetime.now()}] {error_msg}")
-        try:
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"[{datetime.datetime.now()}] {error_msg}\n")
-        except Exception:
-            pass
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Automatic appointment status update failed: {e}")
 
 # Schedule jobs
 scheduler = BackgroundScheduler()
@@ -1484,7 +1482,7 @@ def uploaded_file(filename):
         # Default placeholder from static folder
         return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
-        print(f"Error serving file {filename}: {str(e)}")
+        app.logger.error(f"Error serving file {filename}: {str(e)}")
         return Response("Image not found", status=404)
 
 
@@ -1519,7 +1517,7 @@ def thumbnail_file(filename):
         else:
             return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
-        print(f"Error serving thumbnail {filename}: {str(e)}")
+        app.logger.error(f"Error serving thumbnail {filename}: {str(e)}")
         return Response("Thumbnail not found", status=404)
 
 
@@ -1554,7 +1552,7 @@ def preview_file(filename):
         else:
             return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
-        print(f"Error serving preview {filename}: {str(e)}")
+        app.logger.error(f"Error serving preview {filename}: {str(e)}")
         return Response("Preview not found", status=404)
 
 
@@ -2017,7 +2015,7 @@ def api_library_items():
             'has_more': (offset + count) < total_count
         }), 200
     except Exception as e:
-        print(f"Error fetching library items: {e}")
+        app.logger.error(f"Error fetching library items: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2227,7 +2225,7 @@ def api_item_detail(item_id):
         """
         return detail_html, 200
     except Exception as e:
-        print(f"Error fetching item detail: {e}")
+        app.logger.error(f"Error fetching item detail: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2330,11 +2328,6 @@ def upload_admin():
         try:
             original_item = it.get_item(duplicate_from)
             if original_item:
-                # Enhanced debug logging for images
-                images = original_item.get('Images', [])
-                print(f"DEBUG: Original item: {original_item.get('_id')} has these images: {images}")
-                print(f"DEBUG: Images type: {type(images)}, count: {len(images) if isinstance(images, list) else 'not a list'}")
-                
                 duplicate_data = {
                     'name': original_item.get('Name', ''),
                     'description': original_item.get('Beschreibung', ''),
@@ -2360,7 +2353,7 @@ def upload_admin():
             else:
                 flash('Ursprungs-Element für Duplizierung nicht gefunden.', 'error')
         except Exception as e:
-            print(f"Error loading item for duplication: {e}")
+            app.logger.warning(f"Error loading item for duplication: {e}")
             flash('Fehler beim Laden der Duplizierungsdaten.', 'error')
     
     # Handle the new method (sessionStorage-based duplication)
@@ -2429,7 +2422,7 @@ def library_admin():
             else:
                 flash('Ursprungs-Element für Duplizierung nicht gefunden.', 'error')
         except Exception as e:
-            print(f"Error loading item for duplication: {e}")
+            app.logger.warning(f"Error loading item for duplication: {e}")
             flash('Fehler beim Laden der Duplizierungsdaten.', 'error')
     elif duplicate_flag == 'true':
         flash('Buch wird dupliziert. Die Daten werden aus dem Session-Speicher geladen.', 'info')
@@ -2486,7 +2479,7 @@ def student_cards_admin():
                     'notes': card.get('Notizen', '')
                 }
         except Exception as e:
-            print(f"Error loading student card for edit: {e}")
+            app.logger.error(f"Error loading student card for edit: {e}")
             flash('Fehler beim Laden des Ausweises.', 'error')
 
     # Handle POST request (add or edit)
@@ -2504,7 +2497,7 @@ def student_cards_admin():
                 student_cards.delete_one({'_id': ObjectId(card_id)})
                 flash('Ausweis wurde gelöscht.', 'success')
             except Exception as e:
-                print(f"Error deleting student card: {e}")
+                app.logger.error(f"Error deleting student card: {e}")
                 flash('Fehler beim Löschen des Ausweises.', 'error')
 
         elif action == 'edit':
@@ -2532,7 +2525,7 @@ def student_cards_admin():
                         flash('Ausweis wurde aktualisiert.', 'success')
                         return redirect(url_for('student_cards_admin'))
                 except Exception as e:
-                    print(f"Error updating student card: {e}")
+                    app.logger.error(f"Error updating student card: {e}")
                     flash('Fehler beim Aktualisieren des Ausweises.', 'error')
 
         elif action == 'add':
@@ -2556,7 +2549,7 @@ def student_cards_admin():
                         flash('Neuer Ausweis wurde hinzugefügt.', 'success')
                         return redirect(url_for('student_cards_admin'))
                     except Exception as e:
-                        print(f"Error adding student card: {e}")
+                        app.logger.error(f"Error adding student card: {e}")
                         flash('Fehler beim Hinzufügen des Ausweises.', 'error')
 
     # Get all student cards
@@ -5196,7 +5189,7 @@ def ausleihen(id):
                     flash('Alle Exemplare sind aufgrund geplanter Reservierungen heute belegt.', 'error')
                     return redirect(url_for(redirect_target))
     except Exception as e:
-        print(f"Warning: could not enforce planned booking guard: {e}")
+        app.logger.warning(f"Could not enforce planned booking guard: {e}")
 
     # Get number of exemplars to borrow (default to 1)
     exemplare_count = request.form.get('exemplare_count', 1)
@@ -5317,10 +5310,7 @@ def zurueckgeben(id):
         
     username = session['username']
     
-    print("Code 1169: zurueckgeben called with item ID:", id)
-
     if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
-        print("Code 1172: Item is not available, proceeding with return")
         try:
             # Get ALL active borrowing records for this item and complete them
             client = MongoClient(MONGODB_HOST, MONGODB_PORT)
@@ -5339,8 +5329,6 @@ def zurueckgeben(id):
             updated_count = 0
             for record in active_records:
                 ausleihung_id = str(record['_id'])
-                print(f"Completing active ausleihung {ausleihung_id} for item {id}")
-                
                 # Update each active record
                 result = ausleihungen.update_one(
                     {'_id': ObjectId(ausleihung_id)},

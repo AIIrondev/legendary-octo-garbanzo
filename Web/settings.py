@@ -12,6 +12,8 @@ defaults for the web application and helper modules.
 """
 import os
 import json
+import atexit
+from threading import Lock
 from pymongo import MongoClient as _PyMongoClient
 
 # Base directory of this Web package
@@ -99,10 +101,27 @@ def _get(conf, path, default):
             return default
     return cur
 
+
+def _get_bool_env(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _get_int_env(name, default):
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return int(default)
+    try:
+        return int(value)
+    except ValueError:
+        return int(default)
+
 # Expose settings
 APP_VERSION = _get(_conf, ['ver'], DEFAULTS['version'])
-DEBUG = _get(_conf, ['dbg'], DEFAULTS['debug'])
-SECRET_KEY = str(_get(_conf, ['key'], DEFAULTS['secret_key']))
+DEBUG = _get_bool_env('INVENTAR_DEBUG', _get(_conf, ['dbg'], DEFAULTS['debug']))
+SECRET_KEY = str(os.getenv('INVENTAR_SECRET_KEY', _get(_conf, ['key'], DEFAULTS['secret_key'])))
 HOST = _get(_conf, ['host'], DEFAULTS['host'])
 PORT = _get(_conf, ['port'], DEFAULTS['port'])
 
@@ -115,6 +134,13 @@ MONGODB_DB = _get(_conf, ['mongodb', 'db'], DEFAULTS['mongodb']['db'])
 MONGODB_HOST = os.getenv('INVENTAR_MONGODB_HOST', MONGODB_HOST)
 MONGODB_PORT = int(os.getenv('INVENTAR_MONGODB_PORT', str(MONGODB_PORT)))
 MONGODB_DB = os.getenv('INVENTAR_MONGODB_DB', MONGODB_DB)
+MONGODB_MAX_POOL_SIZE = _get_int_env('INVENTAR_MONGODB_MAX_POOL_SIZE', 20)
+MONGODB_MIN_POOL_SIZE = _get_int_env('INVENTAR_MONGODB_MIN_POOL_SIZE', 0)
+MONGODB_MAX_IDLE_TIME_MS = _get_int_env('INVENTAR_MONGODB_MAX_IDLE_TIME_MS', 300000)
+MONGODB_CONNECT_TIMEOUT_MS = _get_int_env('INVENTAR_MONGODB_CONNECT_TIMEOUT_MS', 5000)
+MONGODB_SERVER_SELECTION_TIMEOUT_MS = _get_int_env('INVENTAR_MONGODB_SERVER_SELECTION_TIMEOUT_MS', 5000)
+MONGODB_SOCKET_TIMEOUT_MS = _get_int_env('INVENTAR_MONGODB_SOCKET_TIMEOUT_MS', 30000)
+MONGODB_MAX_CONNECTING = _get_int_env('INVENTAR_MONGODB_MAX_CONNECTING', 2)
 
 # Scheduler
 SCHEDULER_INTERVAL_MIN = _get(_conf, ['scheduler', 'interval_minutes'], DEFAULTS['scheduler']['interval_minutes'])
@@ -176,19 +202,81 @@ if not os.path.isabs(LOGS_FOLDER):
     LOGS_FOLDER = os.path.join(PROJECT_ROOT, LOGS_FOLDER)
 
 
+_MONGO_CLIENT_CACHE = {}
+_MONGO_CLIENT_LOCK = Lock()
+
+
+class _MongoClientProxy:
+    def __init__(self, client):
+        self._client = client
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def __getitem__(self, name):
+        return self._client[name]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def close(self):
+        return None
+
+
+def _close_cached_mongo_clients():
+    with _MONGO_CLIENT_LOCK:
+        clients = list(_MONGO_CLIENT_CACHE.values())
+        _MONGO_CLIENT_CACHE.clear()
+
+    for proxy in clients:
+        try:
+            proxy._client.close()
+        except Exception:
+            pass
+
+
+atexit.register(_close_cached_mongo_clients)
+
+
 def MongoClient(*args, **kwargs):
-    """Return a lightweight MongoDB client configured from this settings module."""
+    """Return a process-local MongoDB client configured from this settings module."""
+    explicit_host = 'host' in kwargs
+    explicit_port = 'port' in kwargs
+    host = args[0] if len(args) >= 1 else kwargs.pop('host', MONGODB_HOST)
+    port = args[1] if len(args) >= 2 else kwargs.pop('port', MONGODB_PORT)
     client_kwargs = {
-        'maxPoolSize': 10,
-        'minPoolSize': 0,
-        'connectTimeoutMS': 5000,
-        'serverSelectionTimeoutMS': 5000,
+        'maxPoolSize': MONGODB_MAX_POOL_SIZE,
+        'minPoolSize': MONGODB_MIN_POOL_SIZE,
+        'maxIdleTimeMS': MONGODB_MAX_IDLE_TIME_MS,
+        'connectTimeoutMS': MONGODB_CONNECT_TIMEOUT_MS,
+        'serverSelectionTimeoutMS': MONGODB_SERVER_SELECTION_TIMEOUT_MS,
+        'socketTimeoutMS': MONGODB_SOCKET_TIMEOUT_MS,
+        'maxConnecting': MONGODB_MAX_CONNECTING,
         'retryWrites': True,
+        'retryReads': True,
     }
     client_kwargs.update(kwargs)
 
-    # Preserve caller-provided positional host/port arguments.
-    # If none are passed, use configured defaults.
-    if args:
-        return _PyMongoClient(*args, **client_kwargs)
-    return _PyMongoClient(MONGODB_HOST, MONGODB_PORT, **client_kwargs)
+    if len(args) >= 2 and not explicit_host and not explicit_port:
+        mongo_args = args
+    else:
+        mongo_args = (host, port)
+
+    cache_key = (
+        mongo_args,
+        tuple(sorted((key, repr(value)) for key, value in client_kwargs.items())),
+    )
+
+    with _MONGO_CLIENT_LOCK:
+        cached_client = _MONGO_CLIENT_CACHE.get(cache_key)
+        if cached_client is not None:
+            return cached_client
+
+        client = _PyMongoClient(*mongo_args, **client_kwargs)
+
+        cached_client = _MongoClientProxy(client)
+        _MONGO_CLIENT_CACHE[cache_key] = cached_client
+        return cached_client
