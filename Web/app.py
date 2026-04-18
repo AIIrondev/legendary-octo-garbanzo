@@ -1234,17 +1234,62 @@ def update_appointment_statuses():
     except Exception as e:
         app.logger.error(f"Automatic appointment status update failed: {e}")
 
-# Schedule jobs
+# Schedule jobs - only start scheduler if this is the main process or a single-worker deployment
+# This prevents race conditions in multi-worker Gunicorn environments
 scheduler = BackgroundScheduler()
-if cfg.SCHEDULER_ENABLED:
-    scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
-    scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
-    scheduler.add_job(func=create_return_reminders, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
-    scheduler.start()
+_scheduler_initialized = False
+
+def _initialize_scheduler():
+    """Initialize the background scheduler in a safe way for multi-worker deployments."""
+    global _scheduler_initialized
+    if _scheduler_initialized or not cfg.SCHEDULER_ENABLED:
+        return
+    
+    try:
+        # For multi-worker Gunicorn, check if we're in a reasonable scenario
+        # Using a lock file to ensure only one instance starts the scheduler
+        scheduler_lock_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.scheduler_lock')
+        
+        try:
+            # Try to create the lock file - only succeeds if it doesn't exist
+            lock_fd = os.open(scheduler_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            os.close(lock_fd)
+            should_start = True
+        except FileExistsError:
+            should_start = False
+            app.logger.warning("Scheduler lock exists - another process is already running the scheduler")
+        
+        if should_start:
+            scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
+            scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
+            scheduler.add_job(func=create_return_reminders, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
+            scheduler.start()
+            _scheduler_initialized = True
+            app.logger.info(f"Scheduler started successfully (interval={cfg.SCHEDULER_INTERVAL_MIN} min)")
+        else:
+            app.logger.info("Scheduler skipped - another worker instance is running it")
+    except Exception as e:
+        app.logger.error(f"Failed to initialize scheduler: {e}")
+        _scheduler_initialized = False
+
+# Initialize scheduler on app startup
+_initialize_scheduler()
 
 # Register shutdown handler to stop scheduler when app is terminated
 import atexit
-atexit.register(lambda: scheduler.shutdown() if cfg.SCHEDULER_ENABLED else None)
+def _shutdown_scheduler():
+    if cfg.SCHEDULER_ENABLED and _scheduler_initialized:
+        try:
+            scheduler.shutdown()
+            lock_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.scheduler_lock')
+            try:
+                os.remove(lock_path)
+            except Exception:
+                pass
+        except Exception as e:
+            app.logger.error(f"Error during scheduler shutdown: {e}")
+
+atexit.register(_shutdown_scheduler)
 
 def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     """
