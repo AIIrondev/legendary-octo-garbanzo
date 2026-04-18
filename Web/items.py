@@ -287,15 +287,17 @@ def update_item_status(id, verfuegbar, user=None):
             'LastUpdated': datetime.datetime.now()
         }
 
+        update_query = {'$set': update_data}
+
         if user is not None:
             update_data['User'] = user
         elif verfuegbar:
             # If item is being marked as available, clear the user field
-            update_data['$unset'] = {'User': ""}
+            update_query['$unset'] = {'User': ""}
 
         result = items.update_one(
             {'_id': ObjectId(id)},
-            {'$set': update_data}
+            update_query
         )
 
         client.close()

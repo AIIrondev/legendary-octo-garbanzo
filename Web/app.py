@@ -1196,8 +1196,21 @@ def update_appointment_statuses():
                     updated_count += 1
                     if new_status == 'active':
                         activated_count += 1
+                        # Make item unshareable if no conflict is detected
+                        if old_status == 'planned' and appointment.get('Item') and not extra_fields.get('ConflictDetected', False):
+                            try:
+                                it.update_item_status(str(appointment.get('Item')), False, activation_user)
+                            except Exception as e:
+                                app.logger.warning(f"Could not update item status to False for {appointment['_id']}: {e}")
+
                     elif new_status == 'completed':
                         completed_count += 1
+                        # Make item available again
+                        if appointment.get('Item'):
+                            try:
+                                it.update_item_status(str(appointment.get('Item')), True)
+                            except Exception as e:
+                                app.logger.warning(f"Could not update item status to True for {appointment['_id']}: {e}")
 
                 # Create activation notification even if another worker already updated the status.
                 if old_status == 'planned' and new_status == 'active' and activation_user:
@@ -9666,6 +9679,13 @@ def schedule_appointment():
             # If it became active immediately, log it and send a notification
             if initial_status == 'active' and appointment_id:
                 app.logger.info(f"Appointment {appointment_id} scheduled retroactively as active.")
+                
+                # Make the item unavailable since it is now actively borrowed
+                try:
+                    it.update_item_status(item_id, False, session['username'])
+                except Exception as update_err:
+                    app.logger.warning(f"Failed to update item status when retroactively activating: {update_err}")
+
                 # We can also notify the user right away
                 item_name = item.get('Name', 'Unbekannt')
                 
@@ -9795,6 +9815,16 @@ def cancel_ausleihung_route(id):
         if au.cancel_ausleihung(id):
             print(f"Successfully canceled ausleihung with ID: {id}")
             flash('Ausleihung wurde erfolgreich storniert', 'success')
+            
+            # If the booking was already active, make the item available again
+            item_id = str(ausleihung.get('Item')) if ausleihung.get('Item') is not None else None
+            if ausleihung_status == 'active' and item_id:
+                try:
+                    it.update_item_status(item_id, True)
+                    print(f"Restored availability of item {item_id} after active cancellation")
+                except Exception as status_err:
+                    print(f"Warning: could not restore availability of item {item_id}: {status_err}")
+
             _append_audit_event_standalone(
                 'ausleihung_cancelled',
                 {
