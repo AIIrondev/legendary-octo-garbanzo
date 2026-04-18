@@ -4000,6 +4000,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
         applyFilters();
     }
 
+    // Open item modal with fresh details from backend.
+    function openItemQuick(id) {
+        fetch(`/get_item/${id}`)
+            .then(response => response.json())
+            .then(item => {
+                if (item && !item.error) {
+                    openItemModal(item);
+                } else {
+                    console.error('Item details could not be loaded:', item);
+                }
+            })
+            .catch(err => {
+                console.error('Error loading item details:', err);
+            });
+    }
+
     function openEditModalForSelectedUnit(defaultItemId, selectId) {
         let targetItemId = defaultItemId;
 
