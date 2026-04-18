@@ -9014,8 +9014,7 @@ def my_borrowed_items():
     
     planned_ausleihungen = list(ausleihungen_collection.find({
         'User': username,
-        'Status': 'planned',
-        'Start': {'$gt': current_time}
+        'Status': 'planned'
     }))
     
     # DEBUG: Log the number of planned appointments found
@@ -9647,21 +9646,69 @@ def schedule_appointment():
             print(f"Error checking for booking conflicts: {e}")
             return jsonify({'success': False, 'message': f'Fehler beim Prüfen der Verfügbarkeit: {str(e)}'}), 500
             
-        # Create the appointment as a planned booking
+        # Check if the appointment should already be active
+        now = datetime.datetime.now()
+        initial_status = 'active' if start_datetime <= now else 'planned'
+        
+        # Create the appointment
         try:
-            appointment_id = au.add_planned_booking(
+            # Use add_ausleihung directly to set the correct initial status
+            appointment_id = au.add_ausleihung(
                 item_id=item_id,
                 user=session['username'],
                 start_date=start_datetime,
                 end_date=end_datetime,
                 notes=notes,
+                status=initial_status,
                 period=booking_period # Will be None for multi-day
             )
             
+            # If it became active immediately, log it and send a notification
+            if initial_status == 'active' and appointment_id:
+                app.logger.info(f"Appointment {appointment_id} scheduled retroactively as active.")
+                # We can also notify the user right away
+                item_name = item.get('Name', 'Unbekannt')
+                
+                # Log audit event
+                _append_audit_event_standalone(
+                    'ausleihung_started',
+                    {
+                        'borrow_id': str(appointment_id),
+                        'item_id': item_id,
+                        'item_name': item_name,
+                        'user': session['username'],
+                        'status_before': 'planned',
+                        'status_after': 'active'
+                    }
+                )
+                
+                # Send notification
+                try:
+                    client_temp = MongoClient(MONGODB_HOST, MONGODB_PORT)
+                    db_temp = client_temp[MONGODB_DB]
+                    _create_notification(
+                        db_temp,
+                        audience='user',
+                        notif_type='appointment_activated',
+                        title='Reservierung ist jetzt aktiv',
+                        message=f"Deine geplante Ausleihe für {item_name} startet jetzt.",
+                        target_user=session['username'],
+                        reference={
+                            'appointment_id': str(appointment_id),
+                            'item_id': str(item_id),
+                            'event': 'activated',
+                        },
+                        unique_key=f"appointment:activated:{appointment_id}",
+                        severity='info'
+                    )
+                    client_temp.close()
+                except Exception as notif_err:
+                    app.logger.error(f"Error sending immediate active notification: {notif_err}")
+
             if not appointment_id:
                 return jsonify({'success': False, 'message': 'Termin konnte nicht erstellt werden'}), 500
         except Exception as e:
-            print(f"Error creating planned booking: {e}")
+            print(f"Error creating booking: {e}")
             return jsonify({'success': False, 'message': f'Fehler beim Erstellen des Termins: {str(e)}'}), 500
         
         # If we got this far, we have a valid appointment_id
