@@ -4183,6 +4183,83 @@ def get_item_json(id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/get_bookings')
+def get_bookings():
+    """Return calendar bookings for the current user session."""
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    client = None
+    try:
+        username = session.get('username')
+        start = request.args.get('start')
+        end = request.args.get('end')
+
+        bookings = au.get_ausleihungen(status=['planned', 'active', 'completed'], start=start, end=end)
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+
+        result = []
+        for booking in bookings:
+            start_dt = booking.get('Start')
+            if not start_dt:
+                continue
+
+            end_dt = booking.get('End')
+            if not end_dt and isinstance(start_dt, datetime.datetime):
+                end_dt = start_dt + datetime.timedelta(minutes=45)
+            elif not end_dt:
+                end_dt = start_dt
+
+            item_id = str(booking.get('Item') or '')
+            item_doc = None
+            if item_id:
+                try:
+                    item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+                except Exception:
+                    item_doc = None
+
+            item_name = item_id or 'Ausleihe'
+            item_borrower = ''
+            if item_doc:
+                item_name = item_doc.get('Name') or item_doc.get('Code_4') or item_name
+                borrower_info = item_doc.get('BorrowerInfo') or {}
+                borrower_name = borrower_info.get('User') if isinstance(borrower_info, dict) else ''
+                item_borrower = str(item_doc.get('User') or borrower_name or '')
+
+            status = booking.get('Status') or 'unknown'
+            if status == 'active':
+                status = 'current'
+
+            period = booking.get('Period')
+            title = item_name
+            if period:
+                title = f"{title} - {period}. Std"
+
+            result.append({
+                'id': str(booking.get('_id')),
+                'title': title,
+                'start': start_dt.isoformat() if isinstance(start_dt, datetime.datetime) else str(start_dt),
+                'end': end_dt.isoformat() if isinstance(end_dt, datetime.datetime) else str(end_dt),
+                'status': status,
+                'itemId': item_id,
+                'userName': str(booking.get('User') or ''),
+                'notes': str(booking.get('Notes') or ''),
+                'period': period,
+                'isCurrentUser': str(booking.get('User') or '') == username,
+                'itemBorrower': item_borrower,
+            })
+
+        return jsonify({'ok': True, 'bookings': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'bookings': []}), 500
+    finally:
+        if client:
+            client.close()
+
+
 @app.route('/api/booking_conflicts')
 def api_booking_conflicts():
     """
@@ -6577,17 +6654,19 @@ def plan_booking():
         
     try:
         # Extract form data
-        item_id = html.escape(request.form.get('item_id'))
-        start_date_str = html.escape(request.form.get('booking_date'))  # Changed from start_date to booking_date
-        end_date_str = html.escape(request.form.get('booking_end_date'))  # Changed from end_date to booking_end_date
-        period_start = html.escape(request.form.get('period_start'))
-        period_end = html.escape(request.form.get('period_end'))
-        notes = html.escape(request.form.get('notes', ''))
-        booking_type = html.escape(request.form.get('booking_type', 'single'))
+        item_id = (request.form.get('item_id') or '').strip()
+        start_date_str = (request.form.get('booking_date') or request.form.get('start_date') or '').strip()
+        end_date_str = (request.form.get('booking_end_date') or request.form.get('end_date') or '').strip()
+        period_start = (request.form.get('period_start') or '').strip()
+        period_end = (request.form.get('period_end') or '').strip()
+        notes = html.escape(request.form.get('notes', '') or '')
+        booking_type = (request.form.get('booking_type', 'single') or 'single').strip().lower()
         
         # Validate inputs
-        if not all([item_id, start_date_str, end_date_str, period_start]):
+        if not all([item_id, start_date_str, period_start]):
             return {"success": False, "error": "Missing required fields"}, 400
+        if not end_date_str:
+            end_date_str = start_date_str
             
         # Parse dates
         try:
