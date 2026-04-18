@@ -1259,9 +1259,17 @@ def _initialize_scheduler():
         return
     
     try:
-        # For multi-worker Gunicorn, check if we're in a reasonable scenario
-        # Using a lock file to ensure only one instance starts the scheduler
+        # For multi-worker Gunicorn, use a lock file to ensure only one instance starts the scheduler
+        # Clean up any stale lock file from previous runs (older than 5 minutes)
         scheduler_lock_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.scheduler_lock')
+        try:
+            if os.path.exists(scheduler_lock_path):
+                lock_age = time.time() - os.path.getmtime(scheduler_lock_path)
+                if lock_age > 300:  # 5 minutes - indicates a stale lock from a previous container run
+                    os.remove(scheduler_lock_path)
+                    app.logger.info(f"Removed stale scheduler lock file (age: {lock_age:.0f}s)")
+        except Exception:
+            pass  # If we can't clean up, continue anyway
         
         try:
             # Try to create the lock file - only succeeds if it doesn't exist
