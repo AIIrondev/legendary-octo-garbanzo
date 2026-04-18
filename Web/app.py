@@ -4064,6 +4064,9 @@ def get_items():
             'Filter3': 1,
             'Ort': 1,
             'User': 1,
+            'BlockedNow': 1,
+            'Reservierbar': 1,
+            'HasDamage': 1,
             'ItemType': 1,
         }
 

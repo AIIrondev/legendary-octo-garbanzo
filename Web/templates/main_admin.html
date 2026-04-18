@@ -3415,10 +3415,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function loadItems(offset = 0, append = false) {
-        // Für Pages nach der ersten: Explizit vollständige Daten laden (light_mode=false)
-        // Erste Page: light_mode wird automatisch enablet
-        const lightModeParam = offset > 0 ? '&light_mode=false' : '';
-        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}${lightModeParam}`)
+        // Keep list payload lightweight; full details are fetched on-demand in openItemQuick.
+        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ADMIN_ITEMS_PAGE_SIZE}&light_mode=true`)
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
@@ -3592,6 +3590,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             }
                         }
                         const damageCount = Array.isArray(item.DamageReports) ? item.DamageReports.length : 0;
+                        const hasDamage = Boolean(item.HasDamage) || damageCount > 0;
                         const groupedCount = Number(item.GroupedDisplayCount || 1);
                         const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
                         const isGroupedItem = groupedCount > 1;
@@ -3608,7 +3607,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <p class="item-col-filter3"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
                                 <p class="item-col-code"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <p class="item-col-count"><strong>Anzahl:</strong> ${groupedCount}</p>
-                                ${damageCount > 0 ? `<div class="damage-badge">Schäden gemeldet: ${damageCount}</div>` : ''}
+                                ${hasDamage ? `<div class="damage-badge">${damageCount > 0 ? `Schäden gemeldet: ${damageCount}` : 'Schäden gemeldet'}</div>` : ''}
                                 <div class="image-container">
                                     ${imagesHtml}
                                 </div>
@@ -3680,11 +3679,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 }
                                 
                                 e.stopPropagation();
-                                
-                                const modalItemData = {...item};
-                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
-                                
-                                openItemModal(modalItemData);
+
+                                openItemQuick(item._id);
                             });
                         }
                     } catch (err) {
@@ -4303,14 +4299,58 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
 
         const damageReports = Array.isArray(item.DamageReports) ? item.DamageReports : [];
-        const damageInfoHtml = damageReports.length > 0
-            ? `<ul class="damage-list">${damageReports.map(report => {
-                const desc = escapeHtml(report?.description || '-');
-                const by = escapeHtml(report?.reported_by || 'Unbekannt');
-                const at = escapeHtml(formatDamageTimestamp(report?.reported_at));
-                return `<li><strong>${at}</strong> durch ${by}<br>${desc}</li>`;
-            }).join('')}</ul>`
-            : 'Keine Schäden erfasst.';
+        const damageRepairs = Array.isArray(item.DamageRepairs) ? item.DamageRepairs : [];
+        const damageHistoryEntries = [];
+
+        damageReports.forEach(report => {
+            damageHistoryEntries.push({
+                type: 'report',
+                timestamp: report?.reported_at || null,
+                dateLabel: escapeHtml(formatDamageTimestamp(report?.reported_at)),
+                actor: escapeHtml(report?.reported_by || 'Unbekannt'),
+                description: escapeHtml(report?.description || 'Schaden gemeldet'),
+                meta: '',
+            });
+        });
+
+        damageRepairs.forEach(repair => {
+            const resolvedReports = Array.isArray(repair?.resolved_reports) ? repair.resolved_reports : [];
+            damageHistoryEntries.push({
+                type: 'repair',
+                timestamp: repair?.repaired_at || null,
+                dateLabel: escapeHtml(formatDamageTimestamp(repair?.repaired_at)),
+                actor: escapeHtml(repair?.repaired_by || 'Unbekannt'),
+                description: 'Als repariert markiert',
+                meta: `${resolvedReports.length} Meldung(en) abgeschlossen`,
+            });
+        });
+
+        damageHistoryEntries.sort((a, b) => {
+            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+        });
+
+        const damageHistoryHtml = damageHistoryEntries.length > 0
+            ? damageHistoryEntries.map(entry => {
+                const badgeStyle = entry.type === 'repair'
+                    ? 'background:#dcfce7;color:#166534;'
+                    : 'background:#fee2e2;color:#991b1b;';
+                const badgeText = entry.type === 'repair' ? 'Repariert' : 'Schaden';
+                const metaLine = entry.meta ? `<div style="font-size:0.84rem;color:#4b5563;">${escapeHtml(entry.meta)}</div>` : '';
+                return `
+                    <div style="border:1px solid #dbe3ee;border-radius:8px;padding:10px;background:#fff;display:grid;gap:6px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                            <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;${badgeStyle}">${badgeText}</span>
+                            <span style="font-size:0.84rem;color:#475569;">${entry.dateLabel}</span>
+                        </div>
+                        <div style="font-size:0.9rem;color:#0f172a;"><strong>Von:</strong> ${entry.actor}</div>
+                        <div style="font-size:0.92rem;color:#1f2937;">${entry.description}</div>
+                        ${metaLine}
+                    </div>
+                `;
+            }).join('')
+            : '<div style="font-size:0.92rem;color:#64748b;">Keine Beschädigungs-Historie vorhanden.</div>';
         
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
@@ -4385,9 +4425,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <div class="detail-value">${item.Beschreibung || '-'}</div>
                 </div>
 
-                <div class="detail-group full-width">
-                    <div class="detail-label">Schäden:</div>
-                    <div class="detail-value">${damageInfoHtml}</div>
+                <div class="detail-group full-width" style="margin-top:12px;">
+                    <div class="detail-label" style="font-weight:600; color:#374151;">Beschädigungs-Historie</div>
+                    <div class="detail-value">
+                        <button id="toggle-damage-history" class="calendar-toggle-btn" style="margin-bottom:12px; padding:10px 16px; border-radius:6px; background:#f3f4f6; border:1px solid #d1d5db; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s ease;">
+                            <span>🛠️</span>
+                            <span id="toggle-damage-history-text">Historie anzeigen</span>
+                        </button>
+                        <div id="damage-history-panel" style="display:none; margin-top:8px; border:1px solid #e7edf5; border-radius:10px; padding:12px; background:#f8fafc;">
+                            <div style="display:grid; gap:10px;">${damageHistoryHtml}</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="detail-group full-width" style="margin-top:12px; padding:10px; border:1px solid #e3e3e3; border-radius:8px;">
@@ -4486,6 +4534,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const detailsPanel = document.getElementById('calendar-day-details');
         const detailsDate = document.getElementById('cal-details-date');
         const detailsList = document.getElementById('cal-details-list');
+        const damageToggleBtn = document.getElementById('toggle-damage-history');
+        const damageHistoryPanel = document.getElementById('damage-history-panel');
+        const damageToggleText = document.getElementById('toggle-damage-history-text');
 
         let bookings = [];
         let currentDate = new Date();
@@ -4643,6 +4694,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
             detailsPanel.style.display = 'none';
             renderCalendar();
+        });
+
+        damageToggleBtn?.addEventListener('click', () => {
+            const shouldOpen = damageHistoryPanel.style.display === 'none';
+            damageHistoryPanel.style.display = shouldOpen ? 'block' : 'none';
+            if (damageToggleText) {
+                damageToggleText.textContent = shouldOpen ? 'Historie verbergen' : 'Historie anzeigen';
+            }
+            damageToggleBtn.style.background = shouldOpen ? '#e0e7ff' : '#f3f4f6';
+            damageToggleBtn.style.borderColor = shouldOpen ? '#818cf8' : '#d1d5db';
         });
 
 

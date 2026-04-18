@@ -799,10 +799,8 @@
     }
 
     function loadItems(offset = 0, append = false) {
-        // Für Pages nach der ersten: Explizit vollständige Daten laden (light_mode=false)
-        // Erste Page: light_mode wird automatisch enablet
-        const lightModeParam = offset > 0 ? '&light_mode=false' : '';
-        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ITEMS_PAGE_SIZE}${lightModeParam}`)
+        // Keep list payload lightweight; full details are fetched on-demand in openItemQuick.
+        return fetch(`{{ url_for('get_items') }}?offset=${offset}&limit=${MAIN_ITEMS_PAGE_SIZE}&light_mode=true`)
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
@@ -1073,12 +1071,9 @@
                                 
                                 // Stop event from bubbling up
                                 e.stopPropagation();
-                                
-                                // Get full item data with correct image paths
-                                const modalItemData = {...item};
-                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
-                                
-                                openItemModal(modalItemData);
+
+                                // Always load full, up-to-date item details for the modal.
+                                openItemQuick(item._id);
                             });
                         }
                     } catch (err) {
@@ -1414,6 +1409,76 @@
     }
 
     function openItemModal(item) {
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const formatHistoryDate = (value) => {
+            if (!value) return '-';
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) {
+                return escapeHtml(value);
+            }
+            return dt.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        };
+
+        const damageReports = Array.isArray(item.DamageReports) ? item.DamageReports : [];
+        const damageRepairs = Array.isArray(item.DamageRepairs) ? item.DamageRepairs : [];
+        const damageHistoryEntries = [];
+
+        damageReports.forEach((report) => {
+            damageHistoryEntries.push({
+                type: 'report',
+                rawDate: report?.reported_at || null,
+                dateLabel: formatHistoryDate(report?.reported_at),
+                actor: escapeHtml(report?.reported_by || '-'),
+                description: escapeHtml(report?.description || 'Schaden gemeldet'),
+                meta: '',
+            });
+        });
+
+        damageRepairs.forEach((repair) => {
+            const resolvedReports = Array.isArray(repair?.resolved_reports) ? repair.resolved_reports : [];
+            damageHistoryEntries.push({
+                type: 'repair',
+                rawDate: repair?.repaired_at || null,
+                dateLabel: formatHistoryDate(repair?.repaired_at),
+                actor: escapeHtml(repair?.repaired_by || '-'),
+                description: 'Als repariert markiert',
+                meta: `${resolvedReports.length} Meldung(en) abgeschlossen`,
+            });
+        });
+
+        damageHistoryEntries.sort((a, b) => {
+            const ta = a.rawDate ? new Date(a.rawDate).getTime() : 0;
+            const tb = b.rawDate ? new Date(b.rawDate).getTime() : 0;
+            return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+        });
+
+        const damageHistoryHtml = damageHistoryEntries.length
+            ? damageHistoryEntries.map((entry) => {
+                const badgeStyle = entry.type === 'repair'
+                    ? 'background:#dcfce7;color:#166534;'
+                    : 'background:#fee2e2;color:#991b1b;';
+                const badgeText = entry.type === 'repair' ? 'Repariert' : 'Schaden';
+                const metaLine = entry.meta ? `<div style="font-size:0.84rem;color:#4b5563;">${escapeHtml(entry.meta)}</div>` : '';
+                return `
+                    <div style="border:1px solid #dbe3ee;border-radius:8px;padding:10px;background:#fff;display:grid;gap:6px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                            <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;${badgeStyle}">${badgeText}</span>
+                            <span style="font-size:0.84rem;color:#475569;">${entry.dateLabel}</span>
+                        </div>
+                        <div style="font-size:0.9rem;color:#0f172a;"><strong>Von:</strong> ${entry.actor}</div>
+                        <div style="font-size:0.92rem;color:#1f2937;">${entry.description}</div>
+                        ${metaLine}
+                    </div>
+                `;
+            }).join('')
+            : '<div style="font-size:0.92rem;color:#64748b;">Keine Beschädigungs-Historie vorhanden.</div>';
+
         // Get modal elements
         const modal = document.getElementById('item-modal');
         const modalContent = document.getElementById('modal-content-wrapper');
@@ -1571,6 +1636,19 @@
                     <div class="detail-value">${item.Beschreibung || '-'}</div>
                 </div>
 
+                <div class="detail-group full-width" style="margin-top:12px;">
+                    <div class="detail-label" style="font-weight:600; color:#374151;">Beschädigungs-Historie</div>
+                    <div class="detail-value">
+                        <button id="toggle-damage-history" class="calendar-toggle-btn" style="margin-bottom:12px; padding:10px 16px; border-radius:6px; background:#f3f4f6; border:1px solid #d1d5db; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s ease;">
+                            <span>🛠️</span>
+                            <span id="toggle-damage-history-text">Historie anzeigen</span>
+                        </button>
+                        <div id="damage-history-panel" style="display:none; margin-top:8px; border:1px solid #e7edf5; border-radius:10px; padding:12px; background:#f8fafc;">
+                            <div style="display:grid; gap:10px;">${damageHistoryHtml}</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="detail-group full-width" style="margin-top:14px; padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fbfbfd; box-shadow: 0 1px 1px rgba(0,0,0,0.03);">
                     <div class="detail-label" style="font-weight:600; color:#374151;">Verfügbarkeit prüfen</div>
                     <div class="detail-value">
@@ -1687,6 +1765,9 @@
         const detailsPanel = document.getElementById('calendar-day-details');
         const detailsDate = document.getElementById('cal-details-date');
         const detailsList = document.getElementById('cal-details-list');
+        const damageToggleBtn = document.getElementById('toggle-damage-history');
+        const damageHistoryPanel = document.getElementById('damage-history-panel');
+        const damageToggleText = document.getElementById('toggle-damage-history-text');
 
         let bookings = [];
         let currentDate = new Date();
@@ -1845,6 +1926,16 @@
             }
             detailsPanel.style.display = 'none';
             renderCalendar();
+        });
+
+        damageToggleBtn?.addEventListener('click', () => {
+            const shouldOpen = damageHistoryPanel.style.display === 'none';
+            damageHistoryPanel.style.display = shouldOpen ? 'block' : 'none';
+            if (damageToggleText) {
+                damageToggleText.textContent = shouldOpen ? 'Historie verbergen' : 'Historie anzeigen';
+            }
+            damageToggleBtn.style.background = shouldOpen ? '#e0e7ff' : '#f3f4f6';
+            damageToggleBtn.style.borderColor = shouldOpen ? '#818cf8' : '#d1d5db';
         });
 
         // Availability checker (user)
