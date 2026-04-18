@@ -1138,6 +1138,7 @@ def update_appointment_statuses():
                     item_id_str = appointment.get('Item')
                     conflict_detected = False
                     conflict_note = ''
+                    item_name = item_id_str or 'Termin'
                     if item_id_str:
                         try:
                             item_doc = items_col.find_one(
@@ -1145,6 +1146,7 @@ def update_appointment_statuses():
                                 {'Verfuegbar': 1, 'User': 1, 'Name': 1, 'Exemplare': 1}
                             )
                             if item_doc:
+                                item_name = item_doc.get('Name', item_id_str)
                                 total_exemplare = int(item_doc.get('Exemplare', 1))
                                 # Count how many active (non-planned) borrows currently hold this item
                                 active_borrows = ausleihungen.count_documents({
@@ -1191,6 +1193,28 @@ def update_appointment_statuses():
                     updated_count += 1
                     if new_status == 'active':
                         activated_count += 1
+                        try:
+                            _create_notification(
+                                db,
+                                audience='user',
+                                notif_type='appointment_activated',
+                                title='Reservierung ist jetzt aktiv',
+                                message=(
+                                    f"Deine geplante Ausleihe für {item_name} startet jetzt."
+                                ),
+                                target_user=str(appointment.get('User') or '').strip() or None,
+                                reference={
+                                    'appointment_id': str(appointment.get('_id')),
+                                    'item_id': str(appointment.get('Item') or ''),
+                                    'event': 'activated',
+                                },
+                                unique_key=f"appointment:activated:{appointment.get('_id')}",
+                                severity='info',
+                            )
+                        except Exception as notif_err:
+                            app.logger.warning(
+                                f"Failed to create activation notification for {appointment.get('_id')}: {notif_err}"
+                            )
                     elif new_status == 'completed':
                         completed_count += 1
 
