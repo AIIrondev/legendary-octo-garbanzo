@@ -21,7 +21,7 @@
     .items-indicator {
         text-align: center;
         font-size: 0.9rem;
-        color: #495057;
+        color: var(--ui-text-muted);
         margin: 6px 0 16px;
         font-weight: 600;
     }
@@ -78,7 +78,7 @@
     }
 
     .bulk-delete-summary {
-        color: #334155;
+        color: var(--ui-text);
         font-size: 0.92rem;
         margin-top: 4px;
     }
@@ -105,7 +105,7 @@
         padding: 9px 12px;
         cursor: pointer;
         background: #f8fafc;
-        color: #1e293b;
+        color: var(--ui-title);
         font-weight: 600;
         text-align: center;
     }
@@ -161,7 +161,7 @@
 
     .clear-filter {
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--ui-text-muted);
     }
 
     .filter-dropdown {
@@ -208,14 +208,14 @@
 
     .filter-option-group {
         margin-bottom: 12px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--ui-border);
         padding-bottom: 8px;
     }
 
     .filter-group-header {
         font-weight: bold;
         margin-bottom: 5px;
-        color: #495057;
+        color: var(--ui-text-muted);
         font-size: 0.9rem;
     }
 
@@ -236,7 +236,7 @@
     }
 
     .filter-tag-group {
-        color: #6c757d;
+        color: var(--ui-text-muted);
         font-size: 0.8em;
         font-style: italic;
         margin-right: 2px;
@@ -245,7 +245,7 @@
     .filter-tag-remove {
         background: none;
         border: none;
-        color: #6c757d;
+        color: var(--ui-text-muted);
         margin-left: 5px;
         cursor: pointer;
         font-size: 1rem;
@@ -334,7 +334,7 @@
         border: 1px solid #dbe3ee;
         border-radius: 10px;
         background: #f8fafc;
-        color: #334155;
+        color: var(--ui-text);
         justify-content: center;
         align-items: center;
         flex-direction: column;
@@ -393,14 +393,15 @@
     .item-card {
         background-color: var(--ui-surface);
         border: 1px solid var(--ui-border);
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        border-radius: var(--ui-radius);
+        box-shadow: var(--ui-shadow-sm);
         padding: 20px;
-        max-width: 300px;
-        flex-shrink: 0;
+        width: 100%;
+        max-width: 340px;
+        flex: 1 1 300px;
         scroll-snap-align: center;
         cursor: pointer;
-        transition: transform 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s;
         position: relative;
     }
 
@@ -447,7 +448,7 @@
         align-items: center;
         gap: 6px;
         font-size: 0.9rem;
-        color: #475569;
+        color: var(--ui-text);
         cursor: pointer;
         user-select: none;
     }
@@ -676,7 +677,7 @@
     }
 
     .cancel-button {
-        background-color: #6c757d;
+        background-color: var(--ui-text-muted);
         color: white;
     }
 
@@ -711,7 +712,7 @@
     .filter-inputs h3 {
         margin-top: 0;
         margin-bottom: 15px;
-        color: #495057;
+        color: var(--ui-text-muted);
     }
 
     .multi-filter {
@@ -1000,16 +1001,16 @@
 
     /* Disabled Button */
     .disabled-button {
-        background-color: #6c757d !important;
-        border-color: #6c757d !important;
+        background-color: var(--ui-text-muted) !important;
+        border-color: var(--ui-text-muted) !important;
         color: #fff !important;
         cursor: not-allowed !important;
         opacity: 0.6;
     }
 
     .disabled-button:hover {
-        background-color: #6c757d !important;
-        border-color: #6c757d !important;
+        background-color: var(--ui-text-muted) !important;
+        border-color: var(--ui-text-muted) !important;
         transform: none !important;
         box-shadow: none !important;
     }
@@ -1032,7 +1033,7 @@
 
     .detail-label {
         font-weight: bold;
-        color: #495057;
+        color: var(--ui-text-muted);
         min-width: 150px;
         margin-right: 10px;
     }
@@ -1351,7 +1352,7 @@
             display: block !important;
             margin-bottom: 8px !important;
             font-weight: 600 !important;
-            color: #333 !important;
+            color: var(--ui-title) !important;
         }
         
         .form-group input, .form-group select, .form-group textarea {
@@ -1389,7 +1390,7 @@
         /* Tab navigation improvements */
         .nav-tabs {
             flex-wrap: wrap !important;
-            border-bottom: 1px solid #dee2e6 !important;
+            border-bottom: 1px solid var(--ui-border) !important;
         }
         
         .nav-tabs .nav-link {
@@ -1605,6 +1606,7 @@
             gap: 15px !important;
             padding: 10px 0 !important;
             overflow-x: visible !important;
+            scroll-snap-type: none !important;
         }
         
         .item-card {
@@ -1688,7 +1690,7 @@
             display: block !important;
             margin-bottom: 8px !important;
             font-weight: 600 !important;
-            color: #333 !important;
+            color: var(--ui-title) !important;
         }
         
         .form-group input, .form-group select, .form-group textarea {
@@ -1962,8 +1964,8 @@
     }
 
     /* Element text colors for better visibility */
-    .edit-button, .duplicate-button, .generate-qr-button, .ausleihen {
-        color: black !important;
+    .edit-button, .duplicate-button, .generate-qr-button {
+        color: var(--ui-title) !important;
     }
     
     /* Standardized button styles across the application */
@@ -2019,7 +2021,7 @@
         align-items: center;
         gap: 12px;
         padding: 12px;
-        border-bottom: 1px solid #e7edf5;
+        border-bottom: 1px solid var(--ui-border);
         background: #f8fafc;
     }
 
@@ -2029,7 +2031,7 @@
         border: 1px solid #dbe3ee;
         border-radius: 8px;
         background: var(--ui-surface);
-        color: #334155;
+        color: var(--ui-text);
         font-weight: 700;
         line-height: 1;
         cursor: pointer;
@@ -2060,7 +2062,7 @@
         align-items: center;
         justify-content: center;
         border-radius: 8px;
-        color: #334155;
+        color: var(--ui-text);
         font-size: 0.95rem;
         font-weight: 600;
         line-height: 1;
@@ -2173,7 +2175,7 @@
 
     .cal-booking-period {
         margin-left: 8px;
-        color: #475569;
+        color: var(--ui-text);
         font-size: 0.85rem;
         font-weight: 600;
     }
@@ -5667,7 +5669,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             display: block !important;
             margin-right: 0 !important;
             margin-bottom: 2px !important;
-            color: #6c757d !important;
+            color: var(--ui-text-muted) !important;
             font-size: 0.8rem !important;
         }
 

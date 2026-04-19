@@ -19,7 +19,7 @@
         align-items: center;
         gap: 12px;
         padding: 12px;
-        border-bottom: 1px solid #e7edf5;
+        border-bottom: 1px solid var(--ui-border);
         background: #f8fafc;
     }
 
@@ -29,7 +29,7 @@
         border: 1px solid #dbe3ee;
         border-radius: 8px;
         background: var(--ui-surface);
-        color: #334155;
+        color: var(--ui-text);
         font-weight: 700;
         line-height: 1;
         cursor: pointer;
@@ -60,7 +60,7 @@
         align-items: center;
         justify-content: center;
         border-radius: 8px;
-        color: #334155;
+        color: var(--ui-text);
         font-size: 0.95rem;
         font-weight: 600;
         line-height: 1;
@@ -173,7 +173,7 @@
 
     .cal-booking-period {
         margin-left: 8px;
-        color: #475569;
+        color: var(--ui-text);
         font-size: 0.85rem;
         font-weight: 600;
     }
@@ -225,14 +225,14 @@
 
     .filter-option-group {
         margin-bottom: 12px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--ui-border);
         padding-bottom: 8px;
     }
 
     .filter-group-header {
         font-weight: bold;
         margin-bottom: 5px;
-        color: #495057;
+        color: var(--ui-text-muted);
         font-size: 0.9rem;
     }
 
@@ -253,7 +253,7 @@
     }
 
     .filter-tag-group {
-        color: #6c757d;
+        color: var(--ui-text-muted);
         font-size: 0.8em;
         font-style: italic;
         margin-right: 2px;
@@ -262,7 +262,7 @@
     .filter-tag-remove {
         background: none;
         border: none;
-        color: #6c757d;
+        color: var(--ui-text-muted);
         margin-left: 5px;
         cursor: pointer;
         font-size: 1rem;
@@ -2856,7 +2856,7 @@
 
     .clear-filter {
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--ui-text-muted);
     }
 
     .filter-dropdown {
@@ -2903,14 +2903,14 @@
 
     .filter-option-group {
         margin-bottom: 12px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--ui-border);
         padding-bottom: 8px;
     }
 
     .filter-group-header {
         font-weight: bold;
         margin-bottom: 5px;
-        color: #495057;
+        color: var(--ui-text-muted);
         font-size: 0.9rem;
     }
 
@@ -2931,7 +2931,7 @@
     }
 
     .filter-tag-group {
-        color: #6c757d;
+        color: var(--ui-text-muted);
         font-size: 0.8em;
         font-style: italic;
         margin-right: 2px;
@@ -2940,7 +2940,7 @@
     .filter-tag-remove {
         background: none;
         border: none;
-        color: #6c757d;
+        color: var(--ui-text-muted);
         margin-left: 5px;
         cursor: pointer;
         font-size: 1rem;
@@ -3029,7 +3029,7 @@
         border: 1px solid #dbe3ee;
         border-radius: 10px;
         background: #f8fafc;
-        color: #334155;
+        color: var(--ui-text);
         justify-content: center;
         align-items: center;
         flex-direction: column;
@@ -3088,17 +3088,15 @@
     .item-card {
         background-color: var(--ui-surface);
         border: 1px solid var(--ui-border);
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        border-radius: var(--ui-radius);
+        box-shadow: var(--ui-shadow-sm);
         padding: 20px;
-        max-width: 300px;
-        flex-shrink: 0;
+        width: 100%;
+        max-width: 340px;
+        flex: 1 1 300px;
         scroll-snap-align: center;
         cursor: pointer;
-        transition: transform 0.2s;
-    position: relative;
-    }
-
+        transition: transform 0.2s, box-shadow 0.2s;
     .item-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
@@ -3238,7 +3236,7 @@
     }
 
     .cancel-button {
-        background-color: #6c757d;
+        background-color: var(--ui-text-muted);
         color: white;
     }
 
@@ -3640,7 +3638,7 @@
             display: block !important;
             margin-bottom: 8px !important;
             font-weight: 600 !important;
-            color: #333 !important;
+            color: var(--ui-title) !important;
         }
         
         .form-group input, .form-group select, .form-group textarea {
@@ -3711,8 +3709,8 @@
     }
 
     /* Element text colors for better visibility */
-    .edit-button, .duplicate-button, .generate-qr-button, .ausleihen {
-        color: black !important;
+    .edit-button, .duplicate-button, .generate-qr-button {
+        color: var(--ui-title) !important;
     }
     
     /* Standardized button styles across the application */
@@ -3873,7 +3871,7 @@
     .modal-details { margin: 20px 0; }
     .detail-group { display: flex; margin-bottom: 10px; align-items: flex-start; }
     .detail-group.full-width { flex-direction: column; margin-bottom: 15px; }
-    .detail-label { font-weight: bold; color: #495057; min-width: 150px; margin-right: 10px; }
+    .detail-label { font-weight: bold; color: var(--ui-text-muted); min-width: 150px; margin-right: 10px; }
     .detail-value { color: #212529; flex: 1; word-wrap: break-word; }
     .detail-group.full-width .detail-label { margin-bottom: 5px; }
     .detail-group.full-width .detail-value {
@@ -3955,7 +3953,7 @@
         align-items: center;
         padding: 15px;
         background-color: var(--ui-surface);
-        border-bottom: 1px solid #f3f4f6;
+        border-bottom: 1px solid var(--ui-border);
     }
     
     .calendar-header button {
@@ -4121,7 +4119,7 @@
             font-size: 0.95rem !important;
             font-weight: 600 !important;
             line-height: 1.35 !important;
-            color: #212529 !important;
+            color: var(--ui-title) !important;
             word-break: break-word !important;
             overflow-wrap: anywhere !important;
         }
@@ -4199,7 +4197,7 @@
                 display: block !important;
                 margin-right: 0 !important;
                 margin-bottom: 2px !important;
-                color: #6c757d !important;
+                color: var(--ui-text-muted) !important;
                 font-size: 0.8rem !important;
             }
 
@@ -4219,8 +4217,12 @@
         }
 
         .items-container {
-            padding: 6px 0 !important;
-            gap: 10px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+            padding: 10px 0 !important;
+            overflow-x: visible !important;
+            scroll-snap-type: none !important;
         }
 
         body.table-view .table-view-header {
@@ -4237,16 +4239,17 @@
         }
 
         .item-card {
-            border: none !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            border-bottom: 1px solid #e5e7eb !important;
-            padding: 12px 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 15px !important;
+            scroll-snap-align: none !important;
+            content-visibility: auto;
+            contain-intrinsic-size: auto 300px;
         }
 
         .item-card:hover {
-            transform: none !important;
-            box-shadow: none !important;
+            transform: translateY(-2px) !important;
+            box-shadow: var(--ui-shadow-md) !important;
         }
 
         .item-card .image-container {

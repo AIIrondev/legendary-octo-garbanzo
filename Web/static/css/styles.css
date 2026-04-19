@@ -196,7 +196,7 @@ select:focus {
 }
 
 .ausleihen {
-    color: black !important; /* Override any existing color */
+    /* Color handled securely below */
 }
 
 /* Modal image display fix */
@@ -263,12 +263,12 @@ select:focus {
 .view-toggle-btn {
     width: 38px;
     height: 38px;
-    border: 1px solid #c7ced6;
+    border: 1px solid var(--ui-border);
     border-radius: 50%;
-    background: #ffffff;
+    background: var(--ui-surface);
     font-size: 1.15rem;
     cursor: pointer;
-    color: #2f3e4e;
+    color: var(--ui-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -277,8 +277,8 @@ select:focus {
 
 .view-toggle-btn:hover {
     transform: translateY(-1px);
-    border-color: #8fa2b7;
-    background: #f8fbff;
+    border-color: var(--ui-border);
+    background: var(--ui-surface-soft);
     box-shadow: 0 3px 8px rgba(33, 37, 41, 0.12);
 }
 
@@ -287,9 +287,9 @@ select:focus {
 }
 
 .view-toggle-btn[aria-pressed='true'] {
-    background: #e9f2ff;
-    border-color: #7ea1c8;
-    color: #1f4f7a;
+    background: var(--module-primary-color);
+    border-color: var(--module-primary-color);
+    color: white;
 }
 
 .table-view-header {
@@ -306,7 +306,7 @@ body.table-view .table-view-header {
     border: 0;
     border-radius: 10px;
     background: transparent;
-    color: #3f4e5d;
+    color: var(--ui-text-muted);
     font-size: 0.82rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -325,9 +325,9 @@ body.table-view .item-card {
     max-width: none;
     margin: 0 0 10px 0;
     padding: 12px 14px;
-    border: 1px solid #e1e6ed;
+    border: 1px solid var(--ui-border);
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--ui-surface);
     box-shadow: none;
     scroll-snap-align: none;
 }
@@ -353,7 +353,7 @@ body.table-view .item-card .card-content .item-name-cell,
 body.table-view .item-card .card-content .item-col-name {
     font-size: 0.98rem;
     font-weight: 700;
-    color: #1f2d3d;
+    color: var(--ui-title);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -370,7 +370,7 @@ body.table-view .item-card .card-content .item-col-filter3,
 body.table-view .item-card .card-content .item-code-cell,
 body.table-view .item-card .card-content .item-col-code,
 body.table-view .item-card .card-content .item-col-count {
-    color: #445465;
+    color: var(--ui-text-muted);
     font-size: 0.9rem;
     white-space: nowrap;
     overflow: hidden;
@@ -387,7 +387,7 @@ body.table-view .item-card .damage-badge {
 body.table-view .item-card .actions {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px dashed #d9e0e8;
+    border-top: 1px dashed var(--ui-border);
 }
 
 @media (max-width: 900px) {
