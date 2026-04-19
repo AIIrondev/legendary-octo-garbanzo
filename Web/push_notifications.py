@@ -347,7 +347,7 @@ def send_push_to_all_admins(title, body, icon=None, url='/', reference=None):
         
         # Get all admin users
         admin_users = list(users_col.find(
-            {'IsAdmin': True},
+            {'Admin': True},
             {'Username': 1}
         ))
         

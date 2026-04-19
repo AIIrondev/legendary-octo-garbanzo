@@ -5987,7 +5987,7 @@ def report_damage(id):
                 f"Fuer das Item '{item_doc.get('Name', id)}' wurde ein Defekt gemeldet. "
                 f"Meldung von {session.get('username', '-')}: {description}"
             ),
-            reference={'item_id': id, 'damage_count': damage_count},
+            reference={'item_id': id, 'damage_count': damage_count, 'url': '/admin/damaged_items'},
             severity='danger',
         )
 
