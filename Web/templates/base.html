@@ -1754,27 +1754,7 @@
     <script src="{{ url_for('static', filename='js/mobile_compatibility.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ios_fixes.js') }}"></script>
     
-    <!-- Service Worker Registration for Push Notifications -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Register service worker for push notifications and offline support
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
-                    .then(function(registration) {
-                        console.log('Service Worker registered successfully:', registration);
-                        
-                        // Check if we have permission for push notifications
-                        if ('Notification' in window && Notification.permission === 'granted') {
-                            console.log('Push notifications already enabled');
-                        }
-                    })
-                    .catch(function(error) {
-                        console.warn('Service Worker registration failed:', error);
-                    });
-            } else {
-                console.log('Service Workers not supported in this browser');
-            }
-        });
-    </script>
+    <!-- Push Notifications Script -->
+    <script src="{{ url_for('static', filename='js/push-notifications.js') }}"></script>
 </body>
 </html>
