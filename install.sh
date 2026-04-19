@@ -72,6 +72,7 @@ in_app = False
 app_indent = None
 app_service_indent = None
 skip_build_block = False
+image_inserted = False
 
 def leading_spaces(text):
     return len(text) - len(text.lstrip(" "))
@@ -85,6 +86,7 @@ for line in lines:
         app_indent = indent
         app_service_indent = None
         skip_build_block = False
+        image_inserted = False
         out.append(line)
         continue
 
@@ -93,10 +95,13 @@ for line in lines:
             app_service_indent = indent
 
         if indent <= app_indent and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
+            if not image_inserted and app_service_indent is not None:
+                out.append(f"{' ' * app_service_indent}image: {target_image}\n")
             in_app = False
             app_indent = None
             app_service_indent = None
             skip_build_block = False
+            image_inserted = False
 
         if in_app:
             if app_service_indent is None:
@@ -112,15 +117,16 @@ for line in lines:
                 continue
 
             if re.match(rf"^\s{{{app_service_indent}}}image:\s*", line):
+                image_inserted = True
                 continue
 
-            if re.match(rf"^\s{{{app_service_indent}}}[A-Za-z0-9_-]+:\s*$", line):
+            if not image_inserted and re.match(rf"^\s{{{app_service_indent}}}[A-Za-z0-9_-]+:\s*$", line) and "image" not in stripped:
                 out.append(f"{' ' * app_service_indent}image: {target_image}\n")
-                app_service_indent = None
+                image_inserted = True
 
     out.append(line)
 
-if in_app and app_service_indent is not None:
+if in_app and app_service_indent is not None and not image_inserted:
     out.append(f"{' ' * app_service_indent}image: {target_image}\n")
 
 with open(compose_file, "w", encoding="utf-8") as f:
