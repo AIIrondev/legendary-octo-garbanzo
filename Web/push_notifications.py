@@ -324,7 +324,8 @@ def _send_web_push_notification(subscription, payload):
             data=json.dumps(payload),
             vapid_private_key=VAPID_PRIVATE_KEY,
             vapid_claims={'sub': VAPID_SUBJECT},
-            timeout=10
+            timeout=10,
+            ttl=3600  # Notification expires after 1 hour if device is offline
         )
         
         return True

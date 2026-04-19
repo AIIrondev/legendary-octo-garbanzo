@@ -71,6 +71,10 @@ def get_current_status(ausleihung, log_changes=False, user=None):
     # Bei stornierten Ausleihungen bleibt der Status immer storniert
     if original_status == 'cancelled':
         return 'cancelled'
+        
+    # Wenn die Ausleihung bereits abgeschlossen ist, bleibt sie es
+    if original_status == 'completed':
+        return 'completed'
     
     current_time = datetime.datetime.now()
     start_time = ausleihung.get('Start')
@@ -79,10 +83,6 @@ def get_current_status(ausleihung, log_changes=False, user=None):
     # Wenn kein Startdatum vorhanden ist, Status auf 'planned' setzen
     if not start_time:
         new_status = 'planned'
-    # Wenn die Ausleihung als 'completed' markiert wurde und ein Enddatum hat,
-    # bleibt sie bei 'completed'
-    elif original_status == 'completed' and end_time:
-        new_status = 'completed'
     # Wenn die aktuelle Zeit vor dem Startdatum liegt, ist die Ausleihung geplant
     elif current_time < start_time:
         # DEBUG: Log info wenn Booking noch lange in der Zukunft ist
