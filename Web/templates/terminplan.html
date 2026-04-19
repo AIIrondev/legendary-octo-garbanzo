@@ -51,6 +51,8 @@
                     <label for="booking-type">Reservierungstyp:</label>
                     <select id="booking-type" name="booking_type">
                         <option value="single">Einzeltermin</option>
+                        <option value="range">Zeitraum</option>
+                        <option value="recurring">Wiederkehrend</option>
                     </select>
                 </div>
                 
@@ -624,6 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const userId = document.getElementById('user-id').value || 'Admin';  // Get user ID or use fallback
+        const bookingType = document.getElementById('booking-type').value;
 
         // Convert JSON data to FormData
         const formData = new FormData();
@@ -631,16 +634,43 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add all required fields with correct names the server expects
         formData.append('item_id', itemId);
         formData.append('booking_date', startDate);
-        formData.append('booking_end_date', startDate); // For single bookings, end = start
         formData.append('period_start', periodStart);
         formData.append('period_end', periodEnd);
         formData.append('notes', document.getElementById('booking-notes').value || '');
-        formData.append('booking_type', document.getElementById('booking-type').value);
         formData.append('user_id', userId);
+        
+        if (bookingType === 'range') {
+            const endDate = document.getElementById('booking-end-date').value;
+            if (!endDate) {
+                alert('Bitte wählen Sie ein Enddatum für den Zeitraum.');
+                return;
+            }
+            formData.append('booking_end_date', endDate);
+            formData.append('booking_type', 'range');
+        } else if (bookingType === 'recurring') {
+            formData.append('booking_type', 'single'); // Server expects 'single' structure for these individually sent requests
+            const dates = calculateDates();
+            if (dates.length === 0) {
+                alert('Es konnten keine Termine berechnet werden. Bitte überprüfen Sie Ihre Eingaben.');
+                return;
+            }
+            if (confirm(`Möchten Sie wirklich ${dates.length} Termine planen?`)) {
+                processMultipleDates(formData, dates, periodStart, periodEnd);
+            }
+            return; // Use processMultipleDates instead
+        } else {
+            formData.append('booking_end_date', startDate); // For single bookings, end = start
+            formData.append('booking_type', 'single');
+        }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
         
         // Submit with FormData instead of JSON
         fetch('/plan_booking', {
             method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
             body: formData // Remove the Content-Type header and JSON.stringify
         })
         .then(response => {
@@ -681,8 +711,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cancel booking
     document.getElementById('cancel-booking').addEventListener('click', function() {
         if (confirm('Möchten Sie diese Ausleihe wirklich stornieren?')) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
             fetch('/cancel_booking/' + currentEventId, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
             })
             .then(response => response.json())
             .then(data => {
@@ -1131,8 +1165,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 newFormData.get('end_date'));
             
             // Submit this booking
+            const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
             fetch('/plan_booking', {
                 method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
                 body: newFormData
             })
             .then(response => response.json())
