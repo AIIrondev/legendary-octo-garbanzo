@@ -69,44 +69,59 @@ with open(compose_file, "r", encoding="utf-8") as f:
 
 out = []
 in_app = False
-in_build = False
-image_set = False
+app_indent = None
+app_service_indent = None
+skip_build_block = False
+
+def leading_spaces(text):
+    return len(text) - len(text.lstrip(" "))
 
 for line in lines:
     stripped = line.lstrip(" ")
-    indent = len(line) - len(stripped)
+    indent = leading_spaces(line)
 
-    if not in_app and re.match(r"^\s{2}app:\s*$", line):
+    if not in_app and re.match(r"^\s*app:\s*$", line):
         in_app = True
-        image_set = False
+        app_indent = indent
+        app_service_indent = None
+        skip_build_block = False
         out.append(line)
-        out.append(f"    image: {target_image}\n")
-        image_set = True
         continue
 
     if in_app:
-        if indent == 2 and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
+        if app_service_indent is None and indent > app_indent:
+            app_service_indent = indent
+
+        if indent <= app_indent and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
             in_app = False
-            in_build = False
+            app_indent = None
+            app_service_indent = None
+            skip_build_block = False
 
         if in_app:
-            if in_build:
-                if indent > 4:
-                    continue
-                in_build = False
+            if app_service_indent is None:
+                app_service_indent = indent
 
-            if re.match(r"^\s{4}build:\s*$", line):
-                in_build = True
+            if skip_build_block:
+                if indent > app_service_indent:
+                    continue
+                skip_build_block = False
+
+            if re.match(rf"^\s{{{app_service_indent}}}build:\s*$", line):
+                skip_build_block = True
                 continue
 
-            if re.match(r"^\s{4}image:\s*", line):
-                if image_set:
-                    continue
-                out.append(f"    image: {target_image}\n")
-                image_set = True
+            if re.match(rf"^\s{{{app_service_indent}}}image:\s*", line):
                 continue
+
+            if re.match(rf"^\s{{{app_service_indent}}}[A-Za-z0-9_-]+:\s*$", line):
+                out.append(f"{' ' * app_service_indent}image: {target_image}\n")
+                app_service_indent = None
 
     out.append(line)
+
+if in_app and app_service_indent is not None:
+    out.append(f"{' ' * app_service_indent}image: {target_image}\n")
 
 with open(compose_file, "w", encoding="utf-8") as f:
     f.writelines(out)
