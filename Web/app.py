@@ -7060,9 +7060,7 @@ def register():
             
             permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
             use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
-            is_student = bool(request.form.get('is_student')) if cfg.STUDENT_CARDS_MODULE_ENABLED else False
-            student_card_id = us.normalize_student_card_id(request.form.get('student_card_id')) if cfg.STUDENT_CARDS_MODULE_ENABLED else ''
-            max_borrow_days_raw = request.form.get('max_borrow_days') if cfg.STUDENT_CARDS_MODULE_ENABLED else None
+            
             if not username or not password or not name or not last_name:
                 flash('Bitte füllen Sie alle Felder aus', 'error')
                 return redirect(url_for('register'))
@@ -7081,28 +7079,14 @@ def register():
                 for endpoint_name, _ in PERMISSION_PAGE_OPTIONS:
                     page_permissions[endpoint_name] = request.form.get(f'page_{endpoint_name}') == 'on'
 
-            max_borrow_days = None
-            if is_student:
-                if not student_card_id:
-                    flash('Für Schüler muss eine Ausweis-ID angegeben werden.', 'error')
-                    return redirect(url_for('register'))
-                if us.student_card_exists(student_card_id):
-                    flash('Die Ausweis-ID ist bereits vergeben.', 'error')
-                    return redirect(url_for('register'))
-                try:
-                    max_borrow_days = int(max_borrow_days_raw) if max_borrow_days_raw else cfg.STUDENT_DEFAULT_BORROW_DAYS
-                except (TypeError, ValueError):
-                    max_borrow_days = cfg.STUDENT_DEFAULT_BORROW_DAYS
-                max_borrow_days = max(1, min(max_borrow_days, cfg.STUDENT_MAX_BORROW_DAYS))
-
             us.add_user(
                 username,
                 password,
                 name,
                 last_name,
-                is_student=is_student,
-                student_card_id=student_card_id if is_student else None,
-                max_borrow_days=max_borrow_days,
+                is_student=False,
+                student_card_id=None,
+                max_borrow_days=None,
                 permission_preset=permission_preset,
                 action_permissions=action_permissions,
                 page_permissions=page_permissions,

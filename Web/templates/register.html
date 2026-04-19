@@ -70,27 +70,6 @@
                     </div>
                 </div>
 
-                {% if student_cards_module_enabled %}
-                <div class="form-group">
-                    <label style="display:flex; align-items:center; gap:8px; color:#1f2937;">
-                        <input type="checkbox" id="is-student" name="is_student" style="width:auto;">
-                        Schülerkonto mit Ausweis
-                    </label>
-                    <div id="student-fields" style="display:none; margin-top:10px;">
-                        <label for="student-card-id">Ausweis-ID</label>
-                        <div class="input-container">
-                            <span class="input-icon">🪪</span>
-                            <input type="text" id="student-card-id" name="student_card_id" placeholder="z.B. S-2026-001">
-                        </div>
-                        <label for="max-borrow-days" style="margin-top:10px;">Standard-Ausleihdauer (Tage)</label>
-                        <div class="input-container">
-                            <span class="input-icon">📅</span>
-                            <input type="number" id="max-borrow-days" name="max_borrow_days" min="1" max="{{ student_max_borrow_days }}" value="{{ student_default_borrow_days }}">
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
                 <div class="form-group">
                     <label for="permission-preset">Berechtigungs-Preset</label>
                     <select id="permission-preset" name="permission_preset" class="form-select">
@@ -561,25 +540,6 @@ document.addEventListener('DOMContentLoaded', function () {
         passwordInput.addEventListener('blur', updatePasswordRules);
         updatePasswordRules();
     }
-
-    {% if student_cards_module_enabled %}
-    const studentCheckbox = document.getElementById('is-student');
-    const studentFields = document.getElementById('student-fields');
-    const studentCardInput = document.getElementById('student-card-id');
-
-    if (!studentCheckbox || !studentFields || !studentCardInput) {
-        return;
-    }
-
-    function toggleStudentFields() {
-        const isChecked = studentCheckbox.checked;
-        studentFields.style.display = isChecked ? 'block' : 'none';
-        studentCardInput.required = isChecked;
-    }
-
-    studentCheckbox.addEventListener('change', toggleStudentFields);
-    toggleStudentFields();
-    {% endif %}
 });
 </script>
 {% endblock %}
