@@ -32,6 +32,7 @@ import user as us
 import items as it
 import ausleihung as au
 import audit_log as al
+import push_notifications as pn
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
@@ -745,8 +746,30 @@ def _create_notification(db, *, audience, notif_type, title, message, target_use
 
     if audience == 'user' and target_user:
         _bump_notification_version(f'user:{target_user}')
+        # Send push notification to user
+        try:
+            pn.send_push_notification(
+                target_user,
+                title,
+                message,
+                url=reference.get('url', '/') if reference else '/',
+                reference=reference,
+                tag=f'notification-{notif_type}'
+            )
+        except Exception as e:
+            app.logger.warning(f'Failed to send push notification to {target_user}: {e}')
     elif audience == 'admin':
         _bump_notification_version('admin')
+        # Send push notification to all admins
+        try:
+            pn.send_push_to_all_admins(
+                title,
+                message,
+                url=reference.get('url', '/') if reference else '/',
+                reference=reference
+            )
+        except Exception as e:
+            app.logger.warning(f'Failed to send push to admins: {e}')
 
     return True
 
@@ -10740,3 +10763,182 @@ def get_optimal_image_quality(img, target_size_kb=80):
             return quality
     
     return best_quality
+
+
+# ============================================================================
+# PUSH NOTIFICATION API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/push/subscribe', methods=['POST'])
+def subscribe_to_push():
+    """
+    Subscribe a user to push notifications
+    
+    Expects JSON payload:
+    {
+        'subscription': {
+            'endpoint': '...',
+            'keys': {'p256dh': '...', 'auth': '...'}
+        }
+    }
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json() or {}
+        subscription = data.get('subscription')
+        
+        if not subscription or not subscription.get('endpoint'):
+            return jsonify({'success': False, 'error': 'Invalid subscription'}), 400
+        
+        username = session['username']
+        success = pn.save_push_subscription(username, subscription)
+        
+        if success:
+            app.logger.info(f'Push subscription saved for {username}')
+            return jsonify({
+                'success': True,
+                'message': 'Successfully subscribed to push notifications'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save subscription'}), 500
+            
+    except Exception as e:
+        app.logger.error(f'Error subscribing to push: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+def unsubscribe_from_push():
+    """
+    Unsubscribe a user from push notifications
+    
+    Expects JSON payload:
+    {
+        'endpoint': '...'
+    }
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json() or {}
+        endpoint = data.get('endpoint')
+        
+        if not endpoint:
+            return jsonify({'success': False, 'error': 'Missing endpoint'}), 400
+        
+        username = session['username']
+        success = pn.remove_push_subscription(username, endpoint)
+        
+        if success:
+            app.logger.info(f'Push subscription removed for {username}')
+            return jsonify({
+                'success': True,
+                'message': 'Successfully unsubscribed from push notifications'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Subscription not found'}), 404
+            
+    except Exception as e:
+        app.logger.error(f'Error unsubscribing from push: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/push/subscriptions', methods=['GET'])
+def get_push_subscriptions():
+    """
+    Get all push subscriptions for the current user
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    try:
+        username = session['username']
+        subscriptions = pn.get_user_subscriptions(username)
+        
+        # Convert ObjectIds to strings for JSON serialization
+        subs_data = []
+        for sub in subscriptions:
+            subs_data.append({
+                'id': str(sub['_id']),
+                'endpoint': sub.get('Endpoint', ''),
+                'created_at': sub.get('CreatedAt', '').isoformat() if sub.get('CreatedAt') else '',
+                'last_used': sub.get('LastUsed', '').isoformat() if sub.get('LastUsed') else '',
+                'user_agent': sub.get('UserAgent', ''),
+            })
+        
+        return jsonify({
+            'success': True,
+            'subscriptions': subs_data,
+            'count': len(subs_data)
+        })
+        
+    except Exception as e:
+        app.logger.error(f'Error getting push subscriptions: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/push/vapid-key', methods=['GET'])
+def get_vapid_key():
+    """
+    Get the VAPID public key for push notifications
+    Used by the service worker to communicate with push service
+    """
+    try:
+        vapid_key = pn.VAPID_PUBLIC_KEY
+        if not vapid_key:
+            app.logger.warning('VAPID_PUBLIC_KEY not configured')
+            return jsonify({
+                'success': False,
+                'error': 'Push notifications not configured on server'
+            }), 501
+        
+        return jsonify({
+            'success': True,
+            'vapid_key': vapid_key
+        })
+        
+    except Exception as e:
+        app.logger.error(f'Error getting VAPID key: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/push/test', methods=['POST'])
+def test_push_notification():
+    """
+    Send a test push notification (admin only)
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    if not us.is_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json() or {}
+        target_user = data.get('target_user', session['username'])
+        
+        sent = pn.send_push_notification(
+            target_user,
+            'Test Benachrichtigung',
+            'Dies ist eine Test-Benachrichtigung von Inventarsystem',
+            url='/',
+            tag='test-notification'
+        )
+        
+        if sent > 0:
+            return jsonify({
+                'success': True,
+                'message': f'Test push sent to {sent} subscription(s)'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No active subscriptions for user'
+            }), 404
+            
+    except Exception as e:
+        app.logger.error(f'Error sending test push: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500

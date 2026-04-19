@@ -1,0 +1,134 @@
+{
+  "name": "Inventarsystem",
+  "short_name": "Inventar",
+  "description": "Verwaltungssystem für Schulinventare mit Ausleihmanagement",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#007bff",
+  "dir": "ltr",
+  "lang": "de-DE",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "icons": [
+    {
+      "src": "/static/img/logo-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/logo-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/img/logo-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/img/screenshot-540x720.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/static/img/screenshot-1280x720.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Meine Ausleihungen",
+      "short_name": "Ausleihungen",
+      "description": "Zeige meine aktuellen Ausleihungen",
+      "url": "/my_borrowed_items",
+      "icons": [
+        {
+          "src": "/static/img/shortcut-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Kalender",
+      "short_name": "Kalender",
+      "description": "Kalender für Ausleihplanungen",
+      "url": "/terminplan",
+      "icons": [
+        {
+          "src": "/static/img/shortcut-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*", "video/*"]
+        }
+      ]
+    }
+  }
+}

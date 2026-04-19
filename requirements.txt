@@ -13,3 +13,4 @@ reportlab
 python-barcode
 openpyxl
 cryptography
+pywebpush
