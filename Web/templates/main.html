@@ -781,10 +781,10 @@
             styles.flexDirection === 'column';
 
         const distanceToEnd = isMobileLayout
-            ? itemsContainer.scrollHeight - (itemsContainer.scrollTop + itemsContainer.clientHeight)
+            ? Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) - (window.scrollY + window.innerHeight)
             : itemsContainer.scrollWidth - (itemsContainer.scrollLeft + itemsContainer.clientWidth);
         const prefetchThreshold = isMobileLayout
-            ? Math.max(220, itemsContainer.clientHeight * 0.9)
+            ? window.innerHeight * 1.5
             : Math.max(260, itemsContainer.clientWidth * 1.4);
         if (distanceToEnd > prefetchThreshold) {
             return;
@@ -1167,6 +1167,7 @@
 
         if (!mainItemsScrollPrefetchBound) {
             itemsContainer.addEventListener('scroll', maybePrefetchMainItems, { passive: true });
+            window.addEventListener('scroll', maybePrefetchMainItems, { passive: true });
             mainItemsScrollPrefetchBound = true;
         }
 
@@ -1188,7 +1189,7 @@
                 updateMainItemsLoadingIndicator();
             });
         }, {
-            root: itemsContainer,
+            root: isMobileLayout ? null : itemsContainer,
             threshold: 0.15,
             rootMargin: isMobileLayout ? '0px 0px 900px 0px' : '0px 900px 0px 0px'
         });
