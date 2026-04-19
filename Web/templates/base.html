@@ -603,17 +603,38 @@
                 margin-left: auto;
                 flex: 0 0 auto;
                 align-self: flex-start;
+                min-width: 48px;
+                min-height: 48px;
+                border: none;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.2s ease;
+            }
+            
+            .navbar-toggler:active,
+            .navbar-toggler:focus {
+                background: rgba(255, 255, 255, 0.2);
+                box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
             }
 
             .navbar-collapse {
                 order: 4;
                 width: 100%;
-                margin-top: 8px;
-                padding: 10px 10px 6px;
-                border-radius: 14px;
-                background: rgba(15, 23, 42, 0.18);
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
+                margin-top: 12px;
+                padding: 12px;
+                border-radius: 16px;
+                background: rgba(15, 23, 42, 0.85);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                max-height: calc(100vh - 90px); /* fallback */
+                max-height: calc(100dvh - 90px);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
             .navbar-collapse.show,
@@ -625,7 +646,7 @@
                 width: 100%;
                 align-items: stretch;
                 gap: 8px;
-                padding-top: 2px;
+                padding-top: 4px;
             }
 
             .navbar-nav .nav-item {
@@ -635,11 +656,12 @@
             .navbar-nav .nav-link {
                 width: 100%;
                 justify-content: flex-start;
-                min-height: 46px;
-                padding: 0.8rem 0.95rem;
+                min-height: 48px;
+                padding: 0.9rem 1.1rem;
+                margin-bottom: 2px;
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.08);
-                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+                background: rgba(255, 255, 255, 0.06);
+                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
             }
 
             .navbar-nav .nav-link.nav-active,
@@ -662,6 +684,23 @@
                 margin-left: 0;
                 margin-top: 6px;
                 border-radius: 12px;
+                background: rgba(255, 255, 255, 0.08); /* Match nav-link slightly */
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: none;
+            }
+
+            .navbar-nav .dropdown-item {
+                color: rgba(255, 255, 255, 0.9);
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin: 2px 8px;
+                width: calc(100% - 16px);
+            }
+
+            .navbar-nav .dropdown-item:hover,
+            .navbar-nav .dropdown-item:focus {
+                background: rgba(255, 255, 255, 0.15);
+                color: #fff;
             }
 
             .module-selector-bar {
