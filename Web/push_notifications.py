@@ -16,10 +16,38 @@ import settings as cfg
 
 logger = logging.getLogger(__name__)
 
-# VAPID keys for push notifications (should be in environment variables)
+# VAPID keys for push notifications
 VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
 VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', f'mailto:admin@{os.getenv("SERVER_NAME", "localhost")}')
+
+VAPID_PRIVATE_PEM = os.path.join(os.path.dirname(__file__), 'vapid_private.pem')
+VAPID_PUBLIC_PEM = os.path.join(os.path.dirname(__file__), 'vapid_public.pem')
+
+# Auto-generate VAPID keys if none are provided
+if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+    try:
+        from py_vapid import Vapid, b64urlencode
+        from cryptography.hazmat.primitives import serialization
+        
+        vapid = Vapid()
+        if not os.path.exists(VAPID_PRIVATE_PEM):
+            vapid.generate_keys()
+            vapid.save_key(VAPID_PRIVATE_PEM)
+            vapid.save_public_key(VAPID_PUBLIC_PEM)
+            logger.info("Auto-generated new VAPID keys")
+        else:
+            vapid = Vapid.from_file(VAPID_PRIVATE_PEM)
+            
+        raw_pub = vapid.public_key.public_bytes(
+            serialization.Encoding.X962,
+            serialization.PublicFormat.UncompressedPoint
+        )
+        
+        VAPID_PUBLIC_KEY = b64urlencode(raw_pub)
+        VAPID_PRIVATE_KEY = VAPID_PRIVATE_PEM
+    except Exception as e:
+        logger.error(f'Could not load or generate VAPID keys: {e}')
 
 # Push service endpoint (typically Firebase or Web Push Service)
 PUSH_SERVICE_URL = 'https://fcm.googleapis.com/fcm/send'  # Firebase Cloud Messaging

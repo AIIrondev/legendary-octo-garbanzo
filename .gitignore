@@ -4,4 +4,6 @@ certs
 build
 .venv
 __pycache__
-.pyc
+.pycvapid.json
+Web/vapid.json
+Web/vapid_*.pem

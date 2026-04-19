@@ -13,4 +13,4 @@ redis
 reportlab
 python-barcode
 openpyxl
-cryptography
+cryptographypywebpush
