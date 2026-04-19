@@ -10926,3 +10926,11 @@ def test_push_notification():
     except Exception as e:
         app.logger.error(f'Error sending test push: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def serve_sw():
+    return send_from_directory('static', 'sw.js', mimetype='application/javascript')
