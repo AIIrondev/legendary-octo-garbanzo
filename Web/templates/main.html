@@ -724,7 +724,9 @@
     // Add this line to define allItems globally
     let allItems = [];
 
-    const MAIN_ITEMS_PAGE_SIZE = 120;
+    // Dynamic page size: scan viewport/screen size to only load the exact amount needed.
+    const isMobileDevice = window.matchMedia('(max-width: 768px)').matches;
+    const MAIN_ITEMS_PAGE_SIZE = isMobileDevice ? 20 : 120;
     let mainItemsNextOffset = 0;
     let mainItemsHasMore = false;
     let mainItemsLoadingMore = false;
@@ -3562,6 +3564,9 @@
             margin: 0 !important;
             padding: 15px !important;
             scroll-snap-align: none !important;
+            /* Only render when user looks at it (content-visibility virtualizes the DOM) */
+            content-visibility: auto;
+            contain-intrinsic-size: auto 300px;
         }
         
         .item-card:hover {

@@ -1612,6 +1612,9 @@
             margin: 0 !important;
             padding: 15px !important;
             scroll-snap-align: none !important;
+            /* Only render when user looks at it (content-visibility virtualizes the DOM) */
+            content-visibility: auto;
+            contain-intrinsic-size: auto 300px;
         }
         
         .item-card:hover {
@@ -3339,7 +3342,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
 
     // Function to load items from server
-    const MAIN_ADMIN_ITEMS_PAGE_SIZE = 120;
+    // Dynamic page size: scan viewport/screen size to only load the exact amount needed.
+    const isMobileDevice = window.matchMedia('(max-width: 768px)').matches;
+    const MAIN_ADMIN_ITEMS_PAGE_SIZE = isMobileDevice ? 20 : 120;
     let mainAdminItemsNextOffset = 0;
     let mainAdminItemsHasMore = false;
     let mainAdminItemsLoadingMore = false;
