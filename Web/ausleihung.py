@@ -85,6 +85,11 @@ def get_current_status(ausleihung, log_changes=False, user=None):
         new_status = 'completed'
     # Wenn die aktuelle Zeit vor dem Startdatum liegt, ist die Ausleihung geplant
     elif current_time < start_time:
+        # DEBUG: Log info wenn Booking noch lange in der Zukunft ist
+        time_until_start = (start_time - current_time).total_seconds()
+        if time_until_start > 3600:  # Mehr als 1 Stunde entfernt
+            ausleihung_id = str(ausleihung.get('_id', 'unknown'))[:12]
+            print(f"[DEBUG] Ausleihe {ausleihung_id} startet in {time_until_start/3600:.1f} Stunden ({start_time}), noch geplant")
         new_status = 'planned'
     # Wenn kein Enddatum gesetzt ist oder die aktuelle Zeit vor dem Enddatum liegt,
     # ist die Ausleihung aktiv
