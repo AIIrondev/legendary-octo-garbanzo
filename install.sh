@@ -68,65 +68,84 @@ with open(compose_file, "r", encoding="utf-8") as f:
     lines = f.readlines()
 
 out = []
-in_app = False
+in_app_service = False
 app_indent = None
 app_service_indent = None
-skip_build_block = False
-image_inserted = False
+build_found = False
 
 def leading_spaces(text):
     return len(text) - len(text.lstrip(" "))
 
-for line in lines:
+i = 0
+while i < len(lines):
+    line = lines[i]
     stripped = line.lstrip(" ")
     indent = leading_spaces(line)
 
-    if not in_app and re.match(r"^\s*app:\s*$", line):
-        in_app = True
+    # Check if we're starting the app service
+    if not in_app_service and re.match(r"^\s*app:\s*$", line):
+        in_app_service = True
         app_indent = indent
         app_service_indent = None
-        skip_build_block = False
-        image_inserted = False
+        build_found = False
         out.append(line)
+        i += 1
         continue
 
-    if in_app:
+    # Check if we've exited the app service (found another top-level service)
+    if in_app_service and indent <= app_indent and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
+        # We've left the app service - insert image if we haven't already
+        if build_found and app_service_indent is not None:
+            out.append(f"{' ' * app_service_indent}image: {target_image}\n")
+        in_app_service = False
+        out.append(line)
+        i += 1
+        continue
+
+    # Process lines within the app service
+    if in_app_service:
         if app_service_indent is None and indent > app_indent:
             app_service_indent = indent
 
-        if indent <= app_indent and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
-            if not image_inserted and app_service_indent is not None:
+        # Check for image key (already has an image, don't add)
+        if re.match(rf"^\s+image:\s*", line):
+            in_app_service = False
+            out.append(line)
+            i += 1
+            continue
+
+        # Check for build block
+        if re.match(rf"^\s+build:\s*$", line):
+            build_found = True
+            out.append(line)
+            i += 1
+            # Skip all lines that are part of the build block (indented more than app_service_indent)
+            while i < len(lines):
+                next_line = lines[i]
+                next_indent = leading_spaces(next_line)
+                if next_indent > app_service_indent and next_line.strip():
+                    out.append(next_line)
+                    i += 1
+                else:
+                    break
+            continue
+
+        # Insert image after build block before first property
+        if build_found and app_service_indent is not None and indent == app_service_indent:
+            # Check if this is a property line (not build)
+            if not re.match(rf"^\s+build:", line):
                 out.append(f"{' ' * app_service_indent}image: {target_image}\n")
-            in_app = False
-            app_indent = None
-            app_service_indent = None
-            skip_build_block = False
-            image_inserted = False
+                build_found = False  # Mark that we've inserted the image
 
-        if in_app:
-            if app_service_indent is None:
-                app_service_indent = indent
-
-            if skip_build_block:
-                if indent > app_service_indent:
-                    continue
-                skip_build_block = False
-
-            if re.match(rf"^\s{{{app_service_indent}}}build:\s*$", line):
-                skip_build_block = True
-                continue
-
-            if re.match(rf"^\s{{{app_service_indent}}}image:\s*", line):
-                image_inserted = True
-                continue
-
-            if not image_inserted and re.match(rf"^\s{{{app_service_indent}}}[A-Za-z0-9_-]+:\s*$", line) and "image" not in stripped:
-                out.append(f"{' ' * app_service_indent}image: {target_image}\n")
-                image_inserted = True
+        out.append(line)
+        i += 1
+        continue
 
     out.append(line)
+    i += 1
 
-if in_app and app_service_indent is not None and not image_inserted:
+# If we ended while still in the app service, append image at the end
+if in_app_service and build_found and app_service_indent is not None:
     out.append(f"{' ' * app_service_indent}image: {target_image}\n")
 
 with open(compose_file, "w", encoding="utf-8") as f:
