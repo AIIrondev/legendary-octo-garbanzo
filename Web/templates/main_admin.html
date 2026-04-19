@@ -55,7 +55,7 @@
         max-width: 980px;
         margin: 0 auto 18px;
         border: 1px solid #dbe3ee;
-        background: #ffffff;
+        background: var(--ui-surface);
         border-radius: 10px;
         padding: 14px;
         box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
@@ -138,8 +138,8 @@
     .filter-group {
         position: relative;
         min-width: 200px;
-        background-color: #fff;
-        border: 1px solid #ddd;
+        background-color: var(--ui-surface);
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         padding: 10px;
     }
@@ -173,7 +173,7 @@
         max-height: 300px;
         overflow-y: auto;
         background-color: white;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         z-index: 100;
@@ -262,7 +262,7 @@
     #code-search {
         flex: 1;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
     }
 
@@ -391,8 +391,8 @@
     }
 
     .item-card {
-        background-color: #fff;
-        border: 1px solid #ddd;
+        background-color: var(--ui-surface);
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         padding: 20px;
@@ -632,7 +632,7 @@
     .form-group textarea {
         width: 100%;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
         box-sizing: border-box;
     }
@@ -703,7 +703,7 @@
     .filter-inputs {
         margin: 20px 0;
         padding: 15px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         background-color: #f8f9fa;
     }
@@ -723,7 +723,7 @@
     .filter-dropdown-select {
         width: 100%;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
         background-color: white;
     }
@@ -2006,7 +2006,7 @@
     }
     /* Calendar styles for detailed view */
     .calendar-wrapper {
-        background: #fff;
+        background: var(--ui-surface);
         border: 1px solid #dbe3ee;
         border-radius: 12px;
         overflow: hidden;
@@ -2028,7 +2028,7 @@
         height: 34px;
         border: 1px solid #dbe3ee;
         border-radius: 8px;
-        background: #fff;
+        background: var(--ui-surface);
         color: #334155;
         font-weight: 700;
         line-height: 1;
@@ -2109,7 +2109,7 @@
     }
 
     .cal-cell.selected.has-booking::after {
-        background: #fff;
+        background: var(--ui-surface);
     }
 
     .calendar-day-details {
@@ -2138,7 +2138,7 @@
     }
 
     .cal-booking-item {
-        background: #fff;
+        background: var(--ui-surface);
         border: 1px solid #dbe3ee;
         border-left: 3px solid #2563eb;
         border-radius: 10px;
@@ -4361,7 +4361,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 const badgeText = entry.type === 'repair' ? 'Repariert' : 'Schaden';
                 const metaLine = entry.meta ? `<div style="font-size:0.84rem;color:#4b5563;">${escapeHtml(entry.meta)}</div>` : '';
                 return `
-                    <div style="border:1px solid #dbe3ee;border-radius:8px;padding:10px;background:#fff;display:grid;gap:6px;">
+                    <div style="border:1px solid var(--ui-border);border-radius:8px;padding:10px;background:var(--ui-surface);display:grid;gap:6px;">
                         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
                             <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;${badgeStyle}">${badgeText}</span>
                             <span style="font-size:0.84rem;color:#475569;">${entry.dateLabel}</span>
@@ -5500,7 +5500,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 }
 
 .filter-group {
-    background: #ffffff;
+    background: var(--ui-surface);
     border: 1px solid #cfd8e3;
     border-radius: 12px;
     padding: 12px;
@@ -5548,7 +5548,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 }
 
 .clear-filter {
-    background: #fff;
+    background: var(--ui-surface);
     color: #495868;
 }
 
@@ -5557,7 +5557,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     border: 1px solid #cfd8e3;
     border-radius: 12px;
     box-shadow: 0 8px 20px rgba(20, 35, 60, 0.12);
-    background: #ffffff;
+    background: var(--ui-surface);
     padding: 10px;
 }
 

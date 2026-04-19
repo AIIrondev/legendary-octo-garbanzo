@@ -21,6 +21,28 @@
     --ui-radius: 12px;
 }
 
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ui-bg: #0f172a;
+        --ui-bg-accent: #1e293b;
+        --ui-surface: #1e293b;
+        --ui-surface-soft: #25314a;
+        --ui-border: #334155;
+        --ui-text: #f1f5f9;
+        --ui-text-muted: #94a3b8;
+        --ui-title: #ffffff;
+        --ui-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+        --ui-shadow-md: 0 10px 24px rgba(0, 0, 0, 0.5);
+    }
+    
+    /* Make inputs visible in dark mode */
+    input, select, textarea {
+        background-color: var(--ui-surface-soft) !important;
+        color: var(--ui-text) !important;
+        border-color: var(--ui-border) !important;
+    }
+}
+
 body {
     font-family: "Manrope", "Segoe UI", "Noto Sans", sans-serif;
     color: var(--ui-text);
@@ -92,7 +114,7 @@ span {
 .card-header,
 .modal-header,
 thead th {
-    background: linear-gradient(180deg, #f7fafd, #edf3f8) !important;
+    background: var(--ui-surface-soft) !important;
     border-bottom: 1px solid var(--ui-border) !important;
     color: var(--ui-title) !important;
 }
@@ -107,10 +129,10 @@ input[type="email"],
 input[type="date"],
 select {
     border-radius: 10px !important;
-    border: 1px solid #cad5e0 !important;
+    border: 1px solid var(--ui-border) !important;
     min-height: 40px;
     color: var(--ui-text) !important;
-    background-color: #fff !important;
+    background-color: var(--ui-surface) !important;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -131,11 +153,13 @@ select:focus {
 .table th,
 .table td {
     vertical-align: middle;
-    border-color: #dee6ee !important;
+    border-color: var(--ui-border) !important;
+    background-color: var(--ui-surface) !important;
+    color: var(--ui-text) !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) {
-    background-color: #f8fbff;
+    background-color: var(--ui-surface-soft) !important;
 }
 
 .alert {
@@ -144,8 +168,10 @@ select:focus {
 }
 
 .navbar {
-    border-bottom: 1px solid #273341;
+    border-bottom: 1px solid var(--ui-border);
     box-shadow: none;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
 }
 
 .navbar-brand {
@@ -164,17 +190,9 @@ select:focus {
     }
 }
 
-/* Edit and generate buttons with black text for better visibility */
-.edit-button {
-    color: black !important; /* Override any existing color */
-}
-
-.duplicate-button {
-    color: black !important; /* Override any existing color */
-}
-
-.generate-qr-button {
-    color: black !important; /* Override any existing color */
+/* Edit and generate buttons with theme-aware text for better visibility */
+.edit-button, .duplicate-button, .generate-qr-button {
+    color: var(--ui-text) !important; /* Override any existing color */
 }
 
 .ausleihen {
@@ -804,5 +822,18 @@ body.table-view .item-card .actions {
         min-height: 36px !important;
         padding: 7px 12px !important;
         font-size: 0.84rem !important;
+    }
+}
+/* iOS and Mobile optimization fixes */
+html, body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+.scrollable-container, .items-container {
+    -webkit-overflow-scrolling: touch;
+}
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .fixed-bottom, .modal-footer {
+        padding-bottom: env(safe-area-inset-bottom);
     }
 }

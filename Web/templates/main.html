@@ -6,7 +6,7 @@
 
     /* Calendar styles for detailed view */
     .calendar-wrapper {
-        background: #fff;
+        background: var(--ui-surface);
         border: 1px solid #dbe3ee;
         border-radius: 12px;
         overflow: hidden;
@@ -28,7 +28,7 @@
         height: 34px;
         border: 1px solid #dbe3ee;
         border-radius: 8px;
-        background: #fff;
+        background: var(--ui-surface);
         color: #334155;
         font-weight: 700;
         line-height: 1;
@@ -109,7 +109,7 @@
     }
 
     .cal-cell.selected.has-booking::after {
-        background: #fff;
+        background: var(--ui-surface);
     }
 
     .calendar-day-details {
@@ -138,7 +138,7 @@
     }
 
     .cal-booking-item {
-        background: #fff;
+        background: var(--ui-surface);
         border: 1px solid #dbe3ee;
         border-left: 3px solid #2563eb;
         border-radius: 10px;
@@ -296,7 +296,7 @@
     #code-search {
         flex: 1;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
     }
 
@@ -1469,7 +1469,7 @@
                 const badgeText = entry.type === 'repair' ? 'Repariert' : 'Schaden';
                 const metaLine = entry.meta ? `<div style="font-size:0.84rem;color:#4b5563;">${escapeHtml(entry.meta)}</div>` : '';
                 return `
-                    <div style="border:1px solid #dbe3ee;border-radius:8px;padding:10px;background:#fff;display:grid;gap:6px;">
+                    <div style="border:1px solid var(--ui-border);border-radius:8px;padding:10px;background:var(--ui-surface);display:grid;gap:6px;">
                         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
                             <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;${badgeStyle}">${badgeText}</span>
                             <span style="font-size:0.84rem;color:#475569;">${entry.dateLabel}</span>
@@ -2808,7 +2808,7 @@
     }
 
     .container {
-        background-color: #fff;
+        background-color: var(--ui-surface);
         padding: 20px;
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -2833,8 +2833,8 @@
     .filter-group {
         position: relative;
         min-width: 200px;
-        background-color: #fff;
-        border: 1px solid #ddd;
+        background-color: var(--ui-surface);
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         padding: 10px;
     }
@@ -2868,7 +2868,7 @@
         max-height: 300px;
         overflow-y: auto;
         background-color: white;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         z-index: 100;
@@ -2957,7 +2957,7 @@
     #code-search {
         flex: 1;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
     }
 
@@ -3086,8 +3086,8 @@
     }
 
     .item-card {
-        background-color: #fff;
-        border: 1px solid #ddd;
+        background-color: var(--ui-surface);
+        border: 1px solid var(--ui-border);
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         padding: 20px;
@@ -3194,7 +3194,7 @@
     .form-group textarea {
         width: 100%;
         padding: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--ui-border);
         border-radius: 4px;
         box-sizing: border-box;
     }
@@ -3941,7 +3941,7 @@
 
     /* Calendar Styles - Optimized & Mobile Friendly */
     .calendar-wrapper {
-        background: #fff;
+        background: var(--ui-surface);
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid #e5e7eb;
@@ -3954,7 +3954,7 @@
         justify-content: space-between;
         align-items: center;
         padding: 15px;
-        background-color: #fff;
+        background-color: var(--ui-surface);
         border-bottom: 1px solid #f3f4f6;
     }
     
@@ -3979,7 +3979,7 @@
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        background-color: #fff;
+        background-color: var(--ui-surface);
         padding: 10px;
         gap: 5px;
     }
@@ -4041,7 +4041,7 @@
     }
     
     .cal-cell.selected.has-booking::after {
-        background-color: #fff;
+        background-color: var(--ui-surface);
     }
 
     .calendar-day-details {
@@ -4069,7 +4069,7 @@
     
     .cal-booking-item {
         padding: 10px;
-        background: #fff;
+        background: var(--ui-surface);
         border: 1px solid #e5e7eb;
         border-radius: 8px;
         margin-bottom: 8px;
@@ -4436,7 +4436,7 @@ function openItemQuick(id){
 }
 
 .filter-group {
-    background: #ffffff;
+    background: var(--ui-surface);
     border: 1px solid #cfd8e3;
     border-radius: 12px;
     padding: 12px;
@@ -4484,7 +4484,7 @@ function openItemQuick(id){
 }
 
 .clear-filter {
-    background: #fff;
+    background: var(--ui-surface);
     color: #495868;
 }
 
@@ -4493,7 +4493,7 @@ function openItemQuick(id){
     border: 1px solid #cfd8e3;
     border-radius: 12px;
     box-shadow: 0 8px 20px rgba(20, 35, 60, 0.12);
-    background: #ffffff;
+    background: var(--ui-surface);
     padding: 10px;
 }
 
