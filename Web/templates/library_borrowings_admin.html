@@ -52,7 +52,7 @@
   }
 
   .summary-card {
-    background: #fff;
+    background: var(--ui-surface);
     border: 1px solid #e2e8f0;
     border-radius: 14px;
     padding: 14px 16px;
@@ -85,11 +85,11 @@
     padding: 11px 14px;
     border: 1px solid #d6dde6;
     border-radius: 12px;
-    background: #fff;
+    background: var(--ui-surface);
   }
 
   .panel {
-    background: #fff;
+    background: var(--ui-surface);
     border: 1px solid #e2e8f0;
     border-radius: 18px;
     padding: 18px;
@@ -120,7 +120,7 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: #64748b;
-    background: #f8fafc;
+    background: var(--ui-surface-soft);
   }
 
   .library-table tr:hover td {
@@ -408,7 +408,7 @@
 </div>
 
 <div id="damage-invoice-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.72); z-index:9999; padding:20px; overflow:auto;">
-  <div style="max-width:760px; margin:40px auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+  <div style="max-width:760px; margin:40px auto; background: var(--ui-surface); border-radius:12px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;">
       <div>
         <h2 style="margin:0;">Rechnung erstellen</h2>
@@ -421,15 +421,15 @@
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:16px;">
         <div>
           <label for="damage-invoice-item" style="display:block; font-weight:700; margin-bottom:6px;">Element</label>
-          <input id="damage-invoice-item" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+          <input id="damage-invoice-item" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background: var(--ui-surface-soft);">
         </div>
         <div>
           <label for="damage-invoice-borrower" style="display:block; font-weight:700; margin-bottom:6px;">Schüler</label>
-          <input id="damage-invoice-borrower" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+          <input id="damage-invoice-borrower" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background: var(--ui-surface-soft);">
         </div>
         <div>
           <label for="damage-invoice-code" style="display:block; font-weight:700; margin-bottom:6px;">Element-ID / Code</label>
-          <input id="damage-invoice-code" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+          <input id="damage-invoice-code" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background: var(--ui-surface-soft);">
         </div>
         <div>
           <label for="damage-invoice-amount" style="display:block; font-weight:700; margin-bottom:6px;">Preis</label>

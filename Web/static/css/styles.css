@@ -21,26 +21,26 @@
     --ui-radius: 12px;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --ui-bg: #0f172a;
-        --ui-bg-accent: #1e293b;
-        --ui-surface: #1e293b;
-        --ui-surface-soft: #25314a;
-        --ui-border: #334155;
-        --ui-text: #f1f5f9;
-        --ui-text-muted: #94a3b8;
-        --ui-title: #ffffff;
-        --ui-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-        --ui-shadow-md: 0 10px 24px rgba(0, 0, 0, 0.5);
-    }
-    
-    /* Make inputs visible in dark mode */
-    input, select, textarea {
-        background-color: var(--ui-surface-soft) !important;
-        color: var(--ui-text) !important;
-        border-color: var(--ui-border) !important;
-    }
+:root[data-theme="dark"] {
+    --ui-bg: #0f172a;
+    --ui-bg-accent: #1e293b;
+    --ui-surface: #1e293b;
+    --ui-surface-soft: #25314a;
+    --ui-border: #334155;
+    --ui-text: #f1f5f9;
+    --ui-text-muted: #94a3b8;
+    --ui-title: #ffffff;
+    --ui-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --ui-shadow-md: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Make inputs visible in dark mode */
+:root[data-theme="dark"] input, 
+:root[data-theme="dark"] select, 
+:root[data-theme="dark"] textarea {
+    background-color: var(--ui-surface-soft) !important;
+    color: var(--ui-text) !important;
+    border-color: var(--ui-border) !important;
 }
 
 body {

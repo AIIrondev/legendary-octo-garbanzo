@@ -11,7 +11,7 @@
   </div>
 
   <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:16px 0 20px;">
-    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff;">
+    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface);">
       <div style="font-size:0.85rem; color:#64748b;">Chain Status</div>
       {% if verify_result.ok %}
       <div style="font-size:1.35rem; font-weight:700; color:#166534;">OK</div>
@@ -19,15 +19,15 @@
       <div style="font-size:1.35rem; font-weight:700; color:#991b1b;">FEHLER</div>
       {% endif %}
     </div>
-    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff;">
+    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface);">
       <div style="font-size:0.85rem; color:#64748b;">Einträge</div>
       <div style="font-size:1.35rem; font-weight:700;">{{ verify_result.count }}</div>
     </div>
-    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff;">
+    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface);">
       <div style="font-size:0.85rem; color:#64748b;">Letzter Index</div>
       <div style="font-size:1.35rem; font-weight:700;">{{ verify_result.last_chain_index }}</div>
     </div>
-    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff;">
+    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface);">
       <div style="font-size:0.85rem; color:#64748b;">Mismatch Count</div>
       <div style="font-size:1.35rem; font-weight:700;">{{ verify_result.mismatches|length }}</div>
     </div>
@@ -61,7 +61,7 @@
   </div>
   {% endif %}
 
-  <div style="border:1px solid #e2e8f0; border-radius:10px; background:#fff; padding:12px;">
+  <div style="border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface); padding:12px;">
     <h3 style="margin-top:0;">Letzte Audit-Ereignisse</h3>
     <div style="max-height:560px; overflow:auto;">
       <table class="table" style="width:100%; border-collapse:collapse;">

@@ -18,7 +18,7 @@
     .library-header h1 {
         margin: 0 0 5px 0;
         font-size: 2em;
-        color: #333;
+        color: var(--ui-text);
     }
 
     .library-header p {
@@ -48,7 +48,7 @@
 
     /* Scanner panel */
     .library-scan-panel {
-        background: #ffffff;
+        background: var(--ui-surface);
         border: 1px solid #d9dde4;
         border-radius: 8px;
         padding: 14px;
@@ -68,7 +68,7 @@
         border: 1px solid #d0d7e2;
         border-radius: 6px;
         font-size: 14px;
-        background: #fff;
+        background: var(--ui-surface);
     }
 
     .library-scan-status {
@@ -95,7 +95,7 @@
         border: 1px solid #d9dde4;
         border-radius: 8px;
         overflow: hidden;
-        background: #fff;
+        background: var(--ui-surface);
         max-width: 460px;
     }
 
@@ -111,7 +111,7 @@
         border-radius: 6px;
         cursor: pointer;
         font-weight: 500;
-        color: #333;
+        color: var(--ui-text);
         transition: all 0.2s ease;
     }
 
@@ -160,7 +160,7 @@
     .filter-item label {
         font-weight: 600;
         font-size: 0.9em;
-        color: #333;
+        color: var(--ui-text);
         margin-bottom: 6px;
     }
 
@@ -206,7 +206,7 @@
     }
 
     .library-items-table thead {
-        background: #f8f9fa;
+        background: var(--ui-surface-soft);
         border-bottom: 2px solid #ddd;
     }
 
@@ -214,7 +214,7 @@
         padding: 14px 16px;
         text-align: left;
         font-weight: 600;
-        color: #333;
+        color: var(--ui-text);
         font-size: 0.9em;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -228,7 +228,7 @@
     }
 
     .library-items-table tbody tr:hover {
-        background: #f8f9fa;
+        background: var(--ui-surface-soft);
     }
 
     .library-items-table tbody tr:last-child td {
@@ -238,7 +238,7 @@
     /* Table cells */
     .table-title {
         font-weight: 600;
-        color: #333;
+        color: var(--ui-text);
     }
 
     .table-status {
@@ -320,7 +320,7 @@
     }
 
     .modal-content {
-        background-color: #fff;
+        background-color: var(--ui-surface);
         border-radius: 8px;
         padding: 20px;
         max-width: 900px;
@@ -373,7 +373,7 @@
     }
 
     .close:hover {
-        color: #333;
+        color: var(--ui-text);
     }
 
     /* Mobile responsive */
@@ -494,7 +494,7 @@
         </div>
         <div class="filter-buttons">
             <button id="applyFilterBtn" class="button" style="background: #4f46e5; color: white;">Filter anwenden</button>
-            <button id="clearFilterBtn" class="button" style="background: #f0f2f5; color: #333;">Zurücksetzen</button>
+            <button id="clearFilterBtn" class="button" style="background: #f0f2f5; color: var(--ui-text);">Zurücksetzen</button>
         </div>
     </div>
 

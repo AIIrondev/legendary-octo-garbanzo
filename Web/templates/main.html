@@ -20,7 +20,7 @@
         gap: 12px;
         padding: 12px;
         border-bottom: 1px solid var(--ui-border);
-        background: #f8fafc;
+        background: var(--ui-surface-soft);
     }
 
     .calendar-header button {
@@ -36,7 +36,7 @@
     }
 
     .calendar-header button:hover {
-        background: #f1f5f9;
+        background: var(--ui-bg);
     }
 
     .calendar-header span {
@@ -80,7 +80,7 @@
     }
 
     .cal-cell:not(.header):not(.empty):hover {
-        background: #f1f5f9;
+        background: var(--ui-bg);
     }
 
     .cal-cell.empty {
@@ -115,7 +115,7 @@
     .calendar-day-details {
         border-top: 1px solid #e7edf5;
         padding: 12px;
-        background: #f8fafc;
+        background: var(--ui-surface-soft);
         display: none;
     }
 
@@ -1646,7 +1646,7 @@
                             <span>🛠️</span>
                             <span id="toggle-damage-history-text">Historie anzeigen</span>
                         </button>
-                        <div id="damage-history-panel" style="display:none; margin-top:8px; border:1px solid #e7edf5; border-radius:10px; padding:12px; background:#f8fafc;">
+                        <div id="damage-history-panel" style="display:none; margin-top:8px; border:1px solid #e7edf5; border-radius:10px; padding:12px; background: var(--ui-surface-soft);">
                             <div style="display:grid; gap:10px;">${damageHistoryHtml}</div>
                         </div>
                     </div>
@@ -2847,7 +2847,7 @@
     }
 
     .filter-toggle, .clear-filter {
-        background-color: #f8f9fa;
+        background-color: var(--ui-surface-soft);
         border: 1px solid #dee2e6;
         border-radius: 3px;
         padding: 3px 8px;
@@ -3028,7 +3028,7 @@
         margin-right: 8px;
         border: 1px solid #dbe3ee;
         border-radius: 10px;
-        background: #f8fafc;
+        background: var(--ui-surface-soft);
         color: var(--ui-text);
         justify-content: center;
         align-items: center;
@@ -3859,7 +3859,7 @@
         max-height: 400px;
         overflow: hidden;
         border-radius: 8px;
-        background-color: #f8f9fa;
+        background-color: var(--ui-surface-soft);
     }
 
     /* Borrower and appointment info panels in modal */
@@ -3891,7 +3891,7 @@
     .detail-value { color: #212529; flex: 1; word-wrap: break-word; }
     .detail-group.full-width .detail-label { margin-bottom: 5px; }
     .detail-group.full-width .detail-value {
-        background-color: #f8f9fa;
+        background-color: var(--ui-surface-soft);
         padding: 10px;
         border-radius: 4px;
         border: 1px solid #dee2e6;

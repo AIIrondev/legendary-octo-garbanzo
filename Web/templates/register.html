@@ -121,7 +121,7 @@
     --primary-dark: #2980b9;
     --success-color: #2ecc71;
     --error-color: #e74c3c;
-    --text-color: #333;
+    --text-color: var(--ui-text);
     --light-bg: #f9f9f9;
     --border-radius: 8px;
     --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -163,7 +163,7 @@ body {
 }
 
 .content {
-    background-color: #fff;
+    background-color: var(--ui-surface);
     padding: 2rem;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
@@ -345,7 +345,7 @@ input::placeholder {
     padding: 10px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--ui-surface-soft);
 }
 
 .password-rules-title {
@@ -406,7 +406,7 @@ input::placeholder {
     border: 1px solid #d1d5db;
     border-radius: 8px;
     padding: 10px;
-    background: #f8fafc;
+    background: var(--ui-surface-soft);
 }
 
 .permission-panel h4 {

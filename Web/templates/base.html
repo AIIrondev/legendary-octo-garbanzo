@@ -14,8 +14,20 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#2c3e50" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#1a252f" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#2c3e50" id="meta-theme-color">
+    <script>
+        // Init theme early to prevent FOUC (Flash of Unstyled Content)
+        (function() {
+            var theme = localStorage.getItem('inventarsystem-theme');
+            if (theme === 'dark' || (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('meta-theme-color').setAttribute('content', '#1a252f');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('meta-theme-color').setAttribute('content', '#2c3e50');
+            }
+        })();
+    </script>
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Inventarsystem{% endblock %}</title>
     {% block head %}
@@ -117,21 +129,20 @@
             --module-brand-icon: "📚";
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --module-primary-color: #1a252f;
-                --module-primary-light: #2c3e50;
-                --module-accent-color: #2980b9;
-                --module-brand-icon: "📦";
-                --page-bg-gradient: linear-gradient(180deg, #0f172a, #1e293b);
-                --page-bg-overlay1: rgba(56, 189, 248, 0.05);
-                --page-bg-overlay2: rgba(59, 130, 246, 0.06);
-            }
-            html[data-module="library"] {
-                --module-primary-color: #4a354d;
-                --module-primary-light: #614666;
-                --module-accent-color: #8e44ad;
-            }
+        :root[data-theme="dark"] {
+            --module-primary-color: #1a252f;
+            --module-primary-light: #2c3e50;
+            --module-accent-color: #2980b9;
+            --module-brand-icon: "📦";
+            --page-bg-gradient: linear-gradient(180deg, #0f172a, #1e293b);
+            --page-bg-overlay1: rgba(56, 189, 248, 0.05);
+            --page-bg-overlay2: rgba(59, 130, 246, 0.06);
+        }
+        
+        html[data-theme="dark"][data-module="library"] {
+            --module-primary-color: #4a354d;
+            --module-primary-light: #614666;
+            --module-accent-color: #8e44ad;
         }
 
         /* Global styles */
@@ -495,7 +506,7 @@
             
             /* Account dropdown stays light theme on mobile */
             .dropdown-menu-end {
-                background-color: #ffffff;
+                background-color: var(--ui-surface);
                 border: 1px solid #dee2e6;
             }
             
@@ -504,7 +515,7 @@
             }
             
             .dropdown-menu-end .dropdown-item:hover {
-                background-color: #f8f9fa;
+                background-color: var(--ui-surface-soft);
                 color: #007bff;
             }
         }
@@ -861,6 +872,15 @@
                         <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
                     </li>
                     {% endif %}
+                    
+
+                    <li class="nav-item">
+                        <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
+                            <span class="theme-icon-light" style="display: none;">☀️</span>
+                            <span class="theme-icon-dark" style="display: none;">🌙</span>
+                        </button>
+                    </li>
+
                     <li class="nav-item dropdown ms-lg-auto">
                         <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
                             Mehr Optionen
@@ -982,6 +1002,15 @@
                         <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
                     </li>
                     {% endif %}
+                    
+
+                    <li class="nav-item">
+                        <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
+                            <span class="theme-icon-light" style="display: none;">☀️</span>
+                            <span class="theme-icon-dark" style="display: none;">🌙</span>
+                        </button>
+                    </li>
+
                     <li class="nav-item dropdown ms-lg-auto">
                         <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
                             Mehr Optionen
@@ -1098,7 +1127,7 @@
 
         #onboarding-modal {
             width: min(680px, 100%);
-            background: #ffffff;
+            background: var(--ui-surface);
             border-radius: 14px;
             border: 1px solid #dbe3ee;
             box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
@@ -1825,5 +1854,37 @@
     
     <!-- Push Notifications Script -->
     <script src="{{ url_for('static', filename='js/push-notifications.js') }}"></script>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleBtns = document.querySelectorAll('#themeToggleBtn');
+            if (toggleBtns.length === 0) return;
+            
+            function updateIcons(theme) {
+                const isDark = theme === 'dark';
+                document.querySelectorAll('.theme-icon-light').forEach(icon => icon.style.display = isDark ? 'inline' : 'none');
+                document.querySelectorAll('.theme-icon-dark').forEach(icon => icon.style.display = isDark ? 'none' : 'inline');
+            }
+
+            // Get current setup from initial script in head
+            let currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            updateIcons(currentTheme);
+
+            toggleBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+                    
+                    document.documentElement.setAttribute('data-theme', currentTheme);
+                    localStorage.setItem('inventarsystem-theme', currentTheme);
+                    document.getElementById('meta-theme-color').setAttribute('content', currentTheme === 'dark' ? '#1a252f' : '#2c3e50');
+                    
+                    updateIcons(currentTheme);
+                });
+            });
+        });
+    </script>
+
 </body>
 </html>
