@@ -229,8 +229,16 @@ jobs:
           cp config.json release-bundle/config.json
           cp update.sh release-bundle/update.sh
           cp init-admin.sh release-bundle/init-admin.sh
+          
+          # Multitenant scripts & docs
+          cp docker-compose-multitenant.yml release-bundle/docker-compose-multitenant.yml
+          cp docker/nginx/multitenant.conf release-bundle/docker/nginx/multitenant.conf
+          cp manage-tenant.sh release-bundle/manage-tenant.sh
+          cp run-tenant-cmd.sh release-bundle/run-tenant-cmd.sh
+          cp MULTITENANT_DEPLOYMENT.md release-bundle/MULTITENANT_DEPLOYMENT.md
+          cp MULTITENANT_PYTHON_API.md release-bundle/MULTITENANT_PYTHON_API.md
 
-          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup.sh release-bundle/update.sh release-bundle/init-admin.sh
+          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup.sh release-bundle/update.sh release-bundle/init-admin.sh release-bundle/manage-tenant.sh release-bundle/run-tenant-cmd.sh
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
       - name: Create or update GitHub Release

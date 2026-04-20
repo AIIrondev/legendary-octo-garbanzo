@@ -125,3 +125,4 @@ def get_items():
 The `get_tenant_db` function queries `g.tenant_context` inside Flask, calculates the database name from the subdomain, and returns a live `pymongo.database.Database` object. 
 
 This ensures that scaling is extremely cheap on resources because 1 Application Container connects to 100 separate Tenant Databases using just 1 shared `MongoClient` pool.
+
