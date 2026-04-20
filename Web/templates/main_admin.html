@@ -2584,7 +2584,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <input type="date" id="edit-year" name="anschaffungsjahr">
                 </div>
                 <div class="form-group">
-                    <label for="edit-cost">Anschaffungskosten:</label>
+                    <label for="edit-cost">Anschaffungskosten (€):</label>
                     <input id="edit-cost" name="anschaffungskosten">
                 </div>
                 <div class="form-group">
@@ -3530,7 +3530,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images ? item.Images.map((image, index) => {
+                        const imagesHtml = item.Images && item.Images.length > 0 ? item.Images.slice(0, 1).map((image, index) => {
                             // Check if the image already has a full URL path or just the filename
                             const imageSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
                                             image : 
@@ -4441,7 +4441,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 
                 <div class="detail-group">
                     <div class="detail-label">Anschaffungskosten:</div>
-                    <div class="detail-value">${item.Anschaffungskosten || '-'}</div>
+                    <div class="detail-value">${item.Anschaffungskosten ? item.Anschaffungskosten + ' €' : '-'}</div>
                 </div>
                 
                 <div class="detail-group full-width">

@@ -2063,6 +2063,11 @@ def _upload_excel_items(scope='inventory'):
     validation_warnings = []
     reserved_codes = set()
     known_locations = set(it.get_predefined_locations())
+    known_filters = {
+        1: set(it.get_predefined_filter_values(1)),
+        2: set(it.get_predefined_filter_values(2)),
+        3: set(it.get_predefined_filter_values(3))
+    }
 
     def is_code_available(candidate_code):
         return candidate_code not in reserved_codes and it.is_code_unique(candidate_code)
@@ -2114,8 +2119,19 @@ def _upload_excel_items(scope='inventory'):
             validation_warnings.append((row_number, f'Ort "{ort}" wird neu angelegt'))
 
         filter1 = expand_filter_selection(_excel_list(val('filter1')), 1)
+        for f in filter1:
+            if f and f not in known_filters[1]:
+                validation_warnings.append((row_number, f'Kategorie 1 "{f}" wird neu angelegt'))
+
         filter2 = expand_filter_selection(_excel_list(val('filter2')), 2)
+        for f in filter2:
+            if f and f not in known_filters[2]:
+                validation_warnings.append((row_number, f'Kategorie 2 "{f}" wird neu angelegt'))
+
         filter3 = _excel_list(val('filter3'))
+        for f in filter3:
+            if f and f not in known_filters[3]:
+                validation_warnings.append((row_number, f'Kategorie 3 "{f}" wird neu angelegt'))
 
         anschaffungsjahr = _excel_int(val('anschaffungsjahr'))
         raw_year = val('anschaffungsjahr')
@@ -2216,6 +2232,21 @@ def _upload_excel_items(scope='inventory'):
         if row['ort'] and row['ort'] not in known_locations:
             it.add_predefined_location(row['ort'])
             known_locations.add(row['ort'])
+
+        for f in row.get('filter1', []):
+            if f and f not in known_filters[1]:
+                it.add_predefined_filter_value(1, f)
+                known_filters[1].add(f)
+
+        for f in row.get('filter2', []):
+            if f and f not in known_filters[2]:
+                it.add_predefined_filter_value(2, f)
+                known_filters[2].add(f)
+
+        for f in row.get('filter3', []):
+            if f and f not in known_filters[3]:
+                it.add_predefined_filter_value(3, f)
+                known_filters[3].add(f)
 
         series_group_id = str(uuid.uuid4()) if row['count'] > 1 else None
         row_created_ids = []

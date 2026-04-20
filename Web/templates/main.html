@@ -904,7 +904,7 @@
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images ? item.Images.map((file, index) => {
+                        const imagesHtml = item.Images && item.Images.length > 0 ? item.Images.slice(0, 1).map((file, index) => {
                             // Get file with correct case handling
                             const image = file;
                             
@@ -1631,7 +1631,7 @@
                 
                 <div class="detail-group">
                     <div class="detail-label">Anschaffungskosten:</div>
-                    <div class="detail-value">${item.Anschaffungskosten || '-'}</div>
+                    <div class="detail-value">${item.Anschaffungskosten ? item.Anschaffungskosten + ' €' : '-'}</div>
                 </div>
                 
                 <div class="detail-group full-width">
