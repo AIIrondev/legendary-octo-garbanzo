@@ -48,8 +48,8 @@ case "$COMMAND" in
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
-client = tenant.get_tenant_db_client()
+import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
 db.users.insert_one({'username': 'admin', 'password': 'hashed_password_here', 'role': 'admin'})
 print(f'Tenant {sys.argv[1]} database initialized.')
@@ -73,8 +73,8 @@ print(f'Tenant {sys.argv[1]} database initialized.')
             APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
             if [ -n "$APP_CONTAINER" ]; then
                 docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
-client = tenant.get_tenant_db_client()
+import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 client.drop_database(f'{settings.MONGODB_DB}_{sys.argv[1]}')
 print(f'Database for tenant {sys.argv[1]} dropped.')
 " "$TENANT_ID"
@@ -98,8 +98,8 @@ print(f'Database for tenant {sys.argv[1]} dropped.')
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
-client = tenant.get_tenant_db_client()
+import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
 db.sessions.drop() # Force sign-out / session clear
 print(f'Tenant {sys.argv[1]} session cache cleared. Tenant restarted.')
@@ -121,8 +121,8 @@ print(f'Tenant {sys.argv[1]} session cache cleared. Tenant restarted.')
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
              docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
-client = tenant.get_tenant_db_client()
+import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 prefix = f'{settings.MONGODB_DB}_'
 dbs = [d for d in client.list_database_names() if d.startswith(prefix)]
 for db in dbs:
