@@ -325,12 +325,35 @@ download_and_extract_bundle() {
         cp -f "$tmp_dir/update.sh" "$PROJECT_DIR/update.sh"
     fi
 
+    # Neu: Multi-Tenant Ressourcen kopieren, falls vorhanden
+    if [ -f "$tmp_dir/docker-compose-multitenant.yml" ]; then
+        cp -f "$tmp_dir/docker-compose-multitenant.yml" "$PROJECT_DIR/docker-compose-multitenant.yml"
+    fi
+    if [ -f "$tmp_dir/docker/nginx/multitenant.conf" ]; then
+        cp -f "$tmp_dir/docker/nginx/multitenant.conf" "$PROJECT_DIR/docker/nginx/multitenant.conf"
+    fi
+    if [ -f "$tmp_dir/manage-tenant.sh" ]; then
+        cp -f "$tmp_dir/manage-tenant.sh" "$PROJECT_DIR/manage-tenant.sh"
+    fi
+    if [ -f "$tmp_dir/run-tenant-cmd.sh" ]; then
+        cp -f "$tmp_dir/run-tenant-cmd.sh" "$PROJECT_DIR/run-tenant-cmd.sh"
+    fi
+    for file in "MULTITENANT_DEPLOYMENT.md" "MULTITENANT_PYTHON_API.md"; do
+        if [ -f "$tmp_dir/$file" ]; then
+            cp -f "$tmp_dir/$file" "$PROJECT_DIR/$file"
+        fi
+    done
+
+    # Ensure executable permissions on all copied scripts
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/init-admin.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true 2>/dev/null || true
+    chmod +x "$PROJECT_DIR"/manage-tenant.sh "$PROJECT_DIR"/run-tenant-cmd.sh 2>/dev/null || true
+
     if [ ! -f "$PROJECT_DIR/config.json" ] && [ -f "$tmp_dir/config.json" ]; then
         cp -f "$tmp_dir/config.json" "$PROJECT_DIR/config.json"
         log_message "Installed default config.json from release bundle"
     fi
 
-    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh"
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/init-admin.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true
 }
 
 deploy() {
