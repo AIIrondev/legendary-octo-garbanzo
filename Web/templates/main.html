@@ -1719,7 +1719,7 @@
                     : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                 }
                 ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
-                <button type="button" class="close-modal secondary-close" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
+                <button type="button" class="details-button" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
             </div>
         `;
         
@@ -3143,7 +3143,7 @@
     .item-modal {
         display: none;
         position: fixed;
-        z-index: 1000;
+        z-index: 2500;
         left: 0;
         top: 0;
         width: 100%;
