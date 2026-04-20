@@ -3097,6 +3097,8 @@
         scroll-snap-align: center;
         cursor: pointer;
         transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+    }
     .item-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
@@ -3468,6 +3470,19 @@
     
     /* Responsive adjustments */
     @media (max-width: 768px) {
+        /* Mobile viewport and scrolling improvements */
+        html, body {
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-y !important;
+            height: 100% !important;
+        }
+        
+        body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
         .filter-container {
             flex-direction: column;
         }
@@ -3553,8 +3568,9 @@
             display: grid !important;
             grid-template-columns: 1fr !important;
             gap: 15px !important;
-            padding: 10px 0 0 !important;
+            padding: 10px 0 !important;
             overflow-x: visible !important;
+            scroll-snap-type: none !important;
         }
         
         .item-card {
@@ -4098,6 +4114,7 @@
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+            box-sizing: border-box !important;
         }
 
         .filter-group {
@@ -4314,13 +4331,12 @@
         }
 
         .modal-content {
-            width: 100% !important;
-            max-width: 100% !important;
-            height: 100vh !important;
-            max-height: 100vh !important;
-            margin: 0 !important;
-            border: none !important;
-            border-radius: 0 !important;
+            width: calc(100vw - 16px) !important;
+            max-width: none !important;
+            margin: 80px auto 10px !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+            border-radius: 8px !important;
             padding: 16px !important;
         }
 
