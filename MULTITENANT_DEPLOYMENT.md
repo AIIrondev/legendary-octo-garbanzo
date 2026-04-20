@@ -452,3 +452,44 @@ Für Support: Siehe Legal/LICENSE
 ---
 
 **Version**: 1.0 | **Letzte Aktualisierung**: 2026-04-17 | **Kompatibilität**: Python 3.11+, MongoDB 7.0+, Redis 7+
+
+## Tenant Management Operationen (manage-tenant.sh)
+
+Um einzelne Tenants im Multi-Tenant-Umfeld im laufenden Betrieb und ohne globale Downtime zu verwalten, kann das neue CLI-Skript `manage-tenant.sh` verwendet werden.
+
+### 1. Neuen Tenant hinzufügen
+Initialisiert die MongoDB-Datenbankstruktur isoliert für einen neuen Tenant und legt initiale Admin-Zugangsdaten an.
+```bash
+./manage-tenant.sh add <tenant_id>
+```
+
+### 2. Bestimmten Tenant neu starten (Soft-Restart)
+Erzwingt sofortigen Logout und einen Cache/Session-Reset für die Nutzer *eines spezifischen* Tenants, ohne andere laufende Instanzen zu beeinträchtigen. Ideal bei Konfigurationsänderungen oder feststeckenden Sessions.
+```bash
+./manage-tenant.sh restart-tenant <tenant_id>
+```
+
+### 3. Tenant sicher entfernen
+Löscht die dedizierte MongoDB-Datenbank des gewählten Tenants vollständig (erfordert Bestätigung).
+```bash
+./manage-tenant.sh remove <tenant_id>
+```
+
+### 4. Globale Operationen
+```bash
+# Zeigt alle aktiven isolierten Tenant-Datenbanken an
+./manage-tenant.sh list
+
+# Führt einen Zero-Downtime Rolling-Restart aller Application-Container durch
+./manage-tenant.sh restart-all
+```
+
+---
+
+## Aktuelle UI- & Funktionsoptimierungen (Release April 2026)
+
+Neben der Docker-Auslagerung wurden spezifische Caching-, Parsing-, und DOM-Tricks integriert, die das Setup weiter entschlacken:
+
+* **DOM Array Slicing für Bilder:** Bei großen Beständen (hunderte Artikel) rendert der Client im Listen/Kachel-Modus künftig nur noch das primäre Bild (`slice(0, 1)`), was den DOM-Memory-Footprint drastisch reduziert und das Einfrieren von Browsern verhindert.
+* **Auto-Ingestion von Excel-Filtern:** Der Excel-Importer prüft nun dynamisch neue `categories/filter`, die noch nicht in der Datenbank existieren, und speichert sie direkt in die MongoDB `filter_presets`-Kollektion (Zero-Config für Administratoren).
+* **Responsive UI Synchronisierung:** Die Standardansicht (`main.html`) der Smartphones wurde CSS-technisch exakt an das skalierungsfähigere Profil der Admin-Mobile-Ansicht (`main_admin.html`) angeglichen.
