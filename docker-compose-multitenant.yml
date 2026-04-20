@@ -196,3 +196,15 @@ networks:
 # - Medium (5-10 tenants): 4GB RAM, 2-4 CPU cores  
 # - Large (10-20 tenants): 8GB RAM, 4-8 CPU cores
 # - Jumbo (20+ tenants): 16GB+ RAM, 8+ CPU cores with clustering
+
+  # Management Container for multi-tenant scripts
+  tenant-manager:
+    image: bash
+    container_name: tenant-manager
+    restart: "no"
+    profiles:
+      - tools
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    entrypoint: ["bash", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]

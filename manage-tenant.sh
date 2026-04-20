@@ -45,7 +45,7 @@ case "$COMMAND" in
         
         # Initialize tenant database via Python inside container
         echo "Initializing database for $TENANT_ID..."
-        APP_CONTAINER=$(docker-compose -f docker-compose-multitenant.yml ps -q app | head -n 1)
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
 import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
@@ -70,7 +70,7 @@ print(f'Tenant {sys.argv[1]} database initialized.')
         read confirm
         if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
             echo "Removing tenant '$TENANT_ID'..."
-            APP_CONTAINER=$(docker-compose -f docker-compose-multitenant.yml ps -q app | head -n 1)
+            APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
             if [ -n "$APP_CONTAINER" ]; then
                 docker exec $APP_CONTAINER python3 -c "
 import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
@@ -95,7 +95,7 @@ print(f'Database for tenant {sys.argv[1]} dropped.')
         echo "Restarting tenant '$TENANT_ID' (clearing session/cache)..."
         # To restart a single tenant without restarting the global python processes,
         # we can invalidate their cache or drop their sessions collection to sign everyone out
-        APP_CONTAINER=$(docker-compose -f docker-compose-multitenant.yml ps -q app | head -n 1)
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
 import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
@@ -112,13 +112,13 @@ print(f'Tenant {sys.argv[1]} session cache cleared. Tenant restarted.')
 
     restart-all)
         echo "Restarting all application instances with zero-downtime rolling restart..."
-        docker-compose -f docker-compose-multitenant.yml restart app
+        docker restart $(docker ps -qf "name=app")
         echo "Global restart complete."
         ;;
         
     list)
         echo "Listing active tenants (Databases):"
-        APP_CONTAINER=$(docker-compose -f docker-compose-multitenant.yml ps -q app | head -n 1)
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
              docker exec $APP_CONTAINER python3 -c "
 import sys; sys.path.insert(0, '/app/Web'); import tenant, settings
