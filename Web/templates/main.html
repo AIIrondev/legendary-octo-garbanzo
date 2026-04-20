@@ -321,7 +321,7 @@
     border: 1px solid #dc3545 !important;
     }
 </style>
-<div class="container">
+<div class="container admin-content-container">
     <!-- Conflict warning banner (populated by JS) -->
     <div id="conflict-banner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-left:4px solid #fd7e14; color:#856404; padding:12px 16px; border-radius:4px; margin-bottom:16px; position:relative;">
         <strong>⚠ Reservierungskonflikt</strong>
@@ -1005,14 +1005,14 @@
 
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
-                                <h3 class="item-name-cell">${item.Name}</h3>
-                                <p class="item-ort-cell"><strong>Ort:</strong> ${item.Ort || '-'}</p>
-                                <p class="item-filter1-cell"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
-                                <p class="item-filter2-cell"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
-                                <p class="item-filter3-cell"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
-                                <p class="item-code-cell"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
-                                <p class="item-count-cell"><strong>Anzahl:</strong> ${groupedCount}</p>
-                                ${isGroupedItem ? `<p class="item-count-cell"><strong>Verfügbar:</strong> ${availableGroupedCount}</p>` : ''}
+                                <h3 class="item-col-name">${item.Name}</h3>
+                                <p class="item-col-location"><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                                <p class="item-col-filter1"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
+                                <p class="item-col-filter2"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
+                                <p class="item-col-filter3"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-col-code"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <p class="item-col-count"><strong>Anzahl:</strong> ${groupedCount}</p>
+                                ${isGroupedItem ? `<p class="item-col-count"><strong>Verfügbar:</strong> ${availableGroupedCount}</p>` : ''}
                                 <div class="image-container">
                                     ${imagesHtml}
                                 </div>
@@ -4174,7 +4174,7 @@
             overflow-wrap: break-word !important;
         }
 
-        body.table-view .item-card .card-content .item-name-cell {
+        body.table-view .item-card .card-content .item-col-name {
             font-size: 0.95rem !important;
         }
 
@@ -4599,3 +4599,73 @@ function openItemQuick(id){
 }
 </style>
 {% endblock %}
+<style>
+    /* Admin/Main Content Container align */
+    .admin-content-container {
+        --table-columns: minmax(190px, 2fr) repeat(6, minmax(110px, 1fr));
+    }
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .admin-content-container {
+            width: 90% !important;
+        }
+        .items-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+    }
+    @media screen and (max-width: 768px) {
+        .admin-content-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 12px 12px 18px !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+        }
+        .item-card .item-image {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 300px !important;
+            display: block !important;
+            object-fit: cover !important;
+        }
+        .item-card .image-container {
+            height: 200px !important;
+            overflow: hidden !important;
+            position: relative !important;
+            margin-bottom: 15px !important;
+        }
+        .actions {
+            gap: 8px !important;
+            border-top: none !important;
+            padding-top: 8px !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+        .actions form,
+        .actions button,
+        .actions a {
+            width: 100% !important;
+        }
+        .items-container, .item-card, .image-container, .item-image {
+            touch-action: pan-y !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+    }
+    @media (max-width: 767px) {
+        body {
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+        .admin-content-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 12px 12px 18px;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+    }
+</style>
