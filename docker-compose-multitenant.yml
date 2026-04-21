@@ -8,12 +8,10 @@
 # Scale example: To support 10 tenants with 20 users each:
 #   docker-compose -f docker-compose-multitenant.yml up -d --scale app=10
 
-version: '3.9'
-
 services:
   # Management Container for multi-tenant scripts
   tenant-manager:
-    image: bash
+    image: docker:cli
     container_name: tenant-manager
     restart: "no"
     profiles:
@@ -21,7 +19,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace
-    entrypoint: ["bash", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
+    entrypoint: ["sh", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
 
   nginx:
     image: nginx:1.27-alpine

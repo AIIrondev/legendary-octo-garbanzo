@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Script to manage multitenant deployment
 # Allows adding, removing, and restarting tenants without downtime for others
 
