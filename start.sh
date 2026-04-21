@@ -18,6 +18,7 @@ HTTP_PORT_VALUE="80"
 HTTPS_PORT_VALUE="443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
+COMPOSE_FILE="docker-compose.yml"
 
 usage() {
     cat <<EOF
@@ -26,6 +27,7 @@ Usage: $0 [options]
 Options:
   --no-cron         Do not create or update cron jobs
   --with-cron       Create/update cron jobs (default)
+  --multitenant     Use the multi-tenant architecture deployment
   -h, --help        Show this help message
 EOF
 }
@@ -39,6 +41,10 @@ parse_args() {
                 ;;
             --with-cron)
                 CRON_SETUP_VALUE="1"
+                shift
+                ;;
+            --multitenant)
+                COMPOSE_FILE="docker-compose-multitenant.yml"
                 shift
                 ;;
             -h|--help)
@@ -450,7 +456,7 @@ stack_owns_host_port() {
     local container_port="$2"
     local mapped_port
 
-    mapped_port="$(docker compose --env-file "$ENV_FILE" port nginx "$container_port" 2>/dev/null | tail -n1 || true)"
+    mapped_port="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" port nginx "$container_port" 2>/dev/null | tail -n1 || true)"
     if [ -z "$mapped_port" ]; then
         return 1
     fi
@@ -550,7 +556,7 @@ EOF
 
 verify_stack_health() {
     local compose_args running_services retry_count=0
-    compose_args=(--env-file "$ENV_FILE")
+    compose_args=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 
     # Try health check with optional restart on first failure
     while [[ $retry_count -lt 2 ]]; do
@@ -605,7 +611,7 @@ ensure_app_image_loaded
 write_env_file
 
 echo "Starting Inventarsystem Docker stack (app + mongodb)..."
-docker compose --env-file "$ENV_FILE" up -d --remove-orphans
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
 verify_stack_health
 

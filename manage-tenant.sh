@@ -48,11 +48,12 @@ case "$COMMAND" in
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient; import hashlib
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
-db.users.insert_one({'username': 'admin', 'password': 'hashed_password_here', 'role': 'admin'})
-print(f'Tenant {sys.argv[1]} database initialized.')
+hashed_pw = hashlib.sha512('admin123'.encode()).hexdigest()
+db.users.insert_one({'Username': 'admin', 'Password': hashed_pw, 'Role': 'admin', 'Name': 'Admin', 'Nachname': 'User'})
+print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin123')
 " "$TENANT_ID"
             echo "Tenant '$TENANT_ID' successfully added. Ready to use."
         else
