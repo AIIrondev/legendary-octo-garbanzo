@@ -69,9 +69,9 @@ services:
     image: mongo:7.0
     container_name: inventarsystem-mongodb
     restart: unless-stopped
-    command: mongod --wiredTigerCacheSizeGB 2 --journal --dbPath /data/db
-    ports:
-      - "27017:27017"
+    command: mongod --wiredTigerCacheSizeGB 2
+    expose:
+      - "27017"
     volumes:
       - mongodb_data:/data/db
       - ./docker/mongo:/docker-entrypoint-initdb.d:ro
@@ -191,9 +191,6 @@ volumes:
 networks:
   inventar-net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
 
 # Scale guidance:
 # 1 tenant (20 users): 1 app instance + redis + mongodb = ~500MB

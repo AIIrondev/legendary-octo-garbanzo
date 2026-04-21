@@ -14,8 +14,8 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
 fi
 
 NUITKA_BUILD_VALUE="0"
-HTTP_PORT_VALUE="80"
-HTTPS_PORT_VALUE="443"
+HTTP_PORT_VALUE="8001"
+HTTPS_PORT_VALUE="8443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 COMPOSE_FILE="docker-compose.yml"
@@ -499,20 +499,20 @@ configure_host_ports() {
         requested_http="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
     fi
     if [ -z "$requested_http" ]; then
-        requested_http="80"
+        requested_http="8001"
     fi
 
     if stack_owns_host_port "$requested_http" "80"; then
         HTTP_PORT_VALUE="$requested_http"
     elif port_in_use "$requested_http"; then
-        stop_host_nginx_services || true
+        
 
         if ! port_in_use "$requested_http"; then
             HTTP_PORT_VALUE="$requested_http"
             echo "Freed HTTP port $requested_http by stopping host nginx service"
         else
             HTTP_PORT_VALUE="$(find_free_port 8080)"
-            echo "HTTP port 80 is in use. Using fallback HTTP port: $HTTP_PORT_VALUE"
+            echo "HTTP port is in use. Using fallback HTTP port: $HTTP_PORT_VALUE"
         fi
     else
         HTTP_PORT_VALUE="$requested_http"
@@ -524,13 +524,13 @@ configure_host_ports() {
     fi
 
     if [ -z "$requested_https" ]; then
-        requested_https="443"
+        requested_https="8443"
     fi
 
     if stack_owns_host_port "$requested_https" "443"; then
         HTTPS_PORT_VALUE="$requested_https"
     elif port_in_use "$requested_https"; then
-        stop_host_nginx_services || true
+        
 
         if ! port_in_use "$requested_https"; then
             HTTPS_PORT_VALUE="$requested_https"
@@ -539,7 +539,7 @@ configure_host_ports() {
         fi
 
         HTTPS_PORT_VALUE="$(find_free_port 8443)"
-        echo "HTTPS port 443 is in use. Using fallback HTTPS port: $HTTPS_PORT_VALUE"
+        echo "HTTPS port is in use. Using fallback HTTPS port: $HTTPS_PORT_VALUE"
     else
         HTTPS_PORT_VALUE="$requested_https"
     fi
