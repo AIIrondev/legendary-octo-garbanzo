@@ -11,6 +11,18 @@
 version: '3.9'
 
 services:
+  # Management Container for multi-tenant scripts
+  tenant-manager:
+    image: bash
+    container_name: tenant-manager
+    restart: "no"
+    profiles:
+      - tools
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    entrypoint: ["bash", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
+
   nginx:
     image: nginx:1.27-alpine
     container_name: inventarsystem-nginx
@@ -197,14 +209,3 @@ networks:
 # - Large (10-20 tenants): 8GB RAM, 4-8 CPU cores
 # - Jumbo (20+ tenants): 16GB+ RAM, 8+ CPU cores with clustering
 
-  # Management Container for multi-tenant scripts
-  tenant-manager:
-    image: bash
-    container_name: tenant-manager
-    restart: "no"
-    profiles:
-      - tools
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/workspace
-    entrypoint: ["bash", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
