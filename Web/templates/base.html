@@ -928,7 +928,7 @@
                         <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
+                    <li class="nav-item" data-nav-fixed="true">
                         <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
                             <span class="theme-icon-light" style="display: none;">☀️</span>
                             <span class="theme-icon-dark" style="display: none;">🌙</span>
@@ -1047,7 +1047,7 @@
                         <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
+                    <li class="nav-item" data-nav-fixed="true">
                         <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
                             <span class="theme-icon-light" style="display: none;">☀️</span>
                             <span class="theme-icon-dark" style="display: none;">🌙</span>
@@ -1827,6 +1827,14 @@
                 function adaptNavbarByWidth() {
                     if (!navList) return;
 
+                    function isNavOverflowing(bufferPx) {
+                        const buffer = typeof bufferPx === 'number' ? bufferPx : 0;
+                        const collapseOverflow = navCollapse ? (navCollapse.scrollWidth > (navCollapse.clientWidth - buffer)) : false;
+                        const containerOverflow = navContainer ? (navContainer.scrollWidth > (navContainer.clientWidth - buffer)) : false;
+                        const listOverflow = navList.scrollWidth > (navList.clientWidth - buffer);
+                        return collapseOverflow || containerOverflow || listOverflow;
+                    }
+
                     applyCompactMode();
 
                     if (window.innerWidth < 992) {
@@ -1838,8 +1846,9 @@
 
                     const hiddenSources = [];
                     let candidates = collectTopLevelNavSources();
+                    const overflowBuffer = 12;
 
-                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                    while (isNavOverflowing(overflowBuffer) && candidates.length > 0) {
                         const toHide = pickNextNavItemToHide(candidates);
                         if (!toHide) {
                             break;
@@ -1851,8 +1860,9 @@
 
                     rebuildOverflowControl(hiddenSources);
 
+                    // One final pass in case the overflow menu label/count itself changed row width.
                     candidates = collectTopLevelNavSources();
-                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                    while (isNavOverflowing(overflowBuffer) && candidates.length > 0) {
                         const toHide = pickNextNavItemToHide(candidates);
                         if (!toHide) {
                             break;
