@@ -1630,8 +1630,15 @@
             const libraryNavList = document.getElementById('libraryNavList');
             const libNavOverflowAnchor = document.getElementById('lib-nav-overflow-anchor');
 
-            function initNavbarOverflow(navList, navOverflowAnchor) {
-                if (!navList || !navOverflowAnchor) return;
+            function initNavbarOverflow(navList, navOverflowAnchor, options) {
+                if (!navList) return;
+
+                const moreToggleId = options && options.moreToggleId ? options.moreToggleId : '';
+                const moreToggle = moreToggleId ? document.getElementById(moreToggleId) : null;
+                const moreControlItem = moreToggle ? moreToggle.closest('li.nav-item.dropdown') : null;
+                const moreMenu = moreControlItem ? moreControlItem.querySelector(':scope > ul.dropdown-menu') : null;
+                const moreLabelDefault = moreToggle ? moreToggle.textContent.trim() : 'Mehr Optionen';
+                const moreMenuOriginal = moreMenu ? moreMenu.innerHTML : '';
 
                 const navRoot = navList.closest('nav.navbar');
                 const navCollapse = navList.closest('.navbar-collapse');
@@ -1659,43 +1666,33 @@
                     return Array.from(navList.children).filter(function(li){
                         if (!(li instanceof HTMLElement)) return false;
                         if (!li.classList.contains('nav-item')) return false;
-                        if (li.id === navOverflowAnchor.id) return false;
+                        if (navOverflowAnchor && li.id === navOverflowAnchor.id) return false;
                         if (li.dataset.overflowControl === 'true') return false;
                         if (li.dataset.navFixed === 'true') return false;
+                        if (moreControlItem && li === moreControlItem) return false;
                         return li.style.display !== 'none';
                     });
                 }
 
                 function clearOverflowControls() {
-                    if (!navList) return;
-                    navList.querySelectorAll('[data-overflow-control="true"]').forEach(function(node){
-                        node.remove();
-                    });
+                    if (!moreMenu) return;
+                    moreMenu.innerHTML = moreMenuOriginal;
+                    if (moreControlItem) {
+                        moreControlItem.style.display = '';
+                    }
+                    if (moreToggle) {
+                        moreToggle.textContent = moreLabelDefault;
+                    }
                 }
 
                 function restoreAllNavItems() {
                     if (!navList) return;
                     navList.querySelectorAll('li.nav-item').forEach(function(li){
-                        if (li.id === navOverflowAnchor.id) return;
+                        if (navOverflowAnchor && li.id === navOverflowAnchor.id) return;
                         if (li.dataset.overflowControl === 'true') return;
                         li.style.display = '';
                     });
                     clearOverflowControls();
-                }
-
-                function createOverflowControl() {
-                    const li = document.createElement('li');
-                    li.className = 'nav-item dropdown';
-                    li.dataset.overflowControl = 'true';
-
-                    const toggleId = navOverflowAnchor.id + '-toggle';
-                    const menuId = navOverflowAnchor.id + '-menu';
-
-                    li.innerHTML =
-                        '<a class="nav-link dropdown-toggle" href="#" id="' + toggleId + '" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="' + menuId + '">⋮ Weitere</a>' +
-                        '<ul class="dropdown-menu" aria-labelledby="' + toggleId + '" id="' + menuId + '"></ul>';
-
-                    return li;
                 }
 
                 function getNavCandidatePriority(item) {
@@ -1780,29 +1777,46 @@
 
                 function rebuildOverflowControl(hiddenSources) {
                     clearOverflowControls();
-                    if (!navList || !navOverflowAnchor || hiddenSources.length === 0) return;
+                    if (!moreMenu || hiddenSources.length === 0) return;
 
-                    const control = createOverflowControl();
-                    const menu = control.querySelector('ul.dropdown-menu');
-                    const controlLink = control.querySelector(':scope > a.nav-link');
-                    if (controlLink) {
-                        controlLink.textContent = '⋮ Weitere (' + hiddenSources.length + ')';
-                    }
-
+                    const overflowFragment = document.createDocumentFragment();
                     hiddenSources.forEach(function(source){
-                        appendSourceToOverflowMenu(source, menu);
+                        appendSourceToOverflowMenu(source, overflowFragment);
                     });
 
-                    const trailingDivider = menu.querySelector('li:last-child .dropdown-divider');
-                    if (trailingDivider) {
+                    const overflowWrap = document.createElement('div');
+                    overflowWrap.appendChild(overflowFragment);
+                    const trailingDivider = overflowWrap.querySelector('li:last-child .dropdown-divider');
+                    if (trailingDivider && trailingDivider.parentElement) {
                         trailingDivider.parentElement.remove();
                     }
 
-                    navList.insertBefore(control, navOverflowAnchor);
+                    const overflowEntries = Array.from(overflowWrap.childNodes);
+                    if (overflowEntries.length > 0) {
+                        const marker = document.createElement('li');
+                        marker.innerHTML = '<h6 class="dropdown-header">Ausgeblendete Navigation</h6>';
+                        moreMenu.insertBefore(marker, moreMenu.firstChild);
+
+                        overflowEntries.reverse().forEach(function(node){
+                            moreMenu.insertBefore(node, marker.nextSibling);
+                        });
+
+                        const divider = document.createElement('li');
+                        divider.innerHTML = '<hr class="dropdown-divider">';
+                        moreMenu.insertBefore(divider, marker.nextSibling);
+
+                        if (moreToggle) {
+                            moreToggle.textContent = moreLabelDefault + ' (' + hiddenSources.length + ')';
+                        }
+                    }
+
+                    if (moreControlItem) {
+                        moreControlItem.style.display = '';
+                    }
                 }
 
                 function adaptNavbarByWidth() {
-                    if (!navList || !navOverflowAnchor) return;
+                    if (!navList) return;
 
                     applyCompactMode();
 
@@ -1867,12 +1881,12 @@
 
             // Initialize overflow control for inventory navbar
             if (navList && navOverflowAnchor) {
-                initNavbarOverflow(navList, navOverflowAnchor);
+                initNavbarOverflow(navList, navOverflowAnchor, { moreToggleId: 'invMoreDropdown' });
             }
 
             // Initialize overflow control for library navbar
             if (libraryNavList && libNavOverflowAnchor) {
-                initNavbarOverflow(libraryNavList, libNavOverflowAnchor);
+                initNavbarOverflow(libraryNavList, libNavOverflowAnchor, { moreToggleId: 'libMoreDropdown' });
             }
         })();
     </script>
