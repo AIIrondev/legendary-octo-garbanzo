@@ -92,6 +92,8 @@ services:
       args:
         PYTHON_VERSION: "3.13"
         OPTIMIZATION_LEVEL: 2
+    working_dir: /app/Web
+    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "30", "--graceful-timeout", "20", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

@@ -564,6 +564,8 @@ write_runtime_compose_override() {
     cat > "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
 services:
   app:
+    working_dir: /app/Web
+    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "30", "--graceful-timeout", "20", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
     image: ${APP_IMAGE_VALUE}
     build: null
 EOF
