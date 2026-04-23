@@ -7,6 +7,7 @@ cd "$SCRIPT_DIR"
 ENV_FILE="$SCRIPT_DIR/.docker-build.env"
 APP_IMAGE_REPO="ghcr.io/aiirondev/legendary-octo-garbanzo"
 DIST_DIR="$SCRIPT_DIR/dist"
+RUNTIME_COMPOSE_OVERRIDE_FILE="$SCRIPT_DIR/.docker-compose.runtime.override.yml"
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
@@ -18,7 +19,7 @@ HTTP_PORT_VALUE="8001"
 HTTPS_PORT_VALUE="8443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
-COMPOSE_FILE="docker-compose.yml"
+COMPOSE_FILE="docker-compose-multitenant.yml"
 
 usage() {
     cat <<EOF
@@ -28,6 +29,7 @@ Options:
   --no-cron         Do not create or update cron jobs
   --with-cron       Create/update cron jobs (default)
   --multitenant     Use the multi-tenant architecture deployment
+    --singletenant    Use the legacy single-tenant compose deployment
   -h, --help        Show this help message
 EOF
 }
@@ -45,6 +47,10 @@ parse_args() {
                 ;;
             --multitenant)
                 COMPOSE_FILE="docker-compose-multitenant.yml"
+                shift
+                ;;
+            --singletenant)
+                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             -h|--help)
@@ -554,9 +560,22 @@ INVENTAR_APP_IMAGE=$APP_IMAGE_VALUE
 EOF
 }
 
+write_runtime_compose_override() {
+    cat > "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+services:
+  app:
+    image: ${APP_IMAGE_VALUE}
+    build: null
+EOF
+}
+
 verify_stack_health() {
     local compose_args running_services retry_count=0
-    compose_args=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+    compose_args=(-f "$COMPOSE_FILE")
+    if [ -f "$RUNTIME_COMPOSE_OVERRIDE_FILE" ]; then
+        compose_args+=(-f "$RUNTIME_COMPOSE_OVERRIDE_FILE")
+    fi
+    compose_args+=(--env-file "$ENV_FILE")
 
     # Try health check with optional restart on first failure
     while [[ $retry_count -lt 2 ]]; do
@@ -609,9 +628,15 @@ resolve_app_image
 configure_host_ports
 ensure_app_image_loaded
 write_env_file
+write_runtime_compose_override
 
 echo "Starting Inventarsystem Docker stack (app + mongodb)..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+compose_up_args=(-f "$COMPOSE_FILE")
+if [ -f "$RUNTIME_COMPOSE_OVERRIDE_FILE" ]; then
+    compose_up_args+=(-f "$RUNTIME_COMPOSE_OVERRIDE_FILE")
+fi
+compose_up_args+=(--env-file "$ENV_FILE")
+docker compose "${compose_up_args[@]}" up -d --remove-orphans
 
 verify_stack_health
 

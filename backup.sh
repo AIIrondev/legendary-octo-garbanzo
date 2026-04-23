@@ -33,11 +33,12 @@ LOG_FILE="${LOG_FILE:-$LOG_DIR/backup.log}"
 COMPRESSION_LEVEL="${COMPRESSION_LEVEL:-9}"
 KEEP_DAYS="${KEEP_DAYS:-7}"
 MIN_KEEP="${MIN_KEEP:-7}"
-DB_NAME="${DB_NAME:-Inventarsystem}"
+DB_NAME="${DB_NAME:-inventar_default}"
 MONGO_URI="${MONGO_URI:-mongodb://localhost:27017/}"
 INVOICE_KEEP_DAYS="${INVOICE_KEEP_DAYS:-3650}"
 INVOICE_ARCHIVE_DIR="${INVOICE_ARCHIVE_DIR:-$BACKUP_BASE_DIR/invoice-archive}"
 BACKUP_MODE="${BACKUP_MODE:-auto}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-multitenant.yml}"
 DOCKER_AVAILABLE=0
 DOCKER_COMPOSE_CMD=()
 USE_NULL_OUTPUT=false
@@ -58,6 +59,8 @@ Options:
     --keep-days <N>                   Age-based retention in days (default: $KEEP_DAYS; 0 disables age filter)
     --min-keep <N>                    Always keep at least this many backups (default: $MIN_KEEP)
     --mode <auto|host|docker>         Backup mode (default: $BACKUP_MODE)
+    --multitenant                     Use docker-compose-multitenant.yml (default)
+    --singletenant                    Use docker-compose.yml
   -h|--help                         Show this help and exit
 EOF
 }
@@ -87,6 +90,10 @@ while [[ $# -gt 0 ]]; do
             MIN_KEEP="$2"; shift 2;;
         --mode)
             BACKUP_MODE="$2"; shift 2;;
+        --multitenant)
+            COMPOSE_FILE="docker-compose-multitenant.yml"; shift;;
+        --singletenant)
+            COMPOSE_FILE="docker-compose.yml"; shift;;
         -h|--help)
             usage; exit 0;;
         *)
@@ -102,12 +109,12 @@ log_message() {
 init_docker_compose() {
     if docker compose version >/dev/null 2>&1; then
         DOCKER_AVAILABLE=1
-        DOCKER_COMPOSE_CMD=(docker compose -f "$PROJECT_DIR/docker-compose.yml")
+        DOCKER_COMPOSE_CMD=(docker compose -f "$PROJECT_DIR/$COMPOSE_FILE")
         return 0
     fi
     if sudo docker compose version >/dev/null 2>&1; then
         DOCKER_AVAILABLE=1
-        DOCKER_COMPOSE_CMD=(sudo docker compose -f "$PROJECT_DIR/docker-compose.yml")
+        DOCKER_COMPOSE_CMD=(sudo docker compose -f "$PROJECT_DIR/$COMPOSE_FILE")
         return 0
     fi
 

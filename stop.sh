@@ -4,12 +4,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-COMPOSE_FILE="docker-compose.yml"
+COMPOSE_FILE="docker-compose-multitenant.yml"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --multitenant)
             COMPOSE_FILE="docker-compose-multitenant.yml"
+            shift
+            ;;
+        --singletenant)
+            COMPOSE_FILE="docker-compose.yml"
             shift
             ;;
         *)

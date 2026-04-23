@@ -15,6 +15,7 @@ APP_IMAGE_ASSET_PREFIX="inventarsystem-image-"
 ENV_FILE="$PROJECT_DIR/.docker-build.env"
 APP_IMAGE_REPO="ghcr.io/aiirondev/legendary-octo-garbanzo"
 DIST_DIR="$PROJECT_DIR/dist"
+COMPOSE_FILE="docker-compose-multitenant.yml"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
@@ -116,6 +117,41 @@ server {
     listen 80;
     server_name _;
     return 301 https://$host$request_uri;
+}
+
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --multitenant      Use docker-compose-multitenant.yml (default)
+  --singletenant     Use docker-compose.yml
+  -h, --help         Show this help message
+EOF
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --multitenant)
+                COMPOSE_FILE="docker-compose-multitenant.yml"
+                shift
+                ;;
+            --singletenant)
+                COMPOSE_FILE="docker-compose.yml"
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                log_message "ERROR: Unknown option: $1"
+                usage
+                exit 2
+                ;;
+        esac
+    done
 }
 
 server {
@@ -360,6 +396,13 @@ deploy() {
     local tag="$1"
     local meta_file="$2"
     local app_image="${APP_IMAGE_REPO}:${tag}"
+    local compose_path
+
+    compose_path="$PROJECT_DIR/$COMPOSE_FILE"
+    if [ ! -f "$compose_path" ]; then
+        log_message "ERROR: compose file not found: $compose_path"
+        exit 1
+    fi
 
     cd "$PROJECT_DIR"
     if [ ! -f "$ENV_FILE" ]; then
@@ -385,15 +428,15 @@ EOF
         fi
     fi
 
-    docker compose --env-file "$ENV_FILE" pull nginx mongodb >> "$LOG_FILE" 2>&1
-    docker compose --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
+    docker compose -f "$compose_path" --env-file "$ENV_FILE" pull nginx mongodb >> "$LOG_FILE" 2>&1
+    docker compose -f "$compose_path" --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
     docker tag "$app_image" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
 }
 
 verify_stack_health() {
     local compose_args running_services
     local https_port
-    compose_args=(--env-file "$ENV_FILE")
+    compose_args=(-f "$PROJECT_DIR/$COMPOSE_FILE" --env-file "$ENV_FILE")
     https_port="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ')"
     if [ -z "$https_port" ]; then
         https_port="443"
@@ -418,6 +461,8 @@ verify_stack_health() {
 }
 
 main() {
+    parse_args "$@"
+
     ensure_runtime_dependencies
     ensure_tls_certificates
     ensure_nginx_config_mount_source

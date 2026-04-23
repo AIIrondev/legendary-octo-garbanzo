@@ -22,6 +22,7 @@ LEGACY_BACKUP_ARCHIVE=""
 CLEANUP_OLD_SERVICES=true
 CLEANUP_OLD_REMOVE_CRON=false
 TMP_DIR=""
+COMPOSE_FILE="docker-compose-multitenant.yml"
 
 cleanup_tmp_dir() {
     if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
@@ -50,14 +51,13 @@ refresh_start_script_from_main() {
 pin_compose_app_image() {
     local tag="$1"
     local compose_file
-    compose_file="$PROJECT_DIR/docker-compose.yml"
 
-    if [ ! -f "$compose_file" ]; then
-        echo "Warning: $compose_file not found; cannot pin app image"
-        return 0
-    fi
+    for compose_file in "$PROJECT_DIR/docker-compose-multitenant.yml" "$PROJECT_DIR/docker-compose.yml"; do
+        if [ ! -f "$compose_file" ]; then
+            continue
+        fi
 
-    python3 - <<'PY' "$compose_file" "$tag"
+        python3 - <<'PY' "$compose_file" "$tag"
 import re
 import sys
 
@@ -151,6 +151,8 @@ if in_app_service and build_found and app_service_indent is not None:
 with open(compose_file, "w", encoding="utf-8") as f:
     f.writelines(out)
 PY
+
+    done
 }
 
 install_docker_if_missing() {
@@ -173,6 +175,8 @@ Options:
   --remove-legacy-system        Remove old host MongoDB/system after successful import
     --skip-cleanup-old            Do not run cleanup-old.sh after install
     --cleanup-old-remove-cron     Also remove matching cron entries during old-system cleanup
+    --multitenant                Use docker-compose-multitenant.yml (default)
+    --singletenant               Use docker-compose.yml
   --legacy-db-name <name>       Legacy database name (default: $LEGACY_DB_NAME)
   --legacy-mongo-uri <uri>      Legacy Mongo URI (default: $LEGACY_MONGO_URI)
   --legacy-system-dir <path>    Optional old system directory to remove after migration
@@ -197,6 +201,14 @@ parse_args() {
                 ;;
             --cleanup-old-remove-cron)
                 CLEANUP_OLD_REMOVE_CRON=true
+                shift
+                ;;
+            --multitenant)
+                COMPOSE_FILE="docker-compose-multitenant.yml"
+                shift
+                ;;
+            --singletenant)
+                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             --legacy-db-name)
@@ -280,14 +292,21 @@ backup_legacy_database() {
 
 restore_legacy_backup_into_docker() {
     local i
+    local compose_path
 
     if [ "$MIGRATE_LEGACY_DB" != "true" ] || [ -z "$LEGACY_BACKUP_ARCHIVE" ]; then
         return 0
     fi
 
+    compose_path="$PROJECT_DIR/$COMPOSE_FILE"
+    if [ ! -f "$compose_path" ]; then
+        echo "Error: compose file not found: $compose_path"
+        exit 1
+    fi
+
     echo "Waiting for Docker MongoDB to become ready..."
     for i in $(seq 1 60); do
-        if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T mongodb mongosh --quiet --eval "db.adminCommand({ping:1}).ok" >/dev/null 2>&1; then
+        if sudo docker compose -f "$compose_path" exec -T mongodb mongosh --quiet --eval "db.adminCommand({ping:1}).ok" >/dev/null 2>&1; then
             break
         fi
         sleep 2
@@ -299,7 +318,7 @@ restore_legacy_backup_into_docker() {
     fi
 
     echo "Importing legacy backup into Docker MongoDB..."
-    sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T mongodb mongorestore --archive --gzip --drop --nsInclude "${LEGACY_DB_NAME}.*" < "$LEGACY_BACKUP_ARCHIVE"
+    sudo docker compose -f "$compose_path" exec -T mongodb mongorestore --archive --gzip --drop --nsInclude "${LEGACY_DB_NAME}.*" < "$LEGACY_BACKUP_ARCHIVE"
     echo "Legacy DB import completed."
 }
 

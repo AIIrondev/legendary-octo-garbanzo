@@ -6,12 +6,13 @@ LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/restore.log"
 WORK_DIR="$(mktemp -d /tmp/inventarsystem-restore-XXXXXX)"
 
-DB_NAME="${INVENTAR_MONGODB_DB:-Inventarsystem}"
+DB_NAME="${INVENTAR_MONGODB_DB:-inventar_default}"
 SOURCE_PATH=""
 BACKUP_DATE=""
 DROP_DATABASE=false
 RESTART_SERVICES=false
 STAGED_PATH=""
+COMPOSE_FILE="docker-compose-multitenant.yml"
 
 BACKUP_ROOT_LOCAL="$SCRIPT_DIR/backups"
 BACKUP_ROOT_SYSTEM="/var/backups"
@@ -56,6 +57,8 @@ Options:
                           - latest: newest from local/system backup roots
   --drop-database         Drop target DB before import (recommended for full restore)
   --restart-services      Restart stack after restore
+    --multitenant           Use docker-compose-multitenant.yml (default)
+    --singletenant          Use docker-compose.yml
   --list                  List detected backup candidates
   --help                  Show this help
 
@@ -68,12 +71,12 @@ EOF
 
 setup_compose() {
     if docker compose version >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        DOCKER_COMPOSE=(docker compose)
+        DOCKER_COMPOSE=(docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE")
         return 0
     fi
 
     if [ -n "$SUDO" ] && $SUDO docker compose version >/dev/null 2>&1 && $SUDO docker info >/dev/null 2>&1; then
-        DOCKER_COMPOSE=($SUDO docker compose)
+        DOCKER_COMPOSE=($SUDO docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE")
         return 0
     fi
 
@@ -457,6 +460,14 @@ parse_args() {
                 ;;
             --restart-services)
                 RESTART_SERVICES=true
+                shift
+                ;;
+            --multitenant)
+                COMPOSE_FILE="docker-compose-multitenant.yml"
+                shift
+                ;;
+            --singletenant)
+                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             --list)
