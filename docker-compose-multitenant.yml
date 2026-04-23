@@ -108,7 +108,6 @@ services:
       - "8000"
     volumes:
       - ./config.json:/app/config.json:ro
-      - ./Web:/app/Web
       - app_uploads:/app/Web/uploads:cached
       - app_thumbnails:/app/Web/thumbnails:cached
       - app_previews:/app/Web/previews:cached
