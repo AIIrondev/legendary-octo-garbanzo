@@ -208,12 +208,21 @@
 <script>
 // View mode persistence
 const LIBRARY_VIEW_MODE_KEY = 'inventarLibraryViewMode';
+const MOBILE_LIBRARY_MAX_WIDTH = 900;
+
+function isMobileViewport() {
+    return window.matchMedia(`(max-width: ${MOBILE_LIBRARY_MAX_WIDTH}px)`).matches;
+}
 
 function setViewMode(mode) {
     localStorage.setItem(LIBRARY_VIEW_MODE_KEY, mode);
     const container = document.getElementById('itemsContainer');
     const tableHeader = document.getElementById('tableHeader');
-    const items = container.querySelectorAll('.item-card');
+    const renderedItems = Array.from(container.querySelectorAll('.item-card'));
+    const detachedItems = Array.isArray(window.mobileDetachedLibraryItems)
+        ? window.mobileDetachedLibraryItems
+        : [];
+    const items = [...renderedItems, ...detachedItems.filter(item => !container.contains(item))];
     
     items.forEach(item => {
         const cardContent = item.querySelector('.item-content.card-mode');
@@ -234,6 +243,125 @@ function setViewMode(mode) {
     tableHeader.style.display = mode === 'table' ? 'block' : 'none';
     
     document.getElementById('viewModeToggle').classList.toggle('open', mode === 'table');
+}
+
+function initMobileWindowedLibraryLoading() {
+    const container = document.getElementById('itemsContainer');
+    if (!container || !isMobileViewport()) {
+        return;
+    }
+
+    const allItems = Array.from(container.querySelectorAll('.library-item'));
+    if (allItems.length <= 24) {
+        return;
+    }
+
+    const topSpacer = document.createElement('div');
+    topSpacer.className = 'mobile-window-spacer top';
+    const bottomSpacer = document.createElement('div');
+    bottomSpacer.className = 'mobile-window-spacer bottom';
+
+    window.mobileDetachedLibraryItems = allItems;
+    allItems.forEach(item => item.remove());
+    container.appendChild(topSpacer);
+    container.appendChild(bottomSpacer);
+
+    let averageItemHeight = Math.max(Math.round(window.innerHeight * 0.35), 230);
+    let lastStart = -1;
+    let lastEnd = -1;
+    let framePending = false;
+
+    function updateImageMemory(startIndex, endIndex) {
+        const imageBuffer = 4;
+        allItems.forEach((item, index) => {
+            const image = item.querySelector('img.item-image');
+            if (!image) {
+                return;
+            }
+
+            if (!image.dataset.mobileSrc) {
+                image.dataset.mobileSrc = image.getAttribute('src') || '';
+                image.loading = 'lazy';
+                image.decoding = 'async';
+            }
+
+            const shouldKeepLoaded = index >= startIndex - imageBuffer && index < endIndex + imageBuffer;
+            if (shouldKeepLoaded) {
+                if (!image.getAttribute('src') && image.dataset.mobileSrc) {
+                    image.setAttribute('src', image.dataset.mobileSrc);
+                }
+                return;
+            }
+
+            if (image.getAttribute('src')) {
+                image.removeAttribute('src');
+            }
+        });
+    }
+
+    function renderVisibleWindow() {
+        const viewportHeight = window.innerHeight || 800;
+        const scrollTop = window.scrollY || window.pageYOffset || 0;
+        const renderBuffer = viewportHeight * 1.5;
+
+        let startIndex = Math.max(0, Math.floor((scrollTop - renderBuffer) / averageItemHeight));
+        let endIndex = Math.min(allItems.length, Math.ceil((scrollTop + viewportHeight + renderBuffer) / averageItemHeight));
+
+        if (endIndex - startIndex < 14) {
+            endIndex = Math.min(allItems.length, startIndex + 14);
+        }
+
+        if (startIndex === lastStart && endIndex === lastEnd) {
+            return;
+        }
+
+        lastStart = startIndex;
+        lastEnd = endIndex;
+
+        while (topSpacer.nextSibling && topSpacer.nextSibling !== bottomSpacer) {
+            topSpacer.nextSibling.remove();
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (let index = startIndex; index < endIndex; index += 1) {
+            fragment.appendChild(allItems[index]);
+        }
+        container.insertBefore(fragment, bottomSpacer);
+
+        let measuredHeightSum = 0;
+        let measuredCount = 0;
+        for (let index = startIndex; index < endIndex; index += 1) {
+            const height = allItems[index].getBoundingClientRect().height;
+            if (height > 0) {
+                measuredHeightSum += height;
+                measuredCount += 1;
+            }
+        }
+
+        if (measuredCount > 0) {
+            const measuredAverage = measuredHeightSum / measuredCount;
+            averageItemHeight = Math.round((averageItemHeight * 3 + measuredAverage) / 4);
+        }
+
+        topSpacer.style.height = `${Math.max(0, startIndex * averageItemHeight)}px`;
+        bottomSpacer.style.height = `${Math.max(0, (allItems.length - endIndex) * averageItemHeight)}px`;
+        updateImageMemory(startIndex, endIndex);
+    }
+
+    function scheduleWindowRender() {
+        if (framePending) {
+            return;
+        }
+        framePending = true;
+        requestAnimationFrame(() => {
+            framePending = false;
+            renderVisibleWindow();
+        });
+    }
+
+    window.addEventListener('scroll', scheduleWindowRender, { passive: true });
+    window.addEventListener('resize', scheduleWindowRender, { passive: true });
+    scheduleWindowRender();
 }
 
 // Initialize view mode
@@ -311,6 +439,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === this) this.style.display = 'none';
         });
     });
+
+    initMobileWindowedLibraryLoading();
 });
 
 function displayLibraryItemDetail(item) {
