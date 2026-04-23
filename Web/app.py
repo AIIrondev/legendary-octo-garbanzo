@@ -339,6 +339,28 @@ def _enforce_user_permissions():
     return None
 
 
+@app.before_request
+def _enforce_active_session_user():
+    endpoint = request.endpoint or ''
+    if endpoint == 'static' or endpoint.startswith('static'):
+        return None
+
+    username = session.get('username')
+    if not username:
+        return None
+
+    user = us.get_user(username)
+    if user:
+        return None
+
+    session.clear()
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({'ok': False, 'message': 'Sitzung ungültig. Bitte erneut anmelden.'}), 401
+
+    flash('Ihre Sitzung ist nicht mehr gültig. Bitte erneut anmelden.', 'error')
+    return redirect(url_for('login'))
+
+
 def _get_asset_version():
     """Return a cache-busting asset version tied to deployment state."""
     env_version = os.getenv('INVENTAR_ASSET_VERSION', '').strip()
