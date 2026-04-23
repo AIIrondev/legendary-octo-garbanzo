@@ -119,6 +119,36 @@ server {
     return 301 https://$host$request_uri;
 }
 
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
+    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://app:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        default_type text/html;
+        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
+    }
+}
+EOF
+        log_message "Recreated missing nginx config at $config_path"
+    fi
+}
+
 usage() {
     cat <<EOF
 Usage: $0 [options]
@@ -152,36 +182,6 @@ parse_args() {
                 ;;
         esac
     done
-}
-
-server {
-    listen 443 ssl;
-    server_name _;
-
-    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
-    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
-
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass http://app:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300;
-    }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-        default_type text/html;
-        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
-    }
-}
-EOF
-        log_message "Recreated missing nginx config at $config_path"
-    fi
 }
 
 archive_logs() {
