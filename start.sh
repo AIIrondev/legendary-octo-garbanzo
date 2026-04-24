@@ -653,7 +653,11 @@ compose_up_args+=(--env-file "$ENV_FILE")
 if [ -n "$COMPOSE_PROFILES_VALUE" ]; then
     export COMPOSE_PROFILES="$COMPOSE_PROFILES_VALUE"
 fi
-docker compose "${compose_up_args[@]}" up -d --remove-orphans
+if ! docker compose "${compose_up_args[@]}" up -d --remove-orphans; then
+    echo "Docker Compose startup failed once. Waiting briefly and retrying..."
+    sleep 5
+    docker compose "${compose_up_args[@]}" up -d --remove-orphans
+fi
 
 verify_stack_health
 
