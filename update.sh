@@ -16,6 +16,8 @@ ENV_FILE="$PROJECT_DIR/.docker-build.env"
 APP_IMAGE_REPO="ghcr.io/aiirondev/legendary-octo-garbanzo"
 DIST_DIR="$PROJECT_DIR/dist"
 COMPOSE_FILE="docker-compose-multitenant.yml"
+MIN_ROOT_FREE_MB="${INVENTAR_MIN_ROOT_FREE_MB:-2048}"
+DIST_KEEP_COUNT="${INVENTAR_DIST_KEEP_COUNT:-2}"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
@@ -117,6 +119,65 @@ server {
     listen 80;
     server_name _;
     return 301 https://$host$request_uri;
+}
+
+ensure_min_root_disk_space() {
+    local available_kb available_mb
+
+    if ! command -v df >/dev/null 2>&1; then
+        return 0
+    fi
+
+    available_kb="$(df -Pk "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+    if [ -z "$available_kb" ]; then
+        return 0
+    fi
+
+    available_mb=$((available_kb / 1024))
+    if [ "$available_mb" -lt "$MIN_ROOT_FREE_MB" ]; then
+        log_message "ERROR: Low disk space on filesystem containing $PROJECT_DIR"
+        log_message "Available: ${available_mb} MB; required minimum: ${MIN_ROOT_FREE_MB} MB"
+        log_message "Free disk space and rerun update."
+        exit 1
+    fi
+}
+
+cleanup_old_dist_artifacts() {
+    local keep_count
+    keep_count="$DIST_KEEP_COUNT"
+
+    if [ ! -d "$DIST_DIR" ]; then
+        return 0
+    fi
+
+    if ! [[ "$keep_count" =~ ^[0-9]+$ ]]; then
+        keep_count=2
+    fi
+
+    mapfile -t archives < <(find "$DIST_DIR" -maxdepth 1 -type f \( -name 'inventarsystem-image-*.tar.gz' -o -name 'inventarsystem-image-*.tar' \) -printf '%T@ %p\n' | sort -nr | awk '{print $2}')
+    if [ "${#archives[@]}" -le "$keep_count" ]; then
+        return 0
+    fi
+
+    local index old_archive deleted=0
+    for (( index=keep_count; index<${#archives[@]}; index++ )); do
+        old_archive="${archives[$index]}"
+        if rm -f "$old_archive"; then
+            deleted=$((deleted + 1))
+        fi
+    done
+
+    if [ "$deleted" -gt 0 ]; then
+        log_message "Cleaned up $deleted old dist image archive(s)"
+    fi
+}
+
+cleanup_docker_dangling_images() {
+    if docker image prune -f >> "$LOG_FILE" 2>&1; then
+        log_message "Cleaned up dangling Docker images"
+    else
+        log_message "WARNING: Could not prune dangling Docker images"
+    fi
 }
 
 server {
@@ -472,6 +533,7 @@ main() {
     require_cmd docker
     require_cmd python3
 
+    ensure_min_root_disk_space
     archive_logs
     create_backup
 
@@ -559,6 +621,8 @@ main() {
     fi
 
     echo "$latest_tag" > "$STATE_FILE"
+    cleanup_old_dist_artifacts
+    cleanup_docker_dangling_images
     log_message "Update completed successfully to release $latest_tag"
 }
 

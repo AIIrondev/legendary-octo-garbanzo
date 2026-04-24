@@ -21,6 +21,7 @@ CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 COMPOSE_FILE="docker-compose-multitenant.yml"
 COMPOSE_PROFILES_VALUE=""
+MIN_DOCKER_FREE_MB="${INVENTAR_MIN_DOCKER_FREE_MB:-1024}"
 
 usage() {
     cat <<EOF
@@ -562,6 +563,37 @@ configure_host_ports() {
     fi
 }
 
+ensure_min_docker_disk_space() {
+    local docker_root available_kb available_mb
+
+    if ! command -v df >/dev/null 2>&1; then
+        return 0
+    fi
+
+    docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+    if [ -z "$docker_root" ]; then
+        docker_root="/var/lib/docker"
+    fi
+
+    if [ ! -d "$docker_root" ]; then
+        return 0
+    fi
+
+    available_kb="$(df -Pk "$docker_root" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+    if [ -z "$available_kb" ]; then
+        return 0
+    fi
+
+    available_mb=$((available_kb / 1024))
+
+    if [ "$available_mb" -lt "$MIN_DOCKER_FREE_MB" ]; then
+        echo "Error: low disk space in Docker data root ($docker_root)."
+        echo "Available: ${available_mb} MB; required minimum: ${MIN_DOCKER_FREE_MB} MB"
+        echo "MongoDB may fail with 'No space left on device'. Free space and retry."
+        exit 1
+    fi
+}
+
 write_env_file() {
     cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=$NUITKA_BUILD_VALUE
@@ -640,6 +672,7 @@ configure_nuitka_mode
 resolve_app_image
 configure_cloudflared_profile
 configure_host_ports
+ensure_min_docker_disk_space
 ensure_app_image_loaded
 write_env_file
 write_runtime_compose_override
