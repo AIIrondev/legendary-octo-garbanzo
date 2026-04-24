@@ -322,6 +322,32 @@ INVENTAR_WORKER_CONNECTIONS=100
 
 ---
 
+## Schul-Konfiguration pro Tenant
+
+Die Datei `config.json` unterstützt jetzt einen `tenants`-Block. Damit kann jede Schule eigene Modul-Schalter bekommen, ohne dass das ganze System global umgestellt werden muss.
+
+```json
+{
+    "tenants": {
+        "schule1": {
+            "modules": {
+                "library": { "enabled": true },
+                "student_cards": { "enabled": false }
+            }
+        },
+        "schule2": {
+            "modules": {
+                "library": { "enabled": false }
+            }
+        }
+    }
+}
+```
+
+Wenn ein Request über Subdomain oder `X-Tenant-ID` aufgelöst wird, liest die App diese Werte automatisch aus und blendet die Bibliothek bzw. andere Module nur für diesen Tenant ein oder aus.
+
+---
+
 ## Support & Debugging
 
 **Fragen?**

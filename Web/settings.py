@@ -157,8 +157,36 @@ SSL_KEY = _get(_conf, ['ssl', 'key'], DEFAULTS['ssl']['key'])
 SCHOOL_PERIODS = _get(_conf, ['schoolPeriods'], DEFAULTS['schoolPeriods'])
 
 # Optional feature modules
-LIBRARY_MODULE_ENABLED = bool(_get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
-STUDENT_CARDS_MODULE_ENABLED = bool(_get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
+TENANT_CONFIGS = _get(_conf, ['tenants'], {})
+
+
+class _TenantAwareBool:
+    def __init__(self, module_name, default):
+        self.module_name = module_name
+        self.default = bool(default)
+
+    def resolve(self):
+        try:
+            from tenant import is_tenant_module_enabled
+            return bool(is_tenant_module_enabled(self.module_name, default=self.default))
+        except Exception:
+            return self.default
+
+    def __bool__(self):
+        return self.resolve()
+
+    def __int__(self):
+        return int(self.resolve())
+
+    def __str__(self):
+        return 'True' if self.resolve() else 'False'
+
+    def __repr__(self):
+        return f"_TenantAwareBool(module_name={self.module_name!r}, value={self.resolve()!r})"
+
+
+LIBRARY_MODULE_ENABLED = _TenantAwareBool('library', _get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
+STUDENT_CARDS_MODULE_ENABLED = _TenantAwareBool('student_cards', _get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
 STUDENT_DEFAULT_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'default_borrow_days'], DEFAULTS['modules']['student_cards']['default_borrow_days']))
 STUDENT_MAX_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'max_borrow_days'], DEFAULTS['modules']['student_cards']['max_borrow_days']))
 
