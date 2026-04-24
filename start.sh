@@ -20,6 +20,7 @@ HTTPS_PORT_VALUE="8443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 COMPOSE_FILE="docker-compose-multitenant.yml"
+COMPOSE_PROFILES_VALUE=""
 
 usage() {
     cat <<EOF
@@ -439,6 +440,16 @@ resolve_app_image() {
     fi
 }
 
+configure_cloudflared_profile() {
+    if [ -f /etc/cloudflared/credentials.json ]; then
+        COMPOSE_PROFILES_VALUE="cloudflare"
+        echo "Cloudflared tunnel: enabled (homeserver)"
+    else
+        COMPOSE_PROFILES_VALUE=""
+        echo "Cloudflared tunnel: disabled (missing /etc/cloudflared/credentials.json)"
+    fi
+}
+
 port_in_use() {
     local port="$1"
 
@@ -627,6 +638,7 @@ ensure_runtime_config_json
 setup_scheduled_jobs
 configure_nuitka_mode
 resolve_app_image
+configure_cloudflared_profile
 configure_host_ports
 ensure_app_image_loaded
 write_env_file
@@ -638,6 +650,9 @@ if [ -f "$RUNTIME_COMPOSE_OVERRIDE_FILE" ]; then
     compose_up_args+=(-f "$RUNTIME_COMPOSE_OVERRIDE_FILE")
 fi
 compose_up_args+=(--env-file "$ENV_FILE")
+if [ -n "$COMPOSE_PROFILES_VALUE" ]; then
+    export COMPOSE_PROFILES="$COMPOSE_PROFILES_VALUE"
+fi
 docker compose "${compose_up_args[@]}" up -d --remove-orphans
 
 verify_stack_health

@@ -1,4 +1,17 @@
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    profiles:
+      - cloudflare
+    command: ["tunnel", "--no-autoupdate", "run", "--credentials-file", "/etc/cloudflared/credentials.json", "homeserver"]
+    volumes:
+      - /etc/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      nginx:
+        condition: service_started
+
   nginx:
     image: nginx:1.27-alpine
     container_name: inventarsystem-nginx

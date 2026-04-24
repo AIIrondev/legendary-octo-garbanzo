@@ -9,6 +9,21 @@
 #   docker-compose -f docker-compose-multitenant.yml up -d --scale app=10
 
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    profiles:
+      - cloudflare
+    command: ["tunnel", "--no-autoupdate", "run", "--credentials-file", "/etc/cloudflared/credentials.json", "homeserver"]
+    volumes:
+      - /etc/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      nginx:
+        condition: service_started
+    networks:
+      - inventar-net
+
   # Management Container for multi-tenant scripts
   tenant-manager:
     image: docker:cli
