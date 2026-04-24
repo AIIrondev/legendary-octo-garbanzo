@@ -1,0 +1,8 @@
+tunnel: homeserver
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - service: https://nginx:443
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404

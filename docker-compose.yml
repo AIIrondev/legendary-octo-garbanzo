@@ -5,8 +5,9 @@ services:
     restart: unless-stopped
     profiles:
       - cloudflare
-    command: ["tunnel", "--no-autoupdate", "run", "--credentials-file", "/etc/cloudflared/credentials.json", "homeserver"]
+    command: ["--config", "/etc/cloudflared/config.yml", "tunnel", "run"]
     volumes:
+      - ./docker/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
       - /etc/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
     depends_on:
       nginx:
