@@ -10,11 +10,43 @@ Each tenant can support up to 20+ users with isolated data and resource pools.
 from flask import request, g, has_request_context
 from functools import wraps
 import logging
+import settings as cfg
 
 logger = logging.getLogger(__name__)
 
 # Tenant registry: maps subdomain/tenant_id to database name
 TENANT_REGISTRY = {}
+if isinstance(getattr(cfg, 'TENANT_CONFIGS', None), dict):
+    TENANT_REGISTRY.update(cfg.TENANT_CONFIGS)
+
+
+def _get_nested_value(source, path, default=None):
+    current = source
+    for key in path:
+        if isinstance(current, dict) and key in current:
+            current = current[key]
+        else:
+            return default
+    return current
+
+
+def get_tenant_config(tenant_id=None):
+    """Return the registered config for a tenant, falling back to default."""
+    if tenant_id is None:
+        ctx = get_tenant_context()
+        tenant_id = ctx.tenant_id if ctx and ctx.tenant_id else 'default'
+
+    if tenant_id in TENANT_REGISTRY:
+        return TENANT_REGISTRY[tenant_id] or {}
+
+    return TENANT_REGISTRY.get('default', {}) or {}
+
+
+def is_tenant_module_enabled(module_name, tenant_id=None, default=False):
+    """Resolve whether a feature module is enabled for the current tenant."""
+    config = get_tenant_config(tenant_id)
+    enabled = _get_nested_value(config, ['modules', module_name, 'enabled'], default)
+    return bool(enabled)
 
 
 class TenantContext:
@@ -27,6 +59,7 @@ class TenantContext:
         self.tenant_id = None
         self.db_name = None
         self.subdomain = None
+        self.config = {}
 
     def resolve_tenant(self):
         """
@@ -40,6 +73,7 @@ class TenantContext:
         tenant_from_header = request.headers.get('X-Tenant-ID', '').strip()
         if tenant_from_header:
             self.tenant_id = tenant_from_header
+            self.config = get_tenant_config(tenant_from_header)
             return self._get_db_name(tenant_from_header)
 
         # Priority 2: Subdomain extraction
@@ -56,10 +90,12 @@ class TenantContext:
             if potential_subdomain not in ('www', 'api', 'admin', 'app', 'mail'):
                 self.subdomain = potential_subdomain
                 self.tenant_id = potential_subdomain
+                self.config = get_tenant_config(potential_subdomain)
                 return self._get_db_name(potential_subdomain)
 
         # Fallback to default tenant if no subdomain detected
         self.tenant_id = 'default'
+        self.config = get_tenant_config('default')
         return self._get_db_name('default')
 
     def _get_db_name(self, tenant_id):
