@@ -85,7 +85,6 @@ services:
     image: mongo:7.0
     container_name: inventarsystem-mongodb
     restart: unless-stopped
-    command: mongod --wiredTigerCacheSizeGB 2
     expose:
       - "27017"
     volumes:
