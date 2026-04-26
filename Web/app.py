@@ -1313,9 +1313,17 @@ def _initialize_scheduler():
                 if lock_age > 300:  # 5 minutes - indicates a stale lock from a previous container run
                     os.remove(scheduler_lock_path)
                     app.logger.info(f"Removed stale scheduler lock file (age: {lock_age:.0f}s)")
-        except Exception:
-            pass  # If we can't clean up, continue anyway
-        
+        except Exception as e:
+            app.logger.warning(f"Could not clean up scheduler lock file: {e}")
+
+        # Always try to remove lock file on startup (extra safety)
+        try:
+            if os.path.exists(scheduler_lock_path):
+                os.remove(scheduler_lock_path)
+                app.logger.info("Scheduler lock file removed on startup.")
+        except Exception as e:
+            app.logger.warning(f"Could not remove scheduler lock file on startup: {e}")
+
         try:
             # Try to create the lock file - only succeeds if it doesn't exist
             lock_fd = os.open(scheduler_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
@@ -1324,7 +1332,7 @@ def _initialize_scheduler():
         except FileExistsError:
             should_start = False
             app.logger.warning("Scheduler lock exists - another process is already running the scheduler")
-        
+
         if should_start:
             scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
             scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
@@ -10805,6 +10813,10 @@ def get_optimal_image_quality(img, target_size_kb=80):
 # ============================================================================
 # PUSH NOTIFICATION API ENDPOINTS
 # ============================================================================
+
+@app.route('/health')
+def health_check():
+    return 'OK', 200
 
 @app.route('/api/push/subscribe', methods=['POST'])
 def subscribe_to_push():

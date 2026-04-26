@@ -12,6 +12,6 @@ redis
 reportlab
 python-barcode
 openpyxl
-cryptography
+cryptography>=42.0.0
 pywebpush
-py-vapid==1.9.0
+py-vapid>=1.9.0
