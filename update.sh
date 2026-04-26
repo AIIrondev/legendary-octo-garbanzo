@@ -115,7 +115,10 @@ ensure_nginx_config_mount_source() {
 
     if [ ! -f "$config_path" ]; then
         cat > "$config_path" <<'EOF'
-server {
+    fi
+}
+
+server() {
     listen 80;
     server_name _;
     return 301 https://$host$request_uri;
