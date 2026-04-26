@@ -521,8 +521,28 @@ verify_stack_health() {
     return 1
 }
 
+cleanup_server_space() {
+    log_message "Running server cleanup before update..."
+    # Remove unused Docker objects
+    if docker system prune -af --volumes >> "$LOG_FILE" 2>&1; then
+        log_message "Docker system pruned (all unused images, containers, volumes, networks)"
+    else
+        log_message "WARNING: Docker system prune failed"
+    fi
+    # Clean up old dist artifacts
+    cleanup_old_dist_artifacts
+    # Clean up log files older than 7 days
+    if find "$LOG_DIR" -type f -name '*.log' -mtime +7 -exec rm -f {} +; then
+        log_message "Old log files (older than 7 days) cleaned up"
+    else
+        log_message "WARNING: Failed to clean up old log files"
+    fi
+}
+
 main() {
     parse_args "$@"
+
+    cleanup_server_space
 
     ensure_runtime_dependencies
     ensure_tls_certificates
