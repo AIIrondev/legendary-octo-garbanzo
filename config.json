@@ -1,9 +1,9 @@
 {
     "dbg": false,
     "key": "InventarsystemSecureKey2026XYZ789abcdef012",
-    "ver": "0.0.2",
+    "ver": "0.6.44",
     "host": "0.0.0.0",
-    "port": 443,
+    "port": 8000,
 
     "mongodb": {
         "host": "localhost",
