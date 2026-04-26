@@ -8,6 +8,6 @@ ingress:
 
   # Repo 2: Key-Service (Buchung)
   - hostname: booking.maximiliangruendinger.de
-    service: http://key-service-app:8080 
+    service: http://nginx:80
 
   - service: http_status:404

@@ -13,9 +13,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
-    profiles:
-      - cloudflare
-    command: ["--config", "/etc/cloudflared/config.yml", "tunnel", "run"]
+    command: tunnel run homeserver  # 'homeserver' must match your tunnel name
     volumes:
       - ./docker/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
       - /etc/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
