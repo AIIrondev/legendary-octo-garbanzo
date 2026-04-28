@@ -227,17 +227,46 @@ print(f'Tenant {sys.argv[1]} session cache cleared. Tenant restarted.')
         ;;
         
     list)
-        echo "Listing active tenants (Databases):"
+        echo "Listing configured tenants (config.json):"
+        if [ -f "$CONFIG_FILE" ]; then
+            python3 - "$CONFIG_FILE" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants', {})
+if isinstance(tenants, dict) and tenants:
+    for tid, conf in tenants.items():
+        port = conf.get('port') if isinstance(conf, dict) else None
+        if port is not None:
+            print(f'- {tid} (port {port})')
+        else:
+            print(f'- {tid}')
+else:
+    print('  (no tenants configured)')
+PY
+        else
+            echo "  (config.json not found)"
+        fi
+
+        echo ""
+        echo "Listing active tenant databases (MongoDB):"
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
-             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+             docker exec -i "$APP_CONTAINER" python3 - <<'PY'
+import sys
+sys.path.insert(0, '/app/Web')
+import settings
+from pymongo import MongoClient
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 prefix = f'{settings.MONGODB_DB}_'
 dbs = [d for d in client.list_database_names() if d.startswith(prefix)]
-for db in dbs:
-    print(f'- {db.replace(prefix, \"\")}')
-"
+if dbs:
+    for db in dbs:
+        print(f'- {db.replace(prefix, "")}')
+else:
+    print('  (no tenant databases found)')
+PY
         else
             echo "Error: Application container not running."
         fi
