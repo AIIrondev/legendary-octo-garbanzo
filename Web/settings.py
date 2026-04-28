@@ -14,6 +14,7 @@ import os
 import json
 import atexit
 from threading import Lock
+from flask import has_request_context
 from pymongo import MongoClient as _PyMongoClient
 
 # Base directory of this Web package
@@ -250,7 +251,28 @@ class _MongoClientProxy:
         return getattr(self._client, name)
 
     def __getitem__(self, name):
+        if has_request_context():
+            try:
+                from tenant import get_tenant_context
+                ctx = get_tenant_context()
+                if ctx and ctx.db_name:
+                    if name == MONGODB_DB or name == MONGODB_DB.lower() or name == 'inventar_default':
+                        return self._client[ctx.db_name]
+            except Exception:
+                pass
         return self._client[name]
+
+    def get_database(self, name=None, *args, **kwargs):
+        if has_request_context():
+            try:
+                from tenant import get_tenant_context
+                ctx = get_tenant_context()
+                if ctx and ctx.db_name:
+                    if name is None or name == MONGODB_DB or name == MONGODB_DB.lower() or name == 'inventar_default':
+                        return self._client.get_database(ctx.db_name, *args, **kwargs)
+            except Exception:
+                pass
+        return self._client.get_database(name, *args, **kwargs)
 
     def __enter__(self):
         return self

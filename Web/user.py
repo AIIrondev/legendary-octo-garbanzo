@@ -45,6 +45,15 @@ def _clean_name_fragment(value):
     return cleaned
 
 
+def _get_tenant_db(client):
+    """Return the current tenant database for the request, or fall back to default."""
+    try:
+        from tenant import get_tenant_db
+        return get_tenant_db(client)
+    except Exception:
+        return client[cfg.MONGODB_DB]
+
+
 def build_name_synonym(first_name, last_name=''):
     """Build a deterministic, non-personalized short alias from 2 letters each."""
     first = _clean_name_fragment(first_name)
@@ -303,7 +312,7 @@ def update_user_permissions(username, preset_key, action_permissions=None, page_
     }
 
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     result = users.update_one({'Username': username}, {'$set': update_data})
 
@@ -318,7 +327,7 @@ def update_user_permissions(username, preset_key, action_permissions=None, page_
 def get_favorites(username):
     """Return a list of favorite item ObjectId strings for the user."""
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     user = users.find_one({'Username': username}) or users.find_one({'username': username})
     client.close()
@@ -332,7 +341,7 @@ def add_favorite(username, item_id):
     """Add an item to user's favorites (idempotent)."""
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         users.update_one(
             {'$or': [{'Username': username}, {'username': username}]},
@@ -347,7 +356,7 @@ def remove_favorite(username, item_id):
     """Remove an item from user's favorites."""
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         users.update_one(
             {'$or': [{'Username': username}, {'username': username}]},
@@ -430,17 +439,7 @@ def check_nm_pwd(username, password):
             users = db['users']
             return users.find_one({'Username': username, 'Password': hashed_password}) or users.find_one({'username': username, 'Password': hashed_password})
 
-        user = find_user_in_db(db_name)
-        if user:
-            return user
-
-        # Fallback: tenant context may not be available yet, so search all tenant databases.
-        for database_name in client.list_database_names():
-            if database_name == db_name or not database_name.startswith('inventar_'):
-                continue
-            user = find_user_in_db(database_name)
-            if user:
-                return user
+        return find_user_in_db(db_name)
     finally:
         client.close()
 
@@ -470,7 +469,7 @@ def add_user(
         bool: True if user was added successfully, False if password was too weak
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     if not check_password_strength(password):
         return False
@@ -520,7 +519,7 @@ def student_card_exists(student_card_id):
     if not normalized:
         return False
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     exists = users.find_one({'StudentCardId': normalized}) is not None
     client.close()
@@ -533,7 +532,7 @@ def get_user_by_student_card(student_card_id):
     if not normalized:
         return None
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     found_user = users.find_one({'StudentCardId': normalized})
     client.close()
@@ -551,7 +550,7 @@ def make_admin(username):
         bool: True if user was promoted successfully
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     result = users.update_one({'Username': username}, {'$set': {'Admin': True}})
     if result.matched_count == 0:
@@ -570,7 +569,7 @@ def remove_admin(username):
         bool: True if user was demoted successfully
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     result = users.update_one({'Username': username}, {'$set': {'Admin': False}})
     if result.matched_count == 0:
@@ -611,14 +610,6 @@ def get_user(username):
         if user:
             return user
 
-        # Last fallback: search all tenant databases if the user belongs to a tenant-specific DB
-        for database_name in client.list_database_names():
-            if database_name == cfg.MONGODB_DB or not database_name.startswith('inventar_'):
-                continue
-            user = find_in_db(database_name)
-            if user:
-                return user
-
         return None
     finally:
         client.close()
@@ -651,7 +642,7 @@ def update_active_ausleihung(username, id_item, ausleihung):
         bool: True if successful
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     users.update_one({'Username': username}, {'$set': {'active_ausleihung': {'Item': id_item, 'Ausleihung': ausleihung}}})
     client.close()
@@ -669,7 +660,7 @@ def get_active_ausleihung(username):
         dict: Active borrowing information or None
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     user = users.find_one({'Username': username})
     return user['active_ausleihung']
@@ -687,7 +678,7 @@ def has_active_borrowing(username):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         
         user = users.find_one({'username': username})
@@ -718,14 +709,14 @@ def delete_user(username):
         bool: True if user was deleted successfully, False otherwise
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     result = users.delete_one({'username': username})
     client.close()
     if result.deleted_count == 0:
         # Try with different field name
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         result = users.delete_one({'Username': username})
         client.close()
@@ -747,7 +738,7 @@ def update_active_borrowing(username, item_id, status):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         result = users.update_one(
             {'username': username}, 
@@ -780,7 +771,7 @@ def get_name(username):
         str: String of name
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     user = users.find_one({'Username': username})
     name = user.get("name")
@@ -795,7 +786,7 @@ def get_last_name(username):
         str: String of last_name
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = _get_tenant_db(client)
     users = db['users']
     user = users.find_one({'Username': username})
     name = user.get("last_name")
@@ -812,7 +803,7 @@ def get_all_users():
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         all_users = list(users.find())
         client.close()
@@ -836,7 +827,7 @@ def update_password(username, new_password):
             return False
             
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         
         # Hash the new password
@@ -869,7 +860,7 @@ def update_user_name(username, name, last_name):
     try:
         name_alias = build_name_synonym(name, last_name)
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         users = db['users']
         
         result = users.update_one(
