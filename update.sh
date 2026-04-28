@@ -511,8 +511,8 @@ verify_stack_health() {
         if printf '%s\n' "$running_services" | grep -Fxq app && \
            printf '%s\n' "$running_services" | grep -Fxq nginx && \
            printf '%s\n' "$running_services" | grep -Fxq mongodb; then
-            # Primary check: HTTP endpoint responds (most reliable)
-            if curl -kfsS "https://127.0.0.1:$https_port" >/dev/null 2>&1; then
+            # Primary check: health endpoint responds (most reliable)
+            if curl -kfsSL "https://127.0.0.1:$https_port/health" >/dev/null 2>&1; then
                 return 0
             fi
         fi
