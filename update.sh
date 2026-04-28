@@ -76,81 +76,6 @@ ensure_runtime_dependencies() {
     fi
 }
 
-ensure_tls_certificates() {
-    local cert_dir cert_path key_path cn
-    cert_dir="$PROJECT_DIR/certs"
-    cert_path="$cert_dir/inventarsystem.crt"
-    key_path="$cert_dir/inventarsystem.key"
-
-    mkdir -p "$cert_dir"
-
-    if [ -f "$cert_path" ] && [ -f "$key_path" ]; then
-        return 0
-    fi
-
-    cn="${TLS_CN:-localhost}"
-    log_message "No TLS certificates found. Generating self-signed certificate for CN=$cn"
-
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$key_path" \
-        -out "$cert_path" \
-        -subj "/C=DE/ST=NA/L=NA/O=Inventarsystem/OU=IT/CN=$cn" >/dev/null 2>&1
-
-    chmod 600 "$key_path"
-    chmod 644 "$cert_path"
-}
-
-ensure_nginx_config_mount_source() {
-    local nginx_dir config_path backup_path
-    nginx_dir="$PROJECT_DIR/docker/nginx"
-    config_path="$nginx_dir/default.conf"
-
-    mkdir -p "$nginx_dir"
-
-    if [ -d "$config_path" ]; then
-        backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
-        mv "$config_path" "$backup_path"
-        log_message "WARNING: Moved unexpected directory $config_path to $backup_path"
-    fi
-
-    if [ ! -f "$config_path" ]; then
-        cat > "$config_path" <<'EOF'
-server {
-    listen 80;
-    server_name _;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name _;
-
-    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
-    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
-
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass http://app:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300;
-    }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-        default_type text/html;
-        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
-    }
-}
-EOF
-        log_message "Recreated missing nginx config at $config_path"
-    fi
-}
-
 ensure_min_root_disk_space() {
     local available_kb available_mb
 
@@ -408,9 +333,7 @@ download_and_extract_bundle() {
     tar -xzf "$archive" -C "$tmp_dir"
 
     # The bundle must contain docker deployment files only.
-    mkdir -p "$PROJECT_DIR/docker/nginx"
     cp -f "$tmp_dir/docker-compose.yml" "$PROJECT_DIR/docker-compose.yml"
-    cp -f "$tmp_dir/docker/nginx/default.conf" "$PROJECT_DIR/docker/nginx/default.conf"
     cp -f "$tmp_dir/start.sh" "$PROJECT_DIR/start.sh"
     cp -f "$tmp_dir/stop.sh" "$PROJECT_DIR/stop.sh"
 
@@ -425,9 +348,6 @@ download_and_extract_bundle() {
     # Neu: Multi-Tenant Ressourcen kopieren, falls vorhanden
     if [ -f "$tmp_dir/docker-compose-multitenant.yml" ]; then
         cp -f "$tmp_dir/docker-compose-multitenant.yml" "$PROJECT_DIR/docker-compose-multitenant.yml"
-    fi
-    if [ -f "$tmp_dir/docker/nginx/multitenant.conf" ]; then
-        cp -f "$tmp_dir/docker/nginx/multitenant.conf" "$PROJECT_DIR/docker/nginx/multitenant.conf"
     fi
     if [ -f "$tmp_dir/manage-tenant.sh" ]; then
         cp -f "$tmp_dir/manage-tenant.sh" "$PROJECT_DIR/manage-tenant.sh"
@@ -470,7 +390,6 @@ deploy() {
         cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=0
 INVENTAR_HTTP_PORT=10000
-INVENTAR_HTTPS_PORT=10001
 INVENTAR_APP_IMAGE=$app_image
 EOF
     elif grep -q '^INVENTAR_APP_IMAGE=' "$ENV_FILE"; then
@@ -489,27 +408,27 @@ EOF
         fi
     fi
 
-    docker compose -f "$compose_path" --env-file "$ENV_FILE" pull nginx mongodb >> "$LOG_FILE" 2>&1
+    docker compose -f "$compose_path" --env-file "$ENV_FILE" pull app mongodb >> "$LOG_FILE" 2>&1
     docker compose -f "$compose_path" --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
     docker tag "$app_image" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
 }
 
 verify_stack_health() {
     local compose_args running_services
-    local https_port
+    local http_port
     compose_args=(-f "$PROJECT_DIR/$COMPOSE_FILE" --env-file "$ENV_FILE")
-    https_port="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ')"
-    if [ -z "$https_port" ]; then
-        https_port="443"
+    http_port="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ')"
+    if [ -z "$http_port" ]; then
+        http_port="10000"
     fi
 
     for _ in $(seq 1 60); do
         running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
         if printf '%s\n' "$running_services" | grep -Fxq app && \
-           printf '%s\n' "$running_services" | grep -Fxq nginx && \
+           printf '%s\n' "$running_services" | grep -Fxq redis && \
            printf '%s\n' "$running_services" | grep -Fxq mongodb; then
             # Primary check: health endpoint responds (most reliable)
-            if curl -kfsSL "https://127.0.0.1:$https_port/health" >/dev/null 2>&1; then
+            if curl -fsS "http://127.0.0.1:$http_port/health" >/dev/null 2>&1; then
                 return 0
             fi
         fi
@@ -517,7 +436,7 @@ verify_stack_health() {
     done
 
     docker compose "${compose_args[@]}" ps >> "$LOG_FILE" 2>&1 || true
-    docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb >> "$LOG_FILE" 2>&1 || true
+    docker compose "${compose_args[@]}" logs --tail=120 app redis mongodb >> "$LOG_FILE" 2>&1 || true
     return 1
 }
 
@@ -545,8 +464,6 @@ main() {
     cleanup_server_space
 
     ensure_runtime_dependencies
-    ensure_tls_certificates
-    ensure_nginx_config_mount_source
 
     require_cmd curl
     require_cmd tar

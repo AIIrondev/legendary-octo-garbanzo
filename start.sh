@@ -16,9 +16,7 @@ fi
 
 NUITKA_BUILD_VALUE="0"
 HTTP_PORT_VALUE="10000"
-HTTPS_PORT_VALUE="10001"
 DEFAULT_TENANT_PORT_START="${INVENTAR_TENANT_PORT_START:-10000}"
-DEFAULT_TENANT_TLS_OFFSET="${INVENTAR_TENANT_TLS_OFFSET:-1}"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 COMPOSE_FILE="docker-compose-multitenant.yml"
@@ -231,81 +229,6 @@ setup_scheduled_jobs() {
     echo "Nightly auto-update scheduled at 03:00"
 }
 
-ensure_tls_certificates() {
-    local cert_dir cert_path key_path cn
-    cert_dir="$SCRIPT_DIR/certs"
-    cert_path="$cert_dir/inventarsystem.crt"
-    key_path="$cert_dir/inventarsystem.key"
-
-    mkdir -p "$cert_dir"
-
-    if [ -f "$cert_path" ] && [ -f "$key_path" ]; then
-        return 0
-    fi
-
-    cn="${TLS_CN:-localhost}"
-    echo "No TLS certificates found. Generating self-signed certificate for CN=$cn"
-
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$key_path" \
-        -out "$cert_path" \
-        -subj "/C=DE/ST=NA/L=NA/O=Inventarsystem/OU=IT/CN=$cn" >/dev/null 2>&1
-
-    chmod 600 "$key_path"
-    chmod 644 "$cert_path"
-}
-
-ensure_nginx_config_mount_source() {
-    local nginx_dir config_path backup_path
-    nginx_dir="$SCRIPT_DIR/docker/nginx"
-    config_path="$nginx_dir/default.conf"
-
-    mkdir -p "$nginx_dir"
-
-    if [ -d "$config_path" ]; then
-        backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
-        mv "$config_path" "$backup_path"
-        echo "Warning: moved unexpected directory $config_path to $backup_path"
-    fi
-
-    if [ ! -f "$config_path" ]; then
-        cat > "$config_path" <<'EOF'
-server {
-    listen 80;
-    server_name _;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name _;
-
-    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
-    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
-
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass http://app:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300;
-    }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-        default_type text/html;
-        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
-    }
-}
-EOF
-        echo "Recreated missing nginx config at $config_path"
-    fi
-}
-
 ensure_runtime_config_json() {
         local config_path backup_path
         config_path="$SCRIPT_DIR/config.json"
@@ -322,7 +245,7 @@ ensure_runtime_config_json() {
     "ver": "2.6.5",
     "dbg": false,
     "host": "0.0.0.0",
-    "port": 443,
+    "port": 8000,
     "mongodb": {
         "host": "mongodb",
         "port": 27017,
@@ -443,16 +366,6 @@ resolve_app_image() {
     fi
 }
 
-configure_cloudflared_profile() {
-    if [ -f /etc/cloudflared/credentials.json ]; then
-        COMPOSE_PROFILES_VALUE="cloudflare"
-        echo "Cloudflared tunnel: enabled (homeserver)"
-    else
-        COMPOSE_PROFILES_VALUE=""
-        echo "Cloudflared tunnel: disabled (missing /etc/cloudflared/credentials.json)"
-    fi
-}
-
 port_in_use() {
     local port="$1"
 
@@ -471,89 +384,25 @@ find_free_port() {
     echo "$port"
 }
 
-stack_owns_host_port() {
-    local requested_port="$1"
-    local container_port="$2"
-    local mapped_port
-
-    mapped_port="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" port nginx "$container_port" 2>/dev/null | tail -n1 || true)"
-    if [ -z "$mapped_port" ]; then
-        return 1
-    fi
-
-    mapped_port="${mapped_port##*:}"
-    [ "$mapped_port" = "$requested_port" ]
-}
-
-stop_host_nginx_services() {
-    local stopped_any=false
-    local service_name
-
-    if ! command -v systemctl >/dev/null 2>&1; then
-        return 1
-    fi
-
-    while IFS= read -r service_name; do
-        [ -z "$service_name" ] && continue
-        echo "Stopping host service $service_name to free web ports..."
-        $SUDO systemctl stop "$service_name" >/dev/null 2>&1 || true
-        stopped_any=true
-    done < <(systemctl list-units --type=service --state=active --no-pager 2>/dev/null | awk '{print $1}' | grep -E '(^nginx\.service$|nginx)' || true)
-
-    if [ "$stopped_any" = true ]; then
-        sleep 2
-    fi
-
-    if [ "$stopped_any" = true ]; then
-        return 0
-    fi
-
-    return 1
-}
-
-find_free_port_pair() {
-    local port="${1:-$DEFAULT_TENANT_PORT_START}"
-
-    while port_in_use "$port" || port_in_use "$((port + DEFAULT_TENANT_TLS_OFFSET))"; do
-        port=$((port + 2))
-    done
-
-    echo "$port"
-}
-
 configure_host_ports() {
-    local requested_http requested_https base_port
+    local requested_http
 
     requested_http=""
-    requested_https=""
     if [ -f "$ENV_FILE" ]; then
         requested_http="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
-        requested_https="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
     fi
 
     if [ -z "$requested_http" ]; then
         requested_http="$DEFAULT_TENANT_PORT_START"
     fi
-    if [ -z "$requested_https" ]; then
-        requested_https="$((requested_http + DEFAULT_TENANT_TLS_OFFSET))"
-    fi
 
-    if stack_owns_host_port "$requested_http" "80" && stack_owns_host_port "$requested_https" "443"; then
+    if ! port_in_use "$requested_http"; then
         HTTP_PORT_VALUE="$requested_http"
-        HTTPS_PORT_VALUE="$requested_https"
         return
     fi
 
-    if ! port_in_use "$requested_http" && ! port_in_use "$requested_https"; then
-        HTTP_PORT_VALUE="$requested_http"
-        HTTPS_PORT_VALUE="$requested_https"
-        return
-    fi
-
-    base_port="$(find_free_port_pair "$DEFAULT_TENANT_PORT_START")"
-    HTTP_PORT_VALUE="$base_port"
-    HTTPS_PORT_VALUE="$((base_port + DEFAULT_TENANT_TLS_OFFSET))"
-    echo "Tenant host ports are already occupied. Assigned new tenant ports: $HTTP_PORT_VALUE and $HTTPS_PORT_VALUE"
+    HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
+    echo "Host port $requested_http is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
 }
 
 ensure_min_docker_disk_space() {
@@ -591,7 +440,6 @@ write_env_file() {
     cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=$NUITKA_BUILD_VALUE
 INVENTAR_HTTP_PORT=$HTTP_PORT_VALUE
-INVENTAR_HTTPS_PORT=$HTTPS_PORT_VALUE
 INVENTAR_APP_IMAGE=$APP_IMAGE_VALUE
 EOF
 }
@@ -621,10 +469,10 @@ verify_stack_health() {
         for _ in $(seq 1 60); do
             running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
             if printf '%s\n' "$running_services" | grep -Fxq app && \
-               printf '%s\n' "$running_services" | grep -Fxq nginx && \
+               printf '%s\n' "$running_services" | grep -Fxq redis && \
                printf '%s\n' "$running_services" | grep -Fxq mongodb; then
                 if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask, pymongo" >/dev/null 2>&1; then
-                    if curl -kfsSL "https://127.0.0.1:$HTTPS_PORT_VALUE/health" >/dev/null 2>&1; then
+                    if curl -fsS "http://127.0.0.1:$HTTP_PORT_VALUE/health" >/dev/null 2>&1; then
                         echo "Health check passed."
                         return 0
                     fi
@@ -637,8 +485,8 @@ verify_stack_health() {
         if [[ $retry_count -eq 0 ]]; then
             echo "Health check failed. Attempting to restart containers..."
             docker compose "${compose_args[@]}" ps || true
-            docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
-            docker compose "${compose_args[@]}" restart app nginx mongodb
+            docker compose "${compose_args[@]}" logs --tail=120 app redis mongodb || true
+            docker compose "${compose_args[@]}" restart app redis mongodb
             sleep 3
             ((retry_count++))
         else
@@ -649,7 +497,7 @@ verify_stack_health() {
     # Final failure
     echo "Error: stack health check failed after restart attempt."
     docker compose "${compose_args[@]}" ps || true
-    docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
+    docker compose "${compose_args[@]}" logs --tail=120 app redis mongodb || true
     return 1
 }
 
@@ -657,13 +505,10 @@ parse_args "$@"
 
 ensure_runtime_dependencies
 setup_boot_autostart_service
-ensure_tls_certificates
-ensure_nginx_config_mount_source
 ensure_runtime_config_json
 setup_scheduled_jobs
 configure_nuitka_mode
 resolve_app_image
-configure_cloudflared_profile
 configure_host_ports
 ensure_min_docker_disk_space
 ensure_app_image_loaded
@@ -688,4 +533,4 @@ fi
 verify_stack_health
 
 echo "Stack started."
-echo "Open: https://<server-ip>:$HTTPS_PORT_VALUE"
+echo "Open: http://<server-ip>:$HTTP_PORT_VALUE"

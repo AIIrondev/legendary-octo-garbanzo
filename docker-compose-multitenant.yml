@@ -1,28 +1,14 @@
 # Multi-Tenant Optimized Docker Compose
-# Supports running multiple isolated app instances per subdomain
+# Supports running multiple isolated app instances with direct Docker host port binding
 # Each instance: ~50MB base + 20-30MB per 20 users
 # 
 # Usage:
 #   docker-compose -f docker-compose-multitenant.yml up -d
 #
-# Scale example: To support 10 tenants with 20 users each:
-#   docker-compose -f docker-compose-multitenant.yml up -d --scale app=10
+# Example: Start the stack and expose the app on host port 10000
+#   INVENTAR_HTTP_PORT=10000 docker-compose -f docker-compose-multitenant.yml up -d
 
 services:
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    command: tunnel run homeserver  # 'homeserver' must match your tunnel name
-    volumes:
-      - ./docker/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-      - /etc/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
-    depends_on:
-      nginx:
-        condition: service_started
-    networks:
-      - inventar-net
-
   # Management Container for multi-tenant scripts
   tenant-manager:
     image: docker:cli
@@ -34,33 +20,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace
     entrypoint: ["sh", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: inventarsystem-nginx
-    restart: unless-stopped
-    depends_on:
-      app:
-        condition: service_started
-      redis:
-        condition: service_started
-    ports:
-      - "${INVENTAR_HTTP_PORT:-10000}:80"
-      - "${INVENTAR_HTTPS_PORT:-10001}:8000"
-    volumes:
-      - ./docker/nginx/multitenant.conf:/etc/nginx/conf.d/default.conf
-      - ./certs:/etc/nginx/certs:ro
-      - ./docker/nginx/acme:/etc/nginx/acme:ro
-    networks:
-      - inventar-net
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    environment:
-      NGINX_WORKER_PROCESSES: auto
-      NGINX_WORKER_CONNECTIONS: 1024
 
   redis:
     image: redis:7-alpine
@@ -115,6 +74,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    ports:
+      - "${INVENTAR_HTTP_PORT:-10000}:8000"
     networks:
       - inventar-net
     expose:

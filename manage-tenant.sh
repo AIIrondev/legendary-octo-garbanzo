@@ -38,11 +38,6 @@ case "$COMMAND" in
             exit 1
         fi
         echo "Adding new tenant '$TENANT_ID'..."
-        # Add Nginx configuration
-        if [ -f "docker/nginx/multitenant.conf" ]; then
-            echo "Assuming dynamic routing based on subdomain ($TENANT_ID)..."
-        fi
-        
         # Initialize tenant database via Python inside container
         echo "Initializing database for $TENANT_ID..."
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
