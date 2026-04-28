@@ -504,12 +504,71 @@ ensure_min_docker_disk_space() {
     fi
 }
 
+detect_server_capacity() {
+    local cpus mem_kb mem_gb app_workers app_cpus app_mem app_mem_swap
+
+    cpus="$(nproc 2>/dev/null || echo 1)"
+    mem_kb="$(awk '/MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || awk '/MemTotal:/ {print $2; exit}' /proc/meminfo || echo 0)"
+    mem_gb=$(( (mem_kb + 1024*1024 - 1) / (1024*1024) ))
+
+    if [ "$cpus" -ge 8 ] && [ "$mem_gb" -ge 16 ]; then
+        app_workers=8
+        app_cpus="2.0"
+        app_mem="512m"
+        app_mem_swap="1024m"
+    elif [ "$cpus" -ge 4 ] && [ "$mem_gb" -ge 8 ]; then
+        app_workers=4
+        app_cpus="1.0"
+        app_mem="384m"
+        app_mem_swap="768m"
+    elif [ "$cpus" -ge 2 ] && [ "$mem_gb" -ge 4 ]; then
+        app_workers=2
+        app_cpus="0.75"
+        app_mem="320m"
+        app_mem_swap="640m"
+    else
+        app_workers=1
+        app_cpus="0.5"
+        app_mem="256m"
+        app_mem_swap="512m"
+    fi
+
+    if [ -f "$ENV_FILE" ]; then
+        local env_app_cpus env_app_mem env_app_mem_swap env_workers
+        env_app_cpus="$(awk -F= '/^INVENTAR_APP_CPUS=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+        env_app_mem="$(awk -F= '/^INVENTAR_APP_MEM_LIMIT=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+        env_app_mem_swap="$(awk -F= '/^INVENTAR_APP_MEM_SWAP_LIMIT=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+        env_workers="$(awk -F= '/^INVENTAR_WORKERS=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+
+        [ -n "$env_app_cpus" ] && app_cpus="$env_app_cpus"
+        [ -n "$env_app_mem" ] && app_mem="$env_app_mem"
+        [ -n "$env_app_mem_swap" ] && app_mem_swap="$env_app_mem_swap"
+        [ -n "$env_workers" ] && app_workers="$env_workers"
+    fi
+
+    INVENTAR_APP_CPUS="${INVENTAR_APP_CPUS:-$app_cpus}"
+    INVENTAR_APP_MEM_LIMIT="${INVENTAR_APP_MEM_LIMIT:-$app_mem}"
+    INVENTAR_APP_MEM_SWAP_LIMIT="${INVENTAR_APP_MEM_SWAP_LIMIT:-$app_mem_swap}"
+    INVENTAR_WORKERS="${INVENTAR_WORKERS:-$app_workers}"
+    INVENTAR_THREADS="${INVENTAR_THREADS:-2}"
+
+    echo "Detected host capacity: CPUs=$cpus, RAM=${mem_gb}GB"
+    echo "Configured app runtime: INVENTAR_WORKERS=$INVENTAR_WORKERS, INVENTAR_APP_CPUS=$INVENTAR_APP_CPUS, INVENTAR_APP_MEM_LIMIT=$INVENTAR_APP_MEM_LIMIT"
+}
+
 write_env_file() {
     cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=$NUITKA_BUILD_VALUE
 INVENTAR_HTTP_PORT=$HTTP_PORT_VALUE
 INVENTAR_HTTP_PORTS=${HTTP_PORTS_VALUE// /,}
 INVENTAR_APP_IMAGE=$APP_IMAGE_VALUE
+INVENTAR_APP_CPUS=$INVENTAR_APP_CPUS
+INVENTAR_APP_MEM_LIMIT=$INVENTAR_APP_MEM_LIMIT
+INVENTAR_APP_MEM_SWAP_LIMIT=$INVENTAR_APP_MEM_SWAP_LIMIT
+INVENTAR_WORKERS=$INVENTAR_WORKERS
+INVENTAR_THREADS=$INVENTAR_THREADS
+INVENTAR_WORKER_TIMEOUT=${INVENTAR_WORKER_TIMEOUT:-30}
+INVENTAR_WORKER_CONNECTIONS=${INVENTAR_WORKER_CONNECTIONS:-100}
 EOF
 }
 
@@ -518,7 +577,7 @@ write_runtime_compose_override() {
 services:
   app:
     working_dir: /app/Web
-    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "30", "--graceful-timeout", "20", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
+    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "${INVENTAR_WORKERS:-2}", "--threads", "${INVENTAR_THREADS:-2}", "--timeout", "${INVENTAR_WORKER_TIMEOUT:-30}", "--graceful-timeout", "20", "--worker-connections", "${INVENTAR_WORKER_CONNECTIONS:-100}", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
     image: ${APP_IMAGE_VALUE}
     build: null
 EOF
@@ -595,6 +654,7 @@ configure_nuitka_mode
 resolve_app_image
 configure_host_ports
 ensure_min_docker_disk_space
+detect_server_capacity
 ensure_app_image_loaded
 write_env_file
 write_runtime_compose_override

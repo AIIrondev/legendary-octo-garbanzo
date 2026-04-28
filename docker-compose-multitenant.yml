@@ -106,11 +106,16 @@ services:
       INVENTAR_DELETED_ARCHIVE_FOLDER: /data/deleted-archives
       
       # Performance Tuning
-      INVENTAR_WORKER_CLASS: gevent
-      INVENTAR_WORKERS: "4"
-      INVENTAR_THREADS: "2"
-      INVENTAR_WORKER_TIMEOUT: "30"
-      INVENTAR_WORKER_CONNECTIONS: "100"
+      INVENTAR_WORKER_CLASS: ${INVENTAR_WORKER_CLASS:-gevent}
+      INVENTAR_WORKERS: "${INVENTAR_WORKERS:-4}"
+      INVENTAR_THREADS: "${INVENTAR_THREADS:-2}"
+      INVENTAR_WORKER_TIMEOUT: "${INVENTAR_WORKER_TIMEOUT:-30}"
+      INVENTAR_WORKER_CONNECTIONS: "${INVENTAR_WORKER_CONNECTIONS:-100}"
+      
+      # Auto-scaled runtime settings
+      INVENTAR_APP_CPUS: ${INVENTAR_APP_CPUS:-1.0}
+      INVENTAR_APP_MEM_LIMIT: ${INVENTAR_APP_MEM_LIMIT:-256m}
+      INVENTAR_APP_MEM_SWAP_LIMIT: ${INVENTAR_APP_MEM_SWAP_LIMIT:-512m}
       
       # Multi-Tenant
       INVENTAR_MULTITENANT_ENABLED: "true"
@@ -131,9 +136,9 @@ services:
     # Resource Limits (per instance)
     # With 10 instances: each gets ~150MB, totaling ~1.5GB
     # Adjust based on server resources
-    mem_limit: 256m
-    memswap_limit: 512m
-    cpus: "1.0"
+    mem_limit: "${INVENTAR_APP_MEM_LIMIT:-256m}"
+    memswap_limit: "${INVENTAR_APP_MEM_SWAP_LIMIT:-512m}"
+    cpus: "${INVENTAR_APP_CPUS:-1.0}"
     
     # Health check for load balancer
     healthcheck:
