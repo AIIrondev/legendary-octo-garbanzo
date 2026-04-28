@@ -24,31 +24,38 @@ parse_port_list() {
 
 write_runtime_override() {
     local current_ports=""
+    local app_image=""
     local ports=()
-    local ports_csv=""
 
     if [ -f "$ENV_FILE" ]; then
+        app_image="$(awk -F= '/^INVENTAR_APP_IMAGE=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
         current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
         if [ -z "$current_ports" ]; then
             current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
         fi
     fi
 
-    if [ -n "$current_ports" ]; then
-        mapfile -t ports < <(parse_port_list "$current_ports")
-    fi
+    if [ -n "$app_image" ]; then
+        if [ -n "$current_ports" ]; then
+            mapfile -t ports < <(parse_port_list "$current_ports")
+        fi
 
-    if [ ${#ports[@]} -gt 1 ]; then
         cat > "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
 services:
   app:
+    image: $app_image
+    build: null
+EOF
+        if [ ${#ports[@]} -gt 1 ]; then
+            cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
     ports:
 EOF
-        for port in "${ports[@]}"; do
-            cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+            for port in "${ports[@]}"; do
+                cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
       - "$port:8000"
 EOF
-        done
+            done
+        fi
     else
         rm -f "$RUNTIME_COMPOSE_OVERRIDE_FILE"
     fi
