@@ -7,6 +7,53 @@ cd "$SCRIPT_DIR"
 COMPOSE_FILE="docker-compose-multitenant.yml"
 ENV_FILE="$SCRIPT_DIR/.docker-build.env"
 RUNTIME_COMPOSE_OVERRIDE_FILE="$SCRIPT_DIR/.docker-compose.runtime.override.yml"
+
+parse_port_list() {
+    local raw="$1"
+    local port
+    local ports=()
+    raw="${raw//,/ }"
+    for port in $raw; do
+        port="${port//[[:space:]]/}"
+        if [ -n "$port" ] && printf '%s\n' "$port" | grep -qE '^[0-9]+$'; then
+            ports+=("$port")
+        fi
+    done
+    printf '%s\n' "${ports[@]}"
+}
+
+write_runtime_override() {
+    local current_ports=""
+    local ports=()
+    local ports_csv=""
+
+    if [ -f "$ENV_FILE" ]; then
+        current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+        if [ -z "$current_ports" ]; then
+            current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$ENV_FILE" | tr -d ' ' || true)"
+        fi
+    fi
+
+    if [ -n "$current_ports" ]; then
+        mapfile -t ports < <(parse_port_list "$current_ports")
+    fi
+
+    if [ ${#ports[@]} -gt 1 ]; then
+        cat > "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+services:
+  app:
+    ports:
+EOF
+        for port in "${ports[@]}"; do
+            cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+      - "$port:8000"
+EOF
+        done
+    else
+        rm -f "$RUNTIME_COMPOSE_OVERRIDE_FILE"
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --multitenant)
@@ -29,6 +76,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "Rebuilding and/or restarting app container using $COMPOSE_FILE..."
+write_runtime_override
 compose_args=(-f "$COMPOSE_FILE")
 if [ -f "$RUNTIME_COMPOSE_OVERRIDE_FILE" ]; then
     compose_args+=( -f "$RUNTIME_COMPOSE_OVERRIDE_FILE" )
