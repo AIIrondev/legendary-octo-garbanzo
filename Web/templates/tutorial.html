@@ -189,6 +189,38 @@
     font-size: 1rem;
   }
 
+  .tutorial-tooltip-toggle {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(224, 242, 254, 0.9);
+    border: 1px solid #bae6fd;
+  }
+
+  .tutorial-tooltip-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .tutorial-tooltip-toggle input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #2563eb;
+  }
+
+  .tooltip-description {
+    margin: 0;
+    color: #475569;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
   .workflow-controls {
     display: flex;
     gap: 8px;
@@ -229,6 +261,13 @@
       <span class="tutorial-pill">Dauer: ca. 4 Minuten</span>
       <span class="tutorial-pill">Format: Ruhig und geführt</span>
       <span class="tutorial-pill">Benutzer: {{ username }}</span>
+    </div>
+    <div class="tutorial-tooltip-toggle">
+      <label for="toggleTutorialTooltips">
+        <input type="checkbox" id="toggleTutorialTooltips" />
+        Tutorial-Tooltips für das gesamte System aktivieren
+      </label>
+      <p class="tooltip-description">Wenn aktiviert, erscheinen auf allen Seiten erklärende Hinweise und Icons für die wichtigsten Navigationselemente.</p>
     </div>
   </section>
 
@@ -438,8 +477,32 @@
       renderStep();
     });
 
+    const tooltipToggle = document.getElementById('toggleTutorialTooltips');
+    const tooltipModeKey = 'inventarsystem_tutorial_tooltips_enabled_{{ username }}';
+
+    function setTooltipMode(enabled) {
+      localStorage.setItem(tooltipModeKey, enabled ? '1' : '0');
+      document.body.classList.toggle('tutorial-tooltips-active', enabled);
+    }
+
+    function loadTooltipMode() {
+      const saved = localStorage.getItem(tooltipModeKey);
+      const enabled = saved === '1';
+      if (tooltipToggle) {
+        tooltipToggle.checked = enabled;
+      }
+      setTooltipMode(enabled);
+    }
+
+    if (tooltipToggle) {
+      tooltipToggle.addEventListener('change', function () {
+        setTooltipMode(this.checked);
+      });
+    }
+
     loadState();
     renderStep();
+    loadTooltipMode();
   })();
 </script>
 {% endblock %}
