@@ -13,6 +13,8 @@ Provides methods for creating, validating, and retrieving user information.
 import hashlib
 import copy
 import re
+import secrets
+import string
 from bson.objectid import ObjectId
 import settings as cfg
 from settings import MongoClient
@@ -57,6 +59,12 @@ def build_name_synonym(first_name, last_name=''):
     return combined[:6].title()
 
 
+def _generate_anonymous_username(prefix='user', length=8):
+    """Generate a random anonymized username using lowercase letters and digits."""
+    alphabet = string.ascii_lowercase + string.digits
+    return prefix + ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
 def build_username_from_name(first_name, last_name=''):
     """
     Build a deterministic username abbreviation from first and last name.
@@ -71,6 +79,22 @@ def build_username_from_name(first_name, last_name=''):
     """
     alias = build_name_synonym(first_name, last_name)
     return alias.lower()
+
+
+def build_anonymous_username():
+    """
+    Build a truly anonymized username that is not derived from the user's
+    first name or last name.
+    """
+    for _ in range(10):
+        candidate = _generate_anonymous_username()
+        if not get_user(candidate):
+            return candidate
+
+    suffix = 2
+    while get_user(f"user{suffix}"):
+        suffix += 1
+    return f"user{suffix}"
 
 
 def build_unique_username_from_name(first_name, last_name=''):
