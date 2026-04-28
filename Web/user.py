@@ -418,25 +418,39 @@ def check_nm_pwd(username, password):
         dict: User document if credentials are valid, None otherwise
     """
     db_name = cfg.MONGODB_DB
+    tenant_db = None
     try:
         from tenant import get_tenant_context
         ctx = get_tenant_context()
         if ctx and ctx.tenant_id:
-            db_name = ctx.db_name or ctx.resolve_tenant()
+            tenant_db = ctx.db_name or ctx.resolve_tenant()
+            db_name = tenant_db
     except Exception:
         pass
 
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[db_name]
-    users = db['users']
-    user = users.find_one({'Username': username}) or users.find_one({'username': username})
-    client.close()
+    try:
+        hashed_password = hashing(password)
 
-    if not user:
-        return None
+        def find_user_in_db(database_name):
+            db = client[database_name]
+            users = db['users']
+            return users.find_one({'Username': username, 'Password': hashed_password}) or users.find_one({'username': username, 'Password': hashed_password})
 
-    if user.get('Password') == hashing(password):
-        return user
+        user = find_user_in_db(db_name)
+        if user:
+            return user
+
+        # Fallback: tenant context may not be available yet, so search all tenant databases.
+        for database_name in client.list_database_names():
+            if database_name == db_name or not database_name.startswith('inventar_'):
+                continue
+            user = find_user_in_db(database_name)
+            if user:
+                return user
+    finally:
+        client.close()
+
     return None
 
 
