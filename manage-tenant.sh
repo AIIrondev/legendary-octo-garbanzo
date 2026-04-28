@@ -124,6 +124,96 @@ EOF
     fi
 }
 
+remove_tenant_port() {
+    local tenant_id="$1"
+    local config_path="$CONFIG_FILE"
+    local port
+
+    port="$(python3 - "$config_path" "$tenant_id" <<'PY'
+import json, sys, os
+path, tenant_id = sys.argv[1], sys.argv[2]
+if not os.path.isfile(path):
+    sys.exit(1)
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants', {})
+if not isinstance(tenants, dict) or tenant_id not in tenants or not isinstance(tenants[tenant_id], dict):
+    sys.exit(2)
+removed = tenants.pop(tenant_id, None)
+cfg['tenants'] = tenants
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+if removed is not None:
+    port = removed.get('port')
+    if port is not None:
+        print(port)
+PY
+)"
+
+    local status=$?
+    if [ $status -eq 1 ]; then
+        echo "Error: config file not found: $config_path"
+        return 1
+    fi
+    if [ $status -eq 2 ]; then
+        return 2
+    fi
+
+    if [ -n "$port" ]; then
+        echo "$port"
+    fi
+    return 0
+}
+
+remove_runtime_port() {
+    local removed_port="$1"
+    local env_file="$PWD/.docker-build.env"
+    local current_ports=""
+    local port_list=()
+    local new_ports=()
+    local first_port=""
+
+    if [ ! -f "$env_file" ]; then
+        return 0
+    fi
+
+    current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
+    if [ -z "$current_ports" ]; then
+        current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
+    fi
+
+    if [ -z "$current_ports" ]; then
+        return 0
+    fi
+
+    IFS=',' read -r -a port_list <<<"${current_ports// /,}"
+    for port in "${port_list[@]}"; do
+        if [ -n "$port" ] && [ "$port" != "$removed_port" ]; then
+            new_ports+=("$port")
+        fi
+    done
+
+    if [ ${#new_ports[@]} -eq 0 ]; then
+        sed -i '/^INVENTAR_HTTP_PORTS=/d;/^INVENTAR_HTTP_PORT=/d' "$env_file"
+        return 0
+    fi
+
+    first_port="${new_ports[0]}"
+    local ports_csv="$(IFS=,; echo "${new_ports[*]}")"
+
+    if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
+        sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
+    else
+        printf '\nINVENTAR_HTTP_PORTS=%s\n' "$ports_csv" >> "$env_file"
+    fi
+
+    if grep -q '^INVENTAR_HTTP_PORT=' "$env_file" 2>/dev/null; then
+        sed -i "s|^INVENTAR_HTTP_PORT=.*|INVENTAR_HTTP_PORT=$first_port|" "$env_file"
+    else
+        printf '\nINVENTAR_HTTP_PORT=%s\n' "$first_port" >> "$env_file"
+    fi
+}
+
 if [ -z "${1:-}" ]; then
     show_help
 fi
@@ -188,9 +278,21 @@ client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 client.drop_database(f'{settings.MONGODB_DB}_{sys.argv[1]}')
 print(f'Database for tenant {sys.argv[1]} dropped.')
 " "$TENANT_ID"
-                echo "Tenant '$TENANT_ID' removed successfully."
+                echo "Tenant '$TENANT_ID' database removed."
             else
-                echo "Error: Application container not running."
+                echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
+            fi
+
+            port_to_remove=""
+            if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
+                if [ -n "$port_to_remove" ]; then
+                    remove_runtime_port "$port_to_remove"
+                    echo "Removed tenant '$TENANT_ID' from config.json and cleaned runtime port $port_to_remove."
+                else
+                    echo "Removed tenant '$TENANT_ID' from config.json. No port mapping was present."
+                fi
+            else
+                echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
             fi
         else
             echo "Removal canceled."
