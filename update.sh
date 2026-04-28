@@ -38,6 +38,11 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
 fi
 
+IS_ROOT="false"
+if [ "$(id -u)" -eq 0 ]; then
+    IS_ROOT="true"
+fi
+
 apt_install() {
     $SUDO apt-get update -y
     $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
@@ -47,7 +52,7 @@ ensure_runtime_dependencies() {
     local missing=()
 
     if ! command -v docker >/dev/null 2>&1; then
-        missing+=(docker.io)
+        missing+=(docker)
     fi
 
     if ! docker compose version >/dev/null 2>&1; then
@@ -67,12 +72,18 @@ ensure_runtime_dependencies() {
     fi
 
     if [ "${#missing[@]}" -gt 0 ]; then
-        log_message "Installing missing dependencies: ${missing[*]}"
-        apt_install "${missing[@]}"
+        if [ "$IS_ROOT" = "true" ]; then
+            log_message "Installing missing dependencies: ${missing[*]}"
+            apt_install "${missing[@]}"
+        else
+            log_message "ERROR: Missing dependencies: ${missing[*]}"
+            log_message "Install the missing tools manually or re-run as root."
+            exit 1
+        fi
     fi
 
-    if command -v systemctl >/dev/null 2>&1; then
-        $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+    if [ "$IS_ROOT" = "true" ] && command -v systemctl >/dev/null 2>&1; then
+        systemctl enable --now docker >/dev/null 2>&1 || true
     fi
 }
 

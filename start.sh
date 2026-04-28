@@ -14,8 +14,14 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
 fi
 
+IS_ROOT="false"
+if [ "$(id -u)" -eq 0 ]; then
+    IS_ROOT="true"
+fi
+
 NUITKA_BUILD_VALUE="0"
 HTTP_PORT_VALUE="10000"
+HTTP_PORTS_VALUE=""
 DEFAULT_TENANT_PORT_START="${INVENTAR_TENANT_PORT_START:-10000}"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
@@ -114,7 +120,11 @@ ensure_runtime_dependencies() {
     local missing=()
 
     if ! command -v docker >/dev/null 2>&1; then
-        install_docker_engine
+        if [ "$IS_ROOT" = "true" ]; then
+            install_docker_engine
+        else
+            missing+=(docker)
+        fi
     fi
 
     if ! docker compose version >/dev/null 2>&1; then
@@ -138,14 +148,20 @@ ensure_runtime_dependencies() {
     fi
 
     if [ "${#missing[@]}" -gt 0 ]; then
-        echo "Installing missing dependencies: ${missing[*]}"
-        apt_install "${missing[@]}"
+        if [ "$IS_ROOT" = "true" ]; then
+            echo "Installing missing dependencies: ${missing[*]}"
+            apt_install "${missing[@]}"
+        else
+            echo "ERROR: Missing dependencies: ${missing[*]}"
+            echo "Please install the missing tools or run this script as root."
+            exit 1
+        fi
     fi
 
-    if command -v systemctl >/dev/null 2>&1; then
-        $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+    if [ "$IS_ROOT" = "true" ] && command -v systemctl >/dev/null 2>&1; then
+        systemctl enable --now docker >/dev/null 2>&1 || true
         if cron_setup_enabled; then
-            $SUDO systemctl enable --now cron >/dev/null 2>&1 || true
+            systemctl enable --now cron >/dev/null 2>&1 || true
         fi
     fi
 }
@@ -155,6 +171,11 @@ setup_boot_autostart_service() {
     local service_name="inventarsystem-docker.service"
 
     if [ "${INVENTAR_SKIP_AUTOSTART_SETUP:-0}" = "1" ]; then
+        return 0
+    fi
+
+    if [ "$IS_ROOT" != "true" ]; then
+        echo "Skipping systemd autostart setup when not running as root."
         return 0
     fi
 
@@ -199,6 +220,11 @@ setup_scheduled_jobs() {
         return 0
     fi
 
+    if [ "$IS_ROOT" != "true" ]; then
+        echo "Skipping cron job setup when not running as root."
+        return 0
+    fi
+
     if ! command -v crontab >/dev/null 2>&1; then
         echo "Warning: crontab not available, skipping nightly update setup"
         return 0
@@ -209,21 +235,12 @@ setup_scheduled_jobs() {
     backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup.sh --mode auto >> $SCRIPT_DIR/logs/backup.log 2>&1"
 
     local existing_cron
-    if [ "$(id -u)" -eq 0 ]; then
-        existing_cron="$(crontab -l 2>/dev/null || true)"
-        {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
-            echo "$backup_line"
-            echo "$update_line"
-        } | crontab -
-    else
-        existing_cron="$($SUDO crontab -l 2>/dev/null || true)"
-        {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
-            echo "$backup_line"
-            echo "$update_line"
-        } | $SUDO crontab -
-    fi
+    existing_cron="$(crontab -l 2>/dev/null || true)"
+    {
+        printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
+        echo "$backup_line"
+        echo "$update_line"
+    } | crontab -
 
     echo "Nightly backup scheduled at 02:30"
     echo "Nightly auto-update scheduled at 03:00"
@@ -384,25 +401,56 @@ find_free_port() {
     echo "$port"
 }
 
+parse_port_list() {
+    local raw="$1"
+    local port
+    local ports=()
+    raw="${raw//,/ }"
+    for port in $raw; do
+        port="${port//[[:space:]]/}"
+        if [ -n "$port" ] && printf '%s\n' "$port" | grep -qE '^[0-9]+$'; then
+            ports+=("$port")
+        fi
+    done
+    printf '%s\n' "${ports[@]}"
+}
+
 configure_host_ports() {
     local requested_http
+    local requested_ports
 
     requested_http=""
+    requested_ports=""
     if [ -f "$ENV_FILE" ]; then
         requested_http="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
+        requested_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
     fi
 
-    if [ -z "$requested_http" ]; then
-        requested_http="$DEFAULT_TENANT_PORT_START"
+    if [ -n "${INVENTAR_HTTP_PORTS:-}" ]; then
+        requested_ports="$INVENTAR_HTTP_PORTS"
     fi
 
-    if ! port_in_use "$requested_http"; then
-        HTTP_PORT_VALUE="$requested_http"
-        return
+    if [ -n "${INVENTAR_HTTP_PORT:-}" ] && [ -z "$requested_ports" ]; then
+        requested_ports="$INVENTAR_HTTP_PORT"
     fi
 
-    HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
-    echo "Host port $requested_http is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
+    if [ -n "$requested_ports" ]; then
+        mapfile -t ports < <(parse_port_list "$requested_ports")
+    fi
+
+    if [ ${#ports[@]} -gt 0 ]; then
+        HTTP_PORTS_VALUE="${ports[*]}"
+        HTTP_PORT_VALUE="${ports[0]}"
+    else
+        HTTP_PORT_VALUE="$DEFAULT_TENANT_PORT_START"
+        HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
+    fi
+
+    if port_in_use "$HTTP_PORT_VALUE"; then
+        HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
+        echo "Host port ${ports[0]:-$DEFAULT_TENANT_PORT_START} is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
+        HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
+    fi
 }
 
 ensure_min_docker_disk_space() {
@@ -440,6 +488,7 @@ write_env_file() {
     cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=$NUITKA_BUILD_VALUE
 INVENTAR_HTTP_PORT=$HTTP_PORT_VALUE
+INVENTAR_HTTP_PORTS=${HTTP_PORTS_VALUE// /,}
 INVENTAR_APP_IMAGE=$APP_IMAGE_VALUE
 EOF
 }
@@ -453,6 +502,21 @@ services:
     image: ${APP_IMAGE_VALUE}
     build: null
 EOF
+
+    if [ -n "$HTTP_PORTS_VALUE" ]; then
+        local ports_array
+        read -r -a ports_array <<<"$HTTP_PORTS_VALUE"
+        if [ "${#ports_array[@]}" -gt 1 ]; then
+            cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+    ports:
+EOF
+            for port in "${ports_array[@]}"; do
+                cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+      - "$port:8000"
+EOF
+            done
+        fi
+    fi
 }
 
 verify_stack_health() {

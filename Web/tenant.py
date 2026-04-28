@@ -10,6 +10,8 @@ Each tenant can support up to 20+ users with isolated data and resource pools.
 from flask import request, g, has_request_context
 from functools import wraps
 import logging
+import os
+import re
 import settings as cfg
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,46 @@ def _get_nested_value(source, path, default=None):
         else:
             return default
     return current
+
+
+def _parse_port_from_host(host):
+    """Parse host header and return (hostname, port) when a numeric port is present."""
+    if host.startswith('['):
+        # IPv6 with port: [::1]:10000
+        if ']:' in host:
+            host_part, _, port_part = host.rpartition(']:')
+            return host_part + ']', port_part
+        return host, None
+
+    if host.count(':') == 1:
+        hostname, port = host.split(':', 1)
+        if port.isdigit():
+            return hostname, port
+
+    return host, None
+
+
+def _tenant_id_for_port(port):
+    """Map a host port to a registered tenant ID via tenant configs or env overrides."""
+    for tenant_id, config in TENANT_REGISTRY.items():
+        if isinstance(config, dict) and config.get('port') is not None:
+            try:
+                configured_port = str(int(config.get('port')))
+            except (TypeError, ValueError):
+                continue
+            if configured_port == str(port):
+                return tenant_id
+
+    port_map = os.getenv('INVENTAR_TENANT_PORT_MAP', '').strip()
+    if port_map:
+        for mapping in re.split(r'[;,\s]+', port_map):
+            if '=' not in mapping:
+                continue
+            key, value = mapping.split('=', 1)
+            if key.strip() == str(port):
+                return value.strip()
+
+    return None
 
 
 def get_tenant_config(tenant_id=None):
@@ -52,19 +94,20 @@ def is_tenant_module_enabled(module_name, tenant_id=None, default=False):
 class TenantContext:
     """
     Manages current tenant context for request lifecycle.
-    Automatically resolves tenant from subdomain or request header.
+    Automatically resolves tenant from port, header, or subdomain.
     """
 
     def __init__(self):
         self.tenant_id = None
         self.db_name = None
         self.subdomain = None
+        self.port = None
         self.config = {}
 
     def resolve_tenant(self):
         """
         Resolve tenant from request context.
-        Priority: Header > Subdomain > Default
+        Priority: Header > Port mapping > Subdomain > Default
         """
         if not has_request_context():
             return None
@@ -76,8 +119,18 @@ class TenantContext:
             self.config = get_tenant_config(tenant_from_header)
             return self._get_db_name(tenant_from_header)
 
-        # Priority 2: Subdomain extraction
+        # Priority 2: Port-based tenant mapping
         host = request.host.lower()
+        _, port = _parse_port_from_host(host)
+        self.port = port
+        if port:
+            tenant_from_port = _tenant_id_for_port(port)
+            if tenant_from_port:
+                self.tenant_id = tenant_from_port
+                self.config = get_tenant_config(tenant_from_port)
+                return self._get_db_name(tenant_from_port)
+
+        # Priority 3: Subdomain extraction
         parts = host.split('.')
 
         # Extract subdomain from host
@@ -93,7 +146,7 @@ class TenantContext:
                 self.config = get_tenant_config(potential_subdomain)
                 return self._get_db_name(potential_subdomain)
 
-        # Fallback to default tenant if no subdomain detected
+        # Fallback to default tenant if no tenant identifier found
         self.tenant_id = 'default'
         self.config = get_tenant_config('default')
         return self._get_db_name('default')

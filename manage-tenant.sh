@@ -7,21 +7,60 @@ if [ ! -f "docker-compose-multitenant.yml" ]; then
     exit 1
 fi
 
+CONFIG_FILE="$PWD/config.json"
+
 show_help() {
     echo "Usage: ./manage-tenant.sh [COMMAND] [OPTIONS]"
     echo ""
     echo "Commands:"
-    echo "  add <tenant_id>       Add a new tenant (initializes database)"
-    echo "  remove <tenant_id>    Remove a tenant completely (deletes data!)"
-    echo "  restart-tenant <id>   'Restart' a single tenant (clears cache/sessions)"
-    echo "  restart-all           Restart all application containers (zero-downtime reload)"
-    echo "  list                  List active tenants"
+    echo "  add <tenant_id> [port]       Add a new tenant (initializes database)"
+    echo "  remove <tenant_id>           Remove a tenant completely (deletes data!)"
+    echo "  restart-tenant <id>          'Restart' a single tenant (clears cache/sessions)"
+    echo "  restart-all                  Restart all application containers (zero-downtime reload)"
+    echo "  list                         List active tenants"
     echo ""
     echo "Examples:"
-    echo "  ./manage-tenant.sh add school_a"
+    echo "  ./manage-tenant.sh add school_a 10001"
     echo "  ./manage-tenant.sh remove test_tenant"
     echo "  ./manage-tenant.sh restart-all"
     exit 1
+}
+
+register_tenant_port() {
+    local tenant_id="$1"
+    local port="$2"
+
+    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port"
+import json, sys, os
+path, tenant_id, port_str = sys.argv[1], sys.argv[2], sys.argv[3]
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants')
+if tenants is None or not isinstance(tenants, dict):
+    tenants = {}
+for tid, conf in tenants.items():
+    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid != tenant_id:
+        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
+        sys.exit(2)
+existing = tenants.get(tenant_id)
+if existing is None or not isinstance(existing, dict):
+    existing = {}
+existing['port'] = int(port_str)
+tenants[tenant_id] = existing
+cfg['tenants'] = tenants
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+print(f"Registered tenant port {port_str} for {tenant_id}")
+PY
+    then
+        echo "Tenant $tenant_id port $port registered in config.json"
+    else
+        echo "Failed to register tenant port $port for $tenant_id"
+        exit 1
+    fi
 }
 
 if [ -z "$1" ]; then
@@ -54,6 +93,15 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         else
             echo "Warning: Application container is not running. Please start the multi-tenant system first."
             echo "Data will be initialized upon first access by the tenant."
+        fi
+
+        PORT_ARG="$3"
+        if [ -n "$PORT_ARG" ]; then
+            if ! printf '%s\n' "$PORT_ARG" | grep -qE '^[0-9]+$'; then
+                echo "Error: Port must be a numeric value."
+                exit 1
+            fi
+            register_tenant_port "$TENANT_ID" "$PORT_ARG"
         fi
         ;;
     
