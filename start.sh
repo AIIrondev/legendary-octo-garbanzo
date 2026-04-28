@@ -15,8 +15,10 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
 fi
 
 NUITKA_BUILD_VALUE="0"
-HTTP_PORT_VALUE="8001"
-HTTPS_PORT_VALUE="8443"
+HTTP_PORT_VALUE="10000"
+HTTPS_PORT_VALUE="10001"
+DEFAULT_TENANT_PORT_START="${INVENTAR_TENANT_PORT_START:-10000}"
+DEFAULT_TENANT_TLS_OFFSET="${INVENTAR_TENANT_TLS_OFFSET:-1}"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
 APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-$APP_IMAGE_REPO:latest}"
 COMPOSE_FILE="docker-compose-multitenant.yml"
@@ -509,58 +511,49 @@ stop_host_nginx_services() {
     return 1
 }
 
+find_free_port_pair() {
+    local port="${1:-$DEFAULT_TENANT_PORT_START}"
+
+    while port_in_use "$port" || port_in_use "$((port + DEFAULT_TENANT_TLS_OFFSET))"; do
+        port=$((port + 2))
+    done
+
+    echo "$port"
+}
+
 configure_host_ports() {
-    local requested_http requested_https
+    local requested_http requested_https base_port
 
     requested_http=""
-    if [ -f "$ENV_FILE" ]; then
-        requested_http="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
-    fi
-    if [ -z "$requested_http" ]; then
-        requested_http="8001"
-    fi
-
-    if stack_owns_host_port "$requested_http" "80"; then
-        HTTP_PORT_VALUE="$requested_http"
-    elif port_in_use "$requested_http"; then
-        
-
-        if ! port_in_use "$requested_http"; then
-            HTTP_PORT_VALUE="$requested_http"
-            echo "Freed HTTP port $requested_http by stopping host nginx service"
-        else
-            HTTP_PORT_VALUE="$(find_free_port 8080)"
-            echo "HTTP port is in use. Using fallback HTTP port: $HTTP_PORT_VALUE"
-        fi
-    else
-        HTTP_PORT_VALUE="$requested_http"
-    fi
-
     requested_https=""
     if [ -f "$ENV_FILE" ]; then
+        requested_http="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
         requested_https="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
     fi
 
+    if [ -z "$requested_http" ]; then
+        requested_http="$DEFAULT_TENANT_PORT_START"
+    fi
     if [ -z "$requested_https" ]; then
-        requested_https="8443"
+        requested_https="$((requested_http + DEFAULT_TENANT_TLS_OFFSET))"
     fi
 
-    if stack_owns_host_port "$requested_https" "443"; then
+    if stack_owns_host_port "$requested_http" "80" && stack_owns_host_port "$requested_https" "443"; then
+        HTTP_PORT_VALUE="$requested_http"
         HTTPS_PORT_VALUE="$requested_https"
-    elif port_in_use "$requested_https"; then
-        
-
-        if ! port_in_use "$requested_https"; then
-            HTTPS_PORT_VALUE="$requested_https"
-            echo "Freed HTTPS port $requested_https by stopping host nginx service"
-            return
-        fi
-
-        HTTPS_PORT_VALUE="$(find_free_port 8443)"
-        echo "HTTPS port is in use. Using fallback HTTPS port: $HTTPS_PORT_VALUE"
-    else
-        HTTPS_PORT_VALUE="$requested_https"
+        return
     fi
+
+    if ! port_in_use "$requested_http" && ! port_in_use "$requested_https"; then
+        HTTP_PORT_VALUE="$requested_http"
+        HTTPS_PORT_VALUE="$requested_https"
+        return
+    fi
+
+    base_port="$(find_free_port_pair "$DEFAULT_TENANT_PORT_START")"
+    HTTP_PORT_VALUE="$base_port"
+    HTTPS_PORT_VALUE="$((base_port + DEFAULT_TENANT_TLS_OFFSET))"
+    echo "Tenant host ports are already occupied. Assigned new tenant ports: $HTTP_PORT_VALUE and $HTTPS_PORT_VALUE"
 }
 
 ensure_min_docker_disk_space() {

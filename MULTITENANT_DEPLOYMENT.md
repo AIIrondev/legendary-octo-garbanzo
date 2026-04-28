@@ -14,7 +14,7 @@ Die optimierte Multi-Tenant-Architektur unterstützt **mehrere isolierte Instanz
 └─────────────────────────────────────────────────────────────┘
               ↓               ↓               ↓
     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-    │  App :8001   │ │  App :8002   │ │  App :8003   │
+    │  App :10000  │ │  App :10002  │ │  App :10004  │
     │ schule1      │ │ schule2      │ │ schule3      │
     │ Tenant: t1   │ │ Tenant: t2   │ │ Tenant: t3   │
     │ 20 Users     │ │ 20 Users     │ │ 20 Users     │

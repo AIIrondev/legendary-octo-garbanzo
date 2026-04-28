@@ -473,8 +473,8 @@ EOF
     if [ ! -f "$PROJECT_DIR/.docker-build.env" ]; then
         cat > "$TMP_DIR/.docker-build.env" <<EOF
 NUITKA_BUILD=0
-INVENTAR_HTTP_PORT=80
-INVENTAR_HTTPS_PORT=443
+INVENTAR_HTTP_PORT=10000
+INVENTAR_HTTPS_PORT=10001
 INVENTAR_APP_IMAGE=ghcr.io/aiirondev/legendary-octo-garbanzo:$tag
 EOF
         sudo install -m 644 "$TMP_DIR/.docker-build.env" "$PROJECT_DIR/.docker-build.env"
