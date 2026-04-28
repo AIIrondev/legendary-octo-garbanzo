@@ -553,9 +553,11 @@ def make_admin(username):
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
     db = client[cfg.MONGODB_DB]
     users = db['users']
-    users.update_one({'Username': username}, {'$set': {'Admin': True}})
+    result = users.update_one({'Username': username}, {'$set': {'Admin': True}})
+    if result.matched_count == 0:
+        result = users.update_one({'username': username}, {'$set': {'Admin': True}})
     client.close()
-    return True
+    return result.matched_count > 0
 
 def remove_admin(username):
     """
@@ -570,9 +572,11 @@ def remove_admin(username):
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
     db = client[cfg.MONGODB_DB]
     users = db['users']
-    users.update_one({'Username': username}, {'$set': {'Admin': False}})
+    result = users.update_one({'Username': username}, {'$set': {'Admin': False}})
+    if result.matched_count == 0:
+        result = users.update_one({'username': username}, {'$set': {'Admin': False}})
     client.close()
-    return True
+    return result.matched_count > 0
 
 def get_user(username):
     """
@@ -630,12 +634,8 @@ def check_admin(username):
     Returns:
         bool: True if user is an administrator, False otherwise
     """
-    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
-    users = db['users']
-    user = users.find_one({'Username': username})
-    client.close()
-    return user and user.get('Admin', False)
+    user = get_user(username)
+    return bool(user and user.get('Admin', False))
 
 
 def update_active_ausleihung(username, id_item, ausleihung):
