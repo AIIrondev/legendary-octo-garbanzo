@@ -46,29 +46,23 @@ def _clean_name_fragment(value):
 
 
 def build_name_synonym(first_name, last_name=''):
-    """Build a deterministic, non-personalized short alias like 'SimFri'."""
+    """Build a deterministic, non-personalized short alias from 2 letters each."""
     first = _clean_name_fragment(first_name)
     last = _clean_name_fragment(last_name)
 
     if first and last:
-        return (first[:3] + last[:3]).title()
+        return (first[:2] + last[:2]).title()
 
     combined = (first + last)
     if not combined:
         return 'User'
-    return combined[:6].title()
-
-
-def _generate_anonymous_username(prefix='user', length=8):
-    """Generate a random anonymized username using lowercase letters and digits."""
-    alphabet = string.ascii_lowercase + string.digits
-    return prefix + ''.join(secrets.choice(alphabet) for _ in range(length))
+    return combined[:4].title()
 
 
 def build_username_from_name(first_name, last_name=''):
     """
     Build a deterministic username abbreviation from first and last name.
-    Uses the same short alias logic (e.g. SimFri) and stores it lowercase.
+    Uses 2 letters from each name and stores it lowercase.
     
     Args:
         first_name (str): First name
@@ -81,50 +75,25 @@ def build_username_from_name(first_name, last_name=''):
     return alias.lower()
 
 
-def build_anonymous_username():
-    """
-    Build a truly anonymized username that is not derived from the user's
-    first name or last name.
-    """
-    for _ in range(10):
-        candidate = _generate_anonymous_username()
-        if not get_user(candidate):
-            return candidate
-
-    suffix = 2
-    while get_user(f"user{suffix}"):
-        suffix += 1
-    return f"user{suffix}"
-
-
 def build_unique_username_from_name(first_name, last_name=''):
     """
-    Build a unique username based on the abbreviation logic.
-    If a collision occurs, increase the username by one additional letter
-    from the combined cleaned name until it is unique.
+    Build a unique username from the first 2 letters of the first name and
+    the first 2 letters of the last name.
     """
     first = _clean_name_fragment(first_name)
     last = _clean_name_fragment(last_name)
-    combined = (first + last).lower()
+    base_username = (first[:2] + last[:2]).lower()
 
-    base_username = build_username_from_name(first_name, last_name)
-    if not combined:
-        combined = base_username or 'user'
+    if not base_username:
+        base_username = 'user'
 
-    start_len = len(base_username) if base_username else min(6, len(combined))
-    start_len = max(1, min(start_len, len(combined)))
+    if not get_user(base_username):
+        return base_username
 
-    # Main strategy: take one more letter on each collision.
-    for length in range(start_len, len(combined) + 1):
-        candidate = combined[:length]
-        if not get_user(candidate):
-            return candidate
-
-    # Fallback if full combined name is already taken repeatedly.
     suffix = 2
-    while get_user(f"{combined}{suffix}"):
+    while get_user(f"{base_username}{suffix}"):
         suffix += 1
-    return f"{combined}{suffix}"
+    return f"{base_username}{suffix}"
 
 
 ACTION_PERMISSION_KEYS = (

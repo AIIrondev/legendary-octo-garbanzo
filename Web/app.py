@@ -7116,8 +7116,8 @@ def register():
             name = (request.form.get('name') or '').strip()
             last_name = (request.form.get('last-name') or '').strip()
 
-            # Generate a truly anonymized username for new users.
-            username = us.build_anonymous_username()
+            # Generate a username from the first 2 letters of first and last name.
+            username = us.build_unique_username_from_name(name, last_name)
             
             permission_preset = (request.form.get('permission_preset') or 'standard_user').strip()
             use_custom_permissions = request.form.get('use_custom_permissions') == 'on'
