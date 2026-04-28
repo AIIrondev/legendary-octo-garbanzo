@@ -418,6 +418,7 @@ parse_port_list() {
 configure_host_ports() {
     local requested_http
     local requested_ports
+    local ports=()
 
     requested_http=""
     requested_ports=""

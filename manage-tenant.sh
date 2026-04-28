@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 # Script to manage multitenant deployment
 # Allows adding, removing, and restarting tenants without downtime for others
 
@@ -76,6 +78,16 @@ case "$COMMAND" in
             echo "Error: Please provide a tenant_id."
             exit 1
         fi
+
+        PORT_ARG="$3"
+        if [ -n "$PORT_ARG" ]; then
+            if ! printf '%s\n' "$PORT_ARG" | grep -qE '^[0-9]+$'; then
+                echo "Error: Port must be a numeric value."
+                exit 1
+            fi
+            register_tenant_port "$TENANT_ID" "$PORT_ARG"
+        fi
+
         echo "Adding new tenant '$TENANT_ID'..."
         # Initialize tenant database via Python inside container
         echo "Initializing database for $TENANT_ID..."
@@ -93,15 +105,6 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         else
             echo "Warning: Application container is not running. Please start the multi-tenant system first."
             echo "Data will be initialized upon first access by the tenant."
-        fi
-
-        PORT_ARG="$3"
-        if [ -n "$PORT_ARG" ]; then
-            if ! printf '%s\n' "$PORT_ARG" | grep -qE '^[0-9]+$'; then
-                echo "Error: Port must be a numeric value."
-                exit 1
-            fi
-            register_tenant_port "$TENANT_ID" "$PORT_ARG"
         fi
         ;;
     
