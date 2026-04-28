@@ -6,13 +6,13 @@ Handles Web Push notifications for users via Service Workers
 import os
 import json
 import datetime
-from pymongo import MongoClient
 from bson import ObjectId
 import requests
 import hashlib
 import logging
 
 import settings as cfg
+from settings import MongoClient
 
 logger = logging.getLogger(__name__)
 

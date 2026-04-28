@@ -146,10 +146,17 @@ class TenantContext:
                 self.config = get_tenant_config(potential_subdomain)
                 return self._get_db_name(potential_subdomain)
 
-        # Fallback to default tenant if no tenant identifier found
-        self.tenant_id = 'default'
-        self.config = get_tenant_config('default')
-        return self._get_db_name('default')
+        # Fallback to default tenant if no tenant identifier found.
+        # If no explicit 'default' tenant config exists, use configured MongoDB DB.
+        if 'default' in TENANT_REGISTRY:
+            self.tenant_id = 'default'
+            self.config = get_tenant_config('default')
+            return self._get_db_name('default')
+
+        self.tenant_id = None
+        self.config = {}
+        self.db_name = cfg.MONGODB_DB
+        return self.db_name
 
     def _get_db_name(self, tenant_id):
         """
@@ -214,8 +221,8 @@ def get_tenant_db(mongo_client):
     ctx = get_tenant_context()
     if ctx:
         return ctx.get_database(mongo_client)
-    # Fallback to default database
-    return mongo_client['inventar_default']
+    # Fallback to configured default database
+    return mongo_client[cfg.MONGODB_DB]
 
 
 def register_tenant(tenant_id, config=None):

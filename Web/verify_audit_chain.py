@@ -4,9 +4,8 @@
 import json
 import sys
 
-from pymongo import MongoClient
-
 import settings as cfg
+from settings import MongoClient
 import audit_log as al
 
 
