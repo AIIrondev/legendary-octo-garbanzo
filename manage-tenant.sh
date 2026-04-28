@@ -20,11 +20,13 @@ show_help() {
     echo "  restart-tenant <id>          'Restart' a single tenant (clears cache/sessions)"
     echo "  restart-all                  Restart all application containers (zero-downtime reload)"
     echo "  list                         List active tenants"
+    echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./manage-tenant.sh add school_a 10001"
     echo "  ./manage-tenant.sh remove test_tenant"
     echo "  ./manage-tenant.sh restart-all"
+    echo "  ./manage-tenant.sh -h"
     exit 1
 }
 
@@ -73,6 +75,9 @@ COMMAND=$1
 TENANT_ID=$2
 
 case "$COMMAND" in
+    -h|--help)
+        show_help
+        ;;
     add)
         if [ -z "$TENANT_ID" ]; then
             echo "Error: Please provide a tenant_id."
