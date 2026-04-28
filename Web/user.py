@@ -592,11 +592,39 @@ def get_user(username):
         dict: User document or None if not found
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
-    users = db['users']
-    users_return = users.find_one({'Username': username})
-    client.close()
-    return users_return
+    try:
+        def find_in_db(database_name):
+            db = client[database_name]
+            users = db['users']
+            return users.find_one({'Username': username}) or users.find_one({'username': username})
+
+        # Try current tenant first when available
+        try:
+            from tenant import get_tenant_context
+            ctx = get_tenant_context()
+            if ctx and ctx.db_name:
+                user = find_in_db(ctx.db_name)
+                if user:
+                    return user
+        except Exception:
+            pass
+
+        # Fallback to default configured database
+        user = find_in_db(cfg.MONGODB_DB)
+        if user:
+            return user
+
+        # Last fallback: search all tenant databases if the user belongs to a tenant-specific DB
+        for database_name in client.list_database_names():
+            if database_name == cfg.MONGODB_DB or not database_name.startswith('inventar_'):
+                continue
+            user = find_in_db(database_name)
+            if user:
+                return user
+
+        return None
+    finally:
+        client.close()
 
 
 def check_admin(username):
