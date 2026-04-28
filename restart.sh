@@ -26,10 +26,15 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "Rebuilding and restarting app container using $COMPOSE_FILE..."
-docker compose -f "$COMPOSE_FILE" up -d --build app
+echo "Rebuilding and/or restarting app container using $COMPOSE_FILE..."
+if [ -f "$SCRIPT_DIR/Dockerfile" ]; then
+    docker compose -f "$COMPOSE_FILE" up -d --build app
+else
+    echo "Warning: Dockerfile not found in $SCRIPT_DIR. Skipping build and restarting existing app container."
+    docker compose -f "$COMPOSE_FILE" up -d --no-build app
+fi
 
 echo "Cleaning up unused Docker images..."
 docker image prune -f
 
-echo "App rebuild complete."
+echo "App restart complete."
