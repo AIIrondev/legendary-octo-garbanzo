@@ -315,9 +315,11 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
             APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
             if [ -n "$APP_CONTAINER" ]; then
                 docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+import sys; sys.path.insert(0, '/app/Web'); from tenant import TenantContext; import settings; from pymongo import MongoClient
+ctx = TenantContext()
+db_name = ctx._get_db_name(sys.argv[1])
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
-client.drop_database(f'{settings.MONGODB_DB}_{sys.argv[1]}')
+client.drop_database(db_name)
 print(f'Database for tenant {sys.argv[1]} dropped.')
 " "$TENANT_ID"
                 echo "Tenant '$TENANT_ID' database removed."
@@ -403,7 +405,7 @@ sys.path.insert(0, '/app/Web')
 import settings
 from pymongo import MongoClient
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
-prefix = f'{settings.MONGODB_DB}_'
+prefix = 'inventar_'
 dbs = [d for d in client.list_database_names() if d.startswith(prefix)]
 if dbs:
     for db in dbs:
