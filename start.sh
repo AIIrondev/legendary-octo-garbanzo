@@ -419,6 +419,7 @@ configure_host_ports() {
     local requested_http
     local requested_ports
     local ports=()
+    local occupied_ports=()
 
     requested_http=""
     requested_ports=""
@@ -442,15 +443,33 @@ configure_host_ports() {
     if [ ${#ports[@]} -gt 0 ]; then
         HTTP_PORTS_VALUE="${ports[*]}"
         HTTP_PORT_VALUE="${ports[0]}"
+
+        for port in "${ports[@]}"; do
+            if port_in_use "$port"; then
+                occupied_ports+=("$port")
+            fi
+        done
+
+        if [ ${#occupied_ports[@]} -gt 0 ]; then
+            if [ ${#ports[@]} -eq 1 ]; then
+                HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
+                echo "Host port ${ports[0]} is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
+                HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
+            else
+                echo "Error: requested host port(s) already in use: ${occupied_ports[*]}"
+                echo "Remove the occupied port(s) from INVENTAR_HTTP_PORTS or stop the conflicting service."
+                exit 1
+            fi
+        fi
     else
         HTTP_PORT_VALUE="$DEFAULT_TENANT_PORT_START"
         HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
-    fi
 
-    if port_in_use "$HTTP_PORT_VALUE"; then
-        HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
-        echo "Host port ${ports[0]:-$DEFAULT_TENANT_PORT_START} is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
-        HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
+        if port_in_use "$HTTP_PORT_VALUE"; then
+            HTTP_PORT_VALUE="$(find_free_port "$DEFAULT_TENANT_PORT_START")"
+            echo "Host port $DEFAULT_TENANT_PORT_START is already occupied. Assigned new tenant port: $HTTP_PORT_VALUE"
+            HTTP_PORTS_VALUE="$HTTP_PORT_VALUE"
+        fi
     fi
 }
 

@@ -67,6 +67,63 @@ PY
     fi
 }
 
+update_runtime_ports() {
+    local new_port="$1"
+    local env_file="$PWD/.docker-build.env"
+    local current_ports=""
+    local port_list=()
+    local unique_ports=()
+    local first_port=""
+    if [ -n "$new_port" ]; then
+        if [ -f "$env_file" ]; then
+            current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
+            if [ -z "$current_ports" ]; then
+                current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
+            fi
+        fi
+
+        if [ -n "$current_ports" ]; then
+            IFS=',' read -r -a port_list <<<"${current_ports// /,}"
+        fi
+        port_list+=("$new_port")
+
+        for port in "${port_list[@]}"; do
+            if [ -n "$port" ] && ! printf '%s\n' "${unique_ports[@]}" | grep -qx "$port"; then
+                unique_ports+=("$port")
+            fi
+        done
+
+        if [ ${#unique_ports[@]} -eq 0 ]; then
+            unique_ports=("$new_port")
+        fi
+
+        first_port="${unique_ports[0]}"
+        local ports_csv
+        ports_csv="$(IFS=,; echo "${unique_ports[*]}")"
+
+        if [ ! -f "$env_file" ]; then
+            cat > "$env_file" <<EOF
+NUITKA_BUILD=0
+INVENTAR_HTTP_PORT=$first_port
+INVENTAR_HTTP_PORTS=$ports_csv
+EOF
+        else
+            if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
+                sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
+            else
+                printf '\nINVENTAR_HTTP_PORTS=%s\n' "$ports_csv" >> "$env_file"
+            fi
+            if grep -q '^INVENTAR_HTTP_PORT=' "$env_file" 2>/dev/null; then
+                sed -i "s|^INVENTAR_HTTP_PORT=.*|INVENTAR_HTTP_PORT=$first_port|" "$env_file"
+            else
+                printf '\nINVENTAR_HTTP_PORT=%s\n' "$first_port" >> "$env_file"
+            fi
+        fi
+
+        echo "Updated runtime env ports: $ports_csv"
+    fi
+}
+
 if [ -z "${1:-}" ]; then
     show_help
 fi
@@ -91,6 +148,7 @@ case "$COMMAND" in
                 exit 1
             fi
             register_tenant_port "$TENANT_ID" "$PORT_ARG"
+            update_runtime_ports "$PORT_ARG"
         fi
 
         echo "Adding new tenant '$TENANT_ID'..."
