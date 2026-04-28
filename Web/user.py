@@ -417,13 +417,27 @@ def check_nm_pwd(username, password):
     Returns:
         dict: User document if credentials are valid, None otherwise
     """
+    db_name = cfg.MONGODB_DB
+    try:
+        from tenant import get_tenant_context
+        ctx = get_tenant_context()
+        if ctx and ctx.tenant_id:
+            db_name = ctx.db_name or ctx.resolve_tenant()
+    except Exception:
+        pass
+
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
+    db = client[db_name]
     users = db['users']
-    hashed_password = hashlib.sha512(password.encode()).hexdigest()
-    user = users.find_one({'Username': username, 'Password': hashed_password})
+    user = users.find_one({'Username': username}) or users.find_one({'username': username})
     client.close()
-    return user
+
+    if not user:
+        return None
+
+    if user.get('Password') == hashing(password):
+        return user
+    return None
 
 
 def add_user(
@@ -471,7 +485,7 @@ def add_user(
         'Admin': False,
         'active_ausleihung': None,
         'name': name_alias,
-        'last_name': '',
+        'last_name': last_name.strip() if last_name else '',
         'IsStudent': bool(is_student),
         'PermissionPreset': permission_defaults['preset'],
         'ActionPermissions': permission_defaults['actions'],

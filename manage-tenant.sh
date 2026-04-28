@@ -247,11 +247,53 @@ case "$COMMAND" in
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient; import hashlib
+import sys, re; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient; import hashlib
+tenant_id = sys.argv[1].lower()
+sanitized = ''.join(c for c in tenant_id if c.isalnum() or c == '_')
+db_name = f'inventar_{sanitized}'
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
-db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
+db = client[db_name]
 hashed_pw = hashlib.sha512('admin123'.encode()).hexdigest()
-db.users.insert_one({'Username': 'admin', 'Password': hashed_pw, 'Role': 'admin', 'Name': 'Admin', 'Nachname': 'User'})
+if db.users.count_documents({'Username': 'admin'}) == 0:
+    db.users.insert_one({
+        'Username': 'admin',
+        'Password': hashed_pw,
+        'Admin': True,
+        'active_ausleihung': None,
+        'name': 'Admin',
+        'last_name': 'User',
+        'IsStudent': False,
+        'PermissionPreset': 'full_access',
+        'ActionPermissions': {
+            'can_borrow': True,
+            'can_insert': True,
+            'can_edit': True,
+            'can_delete': True,
+            'can_manage_users': True,
+            'can_manage_settings': True,
+            'can_view_logs': True,
+        },
+        'PagePermissions': {
+            'home': True,
+            'tutorial_page': True,
+            'my_borrowed_items': True,
+            'notifications_view': True,
+            'impressum': True,
+            'license': True,
+            'library_view': True,
+            'terminplan': True,
+            'home_admin': True,
+            'upload_admin': True,
+            'library_admin': True,
+            'admin_borrowings': True,
+            'library_loans_admin': True,
+            'admin_damaged_items': True,
+            'admin_audit_dashboard': True,
+            'logs': True,
+            'manage_filters': True,
+            'manage_locations': True,
+        },
+    })
 print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin123')
 " "$TENANT_ID"
             echo "Tenant '$TENANT_ID' successfully added. Ready to use."
