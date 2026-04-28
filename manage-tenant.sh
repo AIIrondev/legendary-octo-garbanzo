@@ -67,12 +67,12 @@ PY
     fi
 }
 
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
     show_help
 fi
 
-COMMAND=$1
-TENANT_ID=$2
+COMMAND="$1"
+TENANT_ID="${2:-}"
 
 case "$COMMAND" in
     -h|--help)
