@@ -46,14 +46,16 @@ services:
     image: $app_image
     build: null
 EOF
-        if [ ${#ports[@]} -gt 1 ]; then
+        if [ ${#ports[@]} -gt 0 ]; then
             cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
     ports:
 EOF
             for port in "${ports[@]}"; do
-                cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+                if [ -n "$port" ]; then
+                    cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
       - "$port:8000"
 EOF
+                fi
             done
         fi
     else
@@ -65,10 +67,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --multitenant)
             COMPOSE_FILE="docker-compose-multitenant.yml"
-            shift
-            ;;
-        --singletenant)
-            COMPOSE_FILE="docker-compose.yml"
             shift
             ;;
         *)
@@ -93,13 +91,13 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 if [ -f "$SCRIPT_DIR/Dockerfile" ]; then
-    docker compose "${compose_args[@]}" up -d --build app
+    docker compose "${compose_args[@]}" up -d --build --force-recreate app
 else
     echo "Warning: Dockerfile not found in $SCRIPT_DIR. Skipping build and restarting existing app container."
-    if ! docker compose "${compose_args[@]}" up -d --no-build app; then
+    if ! docker compose "${compose_args[@]}" up -d --no-build --force-recreate app; then
         echo "Warning: app image not found or not available locally. Attempting docker compose pull app..."
         docker compose "${compose_args[@]}" pull app
-        docker compose "${compose_args[@]}" up -d --no-build app
+        docker compose "${compose_args[@]}" up -d --no-build --force-recreate app
     fi
 fi
 

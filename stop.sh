@@ -12,10 +12,6 @@ while [[ $# -gt 0 ]]; do
             COMPOSE_FILE="docker-compose-multitenant.yml"
             shift
             ;;
-        --singletenant)
-            COMPOSE_FILE="docker-compose.yml"
-            shift
-            ;;
         *)
             shift
             ;;

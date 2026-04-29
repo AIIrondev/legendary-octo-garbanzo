@@ -152,7 +152,6 @@ Usage: $0 [options]
 
 Options:
   --multitenant      Use docker-compose-multitenant.yml (default)
-  --singletenant     Use docker-compose.yml
   -h, --help         Show this help message
 EOF
 }
@@ -162,10 +161,6 @@ parse_args() {
         case "$1" in
             --multitenant)
                 COMPOSE_FILE="docker-compose-multitenant.yml"
-                shift
-                ;;
-            --singletenant)
-                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             -h|--help)

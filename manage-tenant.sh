@@ -124,6 +124,68 @@ EOF
     fi
 }
 
+sync_tenant_port_map() {
+    local config_path="$CONFIG_FILE"
+    local env_file="$PWD/.docker-build.env"
+    local tenant_port_map
+
+    tenant_port_map="$(python3 - <<'PY' "$config_path"
+import json, os, sys
+path = sys.argv[1]
+if not os.path.isfile(path):
+    sys.exit(1)
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants', {})
+if not isinstance(tenants, dict):
+    sys.exit(0)
+entries = []
+for tenant_id, conf in sorted(tenants.items()):
+    if isinstance(conf, dict):
+        port = conf.get('port')
+        if isinstance(port, (int, float)) or (isinstance(port, str) and str(port).strip().isdigit()):
+            entries.append(f"{int(port)}={tenant_id}")
+print(','.join(entries))
+PY
+)"
+
+    if [ -z "$tenant_port_map" ]; then
+        if [ -f "$env_file" ]; then
+            sed -i '/^INVENTAR_TENANT_PORT_MAP=/d' "$env_file"
+        fi
+        return 0
+    fi
+
+    if [ ! -f "$env_file" ]; then
+        cat > "$env_file" <<EOF
+NUITKA_BUILD=0
+INVENTAR_TENANT_PORT_MAP=$tenant_port_map
+EOF
+        return 0
+    fi
+
+    if grep -q '^INVENTAR_TENANT_PORT_MAP=' "$env_file" 2>/dev/null; then
+        sed -i "s|^INVENTAR_TENANT_PORT_MAP=.*|INVENTAR_TENANT_PORT_MAP=$tenant_port_map|" "$env_file"
+    else
+        printf '\nINVENTAR_TENANT_PORT_MAP=%s\n' "$tenant_port_map" >> "$env_file"
+    fi
+}
+
+restart_app_container() {
+    local env_file="$PWD/.docker-build.env"
+    local compose_args=( -f "$PWD/docker-compose-multitenant.yml" )
+
+    if [ -f "$PWD/.docker-compose.runtime.override.yml" ]; then
+        compose_args+=( -f "$PWD/.docker-compose.runtime.override.yml" )
+    fi
+    if [ -f "$env_file" ]; then
+        compose_args+=( --env-file "$env_file" )
+    fi
+
+    echo "Restarting app container to apply tenant configuration changes..."
+    docker compose "${compose_args[@]}" up -d --no-build --force-recreate app
+}
+
 remove_tenant_port() {
     local tenant_id="$1"
     local config_path="$CONFIG_FILE"
@@ -239,6 +301,10 @@ case "$COMMAND" in
             fi
             register_tenant_port "$TENANT_ID" "$PORT_ARG"
             update_runtime_ports "$PORT_ARG"
+            sync_tenant_port_map
+            if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+                restart_app_container
+            fi
         fi
 
         echo "Adding new tenant '$TENANT_ID'..."
@@ -331,8 +397,16 @@ print(f'Database for tenant {sys.argv[1]} dropped.')
             if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
                 if [ -n "$port_to_remove" ]; then
                     remove_runtime_port "$port_to_remove"
+                    sync_tenant_port_map
+                    if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+                        restart_app_container
+                    fi
                     echo "Removed tenant '$TENANT_ID' from config.json and cleaned runtime port $port_to_remove."
                 else
+                    sync_tenant_port_map
+                    if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+                        restart_app_container
+                    fi
                     echo "Removed tenant '$TENANT_ID' from config.json. No port mapping was present."
                 fi
             else

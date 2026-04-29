@@ -176,7 +176,6 @@ Options:
     --skip-cleanup-old            Do not run cleanup-old.sh after install
     --cleanup-old-remove-cron     Also remove matching cron entries during old-system cleanup
     --multitenant                Use docker-compose-multitenant.yml (default)
-    --singletenant               Use docker-compose.yml
   --legacy-db-name <name>       Legacy database name (default: $LEGACY_DB_NAME)
   --legacy-mongo-uri <uri>      Legacy Mongo URI (default: $LEGACY_MONGO_URI)
   --legacy-system-dir <path>    Optional old system directory to remove after migration
@@ -205,10 +204,6 @@ parse_args() {
                 ;;
             --multitenant)
                 COMPOSE_FILE="docker-compose-multitenant.yml"
-                shift
-                ;;
-            --singletenant)
-                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             --legacy-db-name)

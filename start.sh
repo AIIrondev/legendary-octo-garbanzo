@@ -37,7 +37,6 @@ Options:
   --no-cron         Do not create or update cron jobs
   --with-cron       Create/update cron jobs (default)
   --multitenant     Use the multi-tenant architecture deployment
-    --singletenant    Use the legacy single-tenant compose deployment
   -h, --help        Show this help message
 EOF
 }
@@ -55,10 +54,6 @@ parse_args() {
                 ;;
             --multitenant)
                 COMPOSE_FILE="docker-compose-multitenant.yml"
-                shift
-                ;;
-            --singletenant)
-                COMPOSE_FILE="docker-compose.yml"
                 shift
                 ;;
             -h|--help)
@@ -584,15 +579,19 @@ EOF
 
     if [ -n "$HTTP_PORTS_VALUE" ]; then
         local ports_array
-        read -r -a ports_array <<<"$HTTP_PORTS_VALUE"
-        if [ "${#ports_array[@]}" -gt 1 ]; then
+        local ports_list
+        ports_list="${HTTP_PORTS_VALUE//,/ }"
+        read -r -a ports_array <<<"$ports_list"
+        if [ "${#ports_array[@]}" -gt 0 ]; then
             cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
     ports:
 EOF
             for port in "${ports_array[@]}"; do
-                cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
+                if [ -n "$port" ]; then
+                    cat >> "$RUNTIME_COMPOSE_OVERRIDE_FILE" <<EOF
       - "$port:8000"
 EOF
+                fi
             done
         fi
     fi

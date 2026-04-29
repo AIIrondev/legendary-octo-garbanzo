@@ -99,6 +99,7 @@ services:
       INVENTAR_REDIS_HOST: redis
       INVENTAR_REDIS_PORT: "6379"
       INVENTAR_REDIS_DB: "0"
+      INVENTAR_TENANT_PORT_MAP: "${INVENTAR_TENANT_PORT_MAP:-}"
       
       # Storage Configuration
       INVENTAR_BACKUP_FOLDER: /data/backups

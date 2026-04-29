@@ -163,7 +163,7 @@ sudo ./install.sh --cleanup-old-remove-cron
 
 Das System läuft produktiv Docker-first. Deployments und Updates erfolgen über Release-Artefakte (Build-only), nicht über Quellcode-Pulls.
 
-- Laufzeit-Stack: [docker-compose.yml](docker-compose.yml)
+- Laufzeit-Stack: [docker-compose-multitenant.yml](docker-compose-multitenant.yml)
 - Build-Pipeline: [Dockerfile](Dockerfile)
 - Release-Pipeline: [.github/workflows/release-docker.yml](.github/workflows/release-docker.yml)
 - Frontend/Reverse Proxy: Nginx (Container)
@@ -237,7 +237,7 @@ docker compose logs -f nginx
 
 ### Persistente Daten
 
-Die Volumes sind in [docker-compose.yml](docker-compose.yml) definiert:
+Die Volumes sind in [docker-compose-multitenant.yml](docker-compose-multitenant.yml) definiert:
 
 - MongoDB Daten
 - Uploads / Thumbnails / Previews / QRCodes
