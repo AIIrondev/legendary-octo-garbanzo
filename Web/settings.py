@@ -131,11 +131,15 @@ PORT = _get(_conf, ['port'], DEFAULTS['port'])
 MONGODB_HOST = _get(_conf, ['mongodb', 'host'], DEFAULTS['mongodb']['host'])
 MONGODB_PORT = _get(_conf, ['mongodb', 'port'], DEFAULTS['mongodb']['port'])
 MONGODB_DB = _get(_conf, ['mongodb', 'db'], DEFAULTS['mongodb']['db'])
+MONGODB_URI = _get(_conf, ['mongodb', 'uri'], '')
 
 # Optional environment overrides for containerized/runtime deployments.
 MONGODB_HOST = os.getenv('INVENTAR_MONGODB_HOST', MONGODB_HOST)
 MONGODB_PORT = int(os.getenv('INVENTAR_MONGODB_PORT', str(MONGODB_PORT)))
 MONGODB_DB = os.getenv('INVENTAR_MONGODB_DB', MONGODB_DB)
+MONGODB_URI = os.getenv('INVENTAR_MONGODB_URI', os.getenv('MONGO_URI', MONGODB_URI))
+if isinstance(MONGODB_URI, str):
+    MONGODB_URI = MONGODB_URI.strip() or None
 MONGODB_MAX_POOL_SIZE = _get_int_env('INVENTAR_MONGODB_MAX_POOL_SIZE', 20)
 MONGODB_MIN_POOL_SIZE = _get_int_env('INVENTAR_MONGODB_MIN_POOL_SIZE', 0)
 MONGODB_MAX_IDLE_TIME_MS = _get_int_env('INVENTAR_MONGODB_MAX_IDLE_TIME_MS', 300000)
@@ -318,7 +322,9 @@ def MongoClient(*args, **kwargs):
     }
     client_kwargs.update(kwargs)
 
-    if len(args) >= 2 and not explicit_host and not explicit_port:
+    if MONGODB_URI and len(args) == 0 and not explicit_host and not explicit_port:
+        mongo_args = (MONGODB_URI,)
+    elif len(args) >= 2 and not explicit_host and not explicit_port:
         mongo_args = args
     else:
         mongo_args = (host, port)
