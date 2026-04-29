@@ -12,12 +12,15 @@ Provides methods for creating, validating, and retrieving user information.
 '''
 import hashlib
 import copy
+import logging
 import re
 import secrets
 import string
 from bson.objectid import ObjectId
 import settings as cfg
 from settings import MongoClient
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_student_card_id(card_id):
@@ -437,7 +440,18 @@ def check_nm_pwd(username, password):
         def find_user_in_db(database_name):
             db = client[database_name]
             users = db['users']
-            return users.find_one({'Username': username, 'Password': hashed_password}) or users.find_one({'username': username, 'Password': hashed_password})
+            existing_user = users.find_one({'Username': username, 'Password': hashed_password}) or users.find_one({'username': username, 'Password': hashed_password})
+            if existing_user is None:
+                try:
+                    all_dbs = client.list_database_names()
+                    if database_name not in all_dbs:
+                        logger.warning(
+                            f"Tenant database missing for login attempt: {database_name!r}. "
+                            f"Available databases={all_dbs}"
+                        )
+                except Exception:
+                    pass
+            return existing_user
 
         return find_user_in_db(db_name)
     finally:
