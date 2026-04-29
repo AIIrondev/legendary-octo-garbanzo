@@ -45,8 +45,6 @@ Das Inventarsystem stellt folgende Wartungsskripte bereit:
 | `stop.sh` | Dienste stoppen |
 | `restart.sh` | Dienste neu starten |
 | `build-nuitka.sh` | Standalone-Build der App mit Nuitka erstellen |
-| `init-admin.sh` | Initialisiert Admin-User wenn DB leer ist |
-| `create-user.sh` | Erstellt neue User per Kommandozeile |
 | `Backup-DB.py` | Manuelles DB-Backup |
 | `restore.sh` | Backup wiederherstellen |
 | `manage-version.sh` | Versionssteuerung |
@@ -286,27 +284,19 @@ https://[SERVER-IP]
 
 Wenn die Datenbank leer ist (beim ersten Start), erstellen Sie einen Admin-User:
 
-**Option 1: Automatisiert beim Start**
-```bash
-./init-admin.sh
-```
-
-Mit benutzerdefinierten Daten:
-```bash
-./init-admin.sh myadmin mypassword123 Max Mustermann
-```
-
-**Option 2: Interaktiv**
+**Option 1: Interaktiv**
 ```bash
 cd Web && python3 generate_user.py
 ```
 
-**Option 3: Per Kommandozeile**
+**Option 2: Multitenant-Tenant erstellen**
 ```bash
-./create-user.sh admin password123456 Admin User --admin
+sudo ./manage-tenant.sh add <tenant-name> <port>
 ```
 
-**Option 4: Direkt in MongoDB (Notlösung)**
+Dieser Weg erzeugt beim Anlegen eines neuen Tenants einen Standard-Admin für den Tenant.
+
+**Option 3: Direkt in MongoDB (Notlösung)**
 ```bash
 docker exec inventarsystem-mongodb mongosh --eval "
 db.users.insertOne({

@@ -368,7 +368,7 @@ download_and_extract_bundle() {
     done
 
     # Ensure executable permissions on all copied scripts
-    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/init-admin.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true 2>/dev/null || true
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true 2>/dev/null || true
     chmod +x "$PROJECT_DIR"/manage-tenant.sh "$PROJECT_DIR"/run-tenant-cmd.sh 2>/dev/null || true
 
     if [ ! -f "$PROJECT_DIR/config.json" ] && [ -f "$tmp_dir/config.json" ]; then
@@ -376,7 +376,7 @@ download_and_extract_bundle() {
         log_message "Installed default config.json from release bundle"
     fi
 
-    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/init-admin.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh" "$PROJECT_DIR/manage-tenant.sh" "$PROJECT_DIR/run-tenant-cmd.sh" 2>/dev/null || true
 }
 
 deploy() {
