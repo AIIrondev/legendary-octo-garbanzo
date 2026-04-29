@@ -191,6 +191,17 @@
             white-space: nowrap;
             flex-shrink: 0;
         }
+
+        .navbar-text.tenant-badge {
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.9);
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.18);
+            padding: 0.25rem 0.55rem;
+            border-radius: 999px;
+            white-space: nowrap;
+            margin-right: 0.75rem;
+        }
         
         .navbar-brand::before {
             content: attr(data-icon);
@@ -1113,7 +1124,10 @@
                                 <button class="function-search-btn" type="submit">Los</button>
                             </form>
                         </div>
-                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                        {% if current_tenant_db %}
+                        <span class="navbar-text tenant-badge" title="Aktive Tenant-Datenbank">{{ current_tenant_db }}</span>
+                    {% endif %}
+                    <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
                         <div class="dropdown me-2 user-menu-wrap">
                             <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
                                 👤

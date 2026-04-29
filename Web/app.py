@@ -76,6 +76,7 @@ from data_protection import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 import settings as cfg
 from settings import MongoClient
+from tenant import get_tenant_context
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
@@ -1092,6 +1093,15 @@ def inject_version():
                 client.close()
 
     current_module = _get_current_module(request.path)
+    current_tenant_db = MONGODB_DB
+    current_tenant_id = None
+    try:
+        ctx = get_tenant_context()
+        if ctx:
+            current_tenant_db = ctx.db_name or current_tenant_db
+            current_tenant_id = ctx.tenant_id
+    except Exception:
+        current_tenant_db = MONGODB_DB
 
     return {
         'APP_VERSION': APP_VERSION,
@@ -1104,6 +1114,8 @@ def inject_version():
         'is_admin': is_admin,
         'unread_notification_count': unread_notification_count,
         'current_permissions': current_permissions,
+        'current_tenant_db': current_tenant_db,
+        'current_tenant_id': current_tenant_id,
         'permission_action_options': PERMISSION_ACTION_OPTIONS,
         'permission_page_options': PERMISSION_PAGE_OPTIONS,
         'permission_presets': us.get_permission_preset_definitions(),
