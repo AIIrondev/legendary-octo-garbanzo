@@ -81,12 +81,12 @@ from tenant import get_tenant_context
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
-app.logger.setLevel(logging.INFO)
+app.logger.setLevel(logging.DEBUG)
 if not os.path.exists(cfg.LOGS_FOLDER):
     os.makedirs(cfg.LOGS_FOLDER, exist_ok=True)
 log_file_path = os.path.join(cfg.LOGS_FOLDER, 'application.log')
 file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
-file_handler.setLevel(logging.INFO)
+file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
 app.logger.handlers = []
 app.logger.addHandler(file_handler)

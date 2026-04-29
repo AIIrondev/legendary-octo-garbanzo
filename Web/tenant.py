@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import settings as cfg
+from settings import MongoClient
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,21 @@ def _get_nested_value(source, path, default=None):
         else:
             return default
     return current
+
+
+def _parse_tenant_db_map():
+    mapping = {}
+    raw_map = os.getenv('INVENTAR_TENANT_DB_MAP', '').strip()
+    if not raw_map:
+        return mapping
+
+    for mapping_pair in re.split(r'[;,\s]+', raw_map):
+        if '=' not in mapping_pair:
+            continue
+        key, value = mapping_pair.split('=', 1)
+        mapping[key.strip()] = value.strip()
+
+    return mapping
 
 
 def _parse_port_from_host(host):
@@ -82,6 +98,52 @@ def get_tenant_config(tenant_id=None):
         return TENANT_REGISTRY[tenant_id] or {}
 
     return TENANT_REGISTRY.get('default', {}) or {}
+
+
+def _normalize_db_name(db_name):
+    if not db_name:
+        return None
+    db_name = str(db_name).strip()
+    if db_name and not db_name.startswith('inventar_'):
+        db_name = f'inventar_{db_name}'
+    return db_name
+
+
+def _tenant_db_aliases(tenant_id):
+    aliases = []
+    env_map = _parse_tenant_db_map()
+    if tenant_id in env_map:
+        aliases.append(env_map[tenant_id])
+
+    if tenant_id.lower().startswith('schule'):
+        aliases.append(tenant_id.lower().replace('schule', 'school', 1))
+    elif tenant_id.lower().startswith('school'):
+        aliases.append(tenant_id.lower().replace('school', 'schule', 1))
+
+    return [alias for alias in aliases if alias]
+
+
+def _resolve_db_alias(tenant_id, db_name):
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        available_databases = client.list_database_names()
+        if db_name in available_databases:
+            return db_name
+
+        for alias in _tenant_db_aliases(tenant_id):
+            candidate = _normalize_db_name(alias)
+            if candidate in available_databases:
+                logger.warning(
+                    "Tenant DB fallback applied for tenant %r: %r -> %r",
+                    tenant_id,
+                    db_name,
+                    candidate,
+                )
+                return candidate
+    except Exception as exc:
+        logger.exception("Tenant DB alias resolution failed for %r: %s", tenant_id, exc)
+
+    return db_name
 
 
 def is_tenant_module_enabled(module_name, tenant_id=None, default=False):
@@ -170,11 +232,19 @@ class TenantContext:
     def _get_db_name(self, tenant_id):
         """
         Get MongoDB database name for tenant.
-        Format: inventar_<tenant_id>
+        Format: inventar_<tenant_id> unless tenant config overrides it.
         """
-        # Sanitize tenant_id for MongoDB database name
-        sanitized = ''.join(c if c.isalnum() or c == '_' else '' for c in tenant_id.lower())
-        db_name = f"inventar_{sanitized}"
+        explicit_db = None
+        if isinstance(self.config, dict):
+            explicit_db = self.config.get('db') or self.config.get('db_name')
+
+        if explicit_db:
+            db_name = _normalize_db_name(explicit_db)
+        else:
+            sanitized = ''.join(c if c.isalnum() or c == '_' else '' for c in tenant_id.lower())
+            db_name = f"inventar_{sanitized}"
+
+        db_name = _resolve_db_alias(tenant_id, db_name)
         self.db_name = db_name
         return db_name
 

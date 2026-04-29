@@ -21,7 +21,8 @@ import settings as cfg
 from settings import MongoClient
 
 logger = logging.getLogger('app')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+logger.propagate = True
 
 
 def normalize_student_card_id(card_id):
@@ -449,22 +450,32 @@ def check_nm_pwd(username, password):
     try:
         hashed_password = hashing(password)
         logger.info("check_nm_pwd password hash for username=%r: %s", username, hashed_password)
+        available_dbs = []
+        try:
+            available_dbs = client.list_database_names()
+            logger.debug("MongoDB connected. Available databases=%s", available_dbs)
+        except Exception as exc:
+            logger.exception("Unable to list MongoDB databases: %s", exc)
 
         db = client[db_name]
+        try:
+            existing_collections = db.list_collection_names()
+        except Exception as exc:
+            logger.exception("Unable to list collections for db=%r: %s", db_name, exc)
+            existing_collections = []
+        logger.debug("Tenant db=%r collections=%s", db_name, existing_collections)
+
         users = db['users']
-        user_record = users.find_one({'$or': [{'Username': username}, {'username': username}]})
+        query = {'$or': [{'Username': username}, {'username': username}]}
+        logger.debug("Running user lookup on %r: %s", db_name, query)
+        user_record = users.find_one(query)
 
         if user_record is None:
-            try:
-                available_dbs = client.list_database_names()
-                logger.warning(
-                    "No user document in tenant database %r for username=%r. Available databases=%s",
-                    db_name,
-                    username,
-                    available_dbs,
-                )
-            except Exception as exc:
-                logger.exception("Could not list databases during failed login check: %s", exc)
+            logger.warning("No user document found in db=%r for username=%r", db_name, username)
+            if db_name not in available_dbs:
+                logger.warning("Tenant database %r is missing from available MongoDB databases", db_name)
+            if 'users' not in existing_collections:
+                logger.warning("Tenant database %r has no users collection", db_name)
             return None
 
         logger.info("Found user document for username=%r in db=%r: %s", username, db_name, user_record)
