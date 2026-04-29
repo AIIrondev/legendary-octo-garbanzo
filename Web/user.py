@@ -20,7 +20,8 @@ from bson.objectid import ObjectId
 import settings as cfg
 from settings import MongoClient
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('app')
+logger.setLevel(logging.INFO)
 
 
 def normalize_student_card_id(card_id):
