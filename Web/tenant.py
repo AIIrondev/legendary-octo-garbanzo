@@ -128,7 +128,9 @@ class TenantContext:
             if tenant_from_port:
                 self.tenant_id = tenant_from_port
                 self.config = get_tenant_config(tenant_from_port)
+                logger.info(f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port}")
                 return self._get_db_name(tenant_from_port)
+            logger.info(f"Tenant port not mapped: host={host} port={port}")
 
         # Priority 3: Subdomain extraction
         parts = host.split('.')
@@ -144,7 +146,9 @@ class TenantContext:
                 self.subdomain = potential_subdomain
                 self.tenant_id = potential_subdomain
                 self.config = get_tenant_config(potential_subdomain)
+                logger.info(f"Tenant resolution by subdomain: host={host} tenant={potential_subdomain}")
                 return self._get_db_name(potential_subdomain)
+            logger.info(f"Tenant subdomain ignored: {potential_subdomain}")
 
         # Fallback to default tenant if no tenant identifier found.
         # If no explicit 'default' tenant config exists, use configured MongoDB DB.

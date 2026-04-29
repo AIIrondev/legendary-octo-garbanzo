@@ -50,6 +50,7 @@ import socket
 import io
 import html
 import logging
+from logging.handlers import RotatingFileHandler
 import secrets
 import importlib
 try:
@@ -80,7 +81,15 @@ from tenant import get_tenant_context
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
-app.logger.setLevel(logging.WARNING)
+app.logger.setLevel(logging.INFO)
+if not os.path.exists(cfg.LOGS_FOLDER):
+    os.makedirs(cfg.LOGS_FOLDER, exist_ok=True)
+log_file_path = os.path.join(cfg.LOGS_FOLDER, 'application.log')
+file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+app.logger.handlers = []
+app.logger.addHandler(file_handler)
 app.secret_key = cfg.SECRET_KEY
 app.debug = cfg.DEBUG
 app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
@@ -4048,13 +4057,19 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        ctx = get_tenant_context()
+        current_tenant_id = ctx.tenant_id if ctx else None
+        current_tenant_db = ctx.db_name if ctx else cfg.MONGODB_DB
+        app.logger.info(f"Login attempt: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
         if not username or not password:
+            app.logger.warning(f"Login blocked: missing credentials tenant={current_tenant_id or 'default'} host={request.host} ip={request.remote_addr}")
             flash('Bitte alle Felder ausfüllen', 'error')
             return redirect(url_for('login'))
         
         user = us.check_nm_pwd(username, password)
 
         if user:
+            app.logger.info(f"Login success: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
             session['username'] = username
             is_admin_user = bool(user.get('Admin', False))
             session['admin'] = is_admin_user
@@ -4075,6 +4090,7 @@ def login():
             else:
                 return redirect(url_for('home'))
         else:
+            app.logger.warning(f"Login failed: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
             flash('Ungültige Anmeldedaten', 'error')
             get_flashed_messages()
     return render_template('login.html')
