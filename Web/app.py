@@ -6618,11 +6618,15 @@ def zurueckgeben(id):
 def get_filter():
     """
     API endpoint to retrieve available item filters/categories.
-    
+
     Returns:
-        dict: Dictionary of available filters
+        dict: Dictionary of available filters by filter field
     """
-    return it.get_filters()
+    return jsonify({
+        'filter1': it.get_primary_filters(),
+        'filter2': it.get_secondary_filters(),
+        'filter3': it.get_tertiary_filters(),
+    })
     
 
 @app.route('/get_ausleihung_by_item/<id>')
