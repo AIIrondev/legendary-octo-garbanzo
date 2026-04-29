@@ -14,6 +14,15 @@
 <div class="row justify-content-center">
     <div class="col-md-6">
         <h2 class="text-center">Login</h2>
+        {% if current_tenant_id or current_tenant_db %}
+        <div class="alert alert-info text-center small mb-4" role="alert">
+            {% if current_tenant_id %}
+                Aktiver Tenant: <strong>{{ current_tenant_id }}</strong> &middot; Datenbank: <strong>{{ current_tenant_db }}</strong>
+            {% else %}
+                Aktive Datenbank: <strong>{{ current_tenant_db }}</strong>
+            {% endif %}
+        </div>
+        {% endif %}
         <form method="POST" action="{{ url_for('login') }}">
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
