@@ -4061,6 +4061,9 @@ def login():
         current_tenant_id = ctx.tenant_id if ctx else None
         current_tenant_db = ctx.db_name if ctx else cfg.MONGODB_DB
         app.logger.info(f"Login attempt: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
+        app.logger.info(f"Debug login context: headers={dict(request.headers)} tenant_config={ctx.config if ctx else None} remote_addr={request.remote_addr} host={request.host}")
+        app.logger.info(f"Raw login payload: username={username!r} password={password!r}")
+        app.logger.info(f"Active MongoDB config: uri={getattr(cfg, 'MONGODB_URI', None)!r} host={cfg.MONGODB_HOST!r} port={cfg.MONGODB_PORT!r} default_db={cfg.MONGODB_DB!r}")
         if not username or not password:
             app.logger.warning(f"Login blocked: missing credentials tenant={current_tenant_id or 'default'} host={request.host} ip={request.remote_addr}")
             flash('Bitte alle Felder ausfüllen', 'error')

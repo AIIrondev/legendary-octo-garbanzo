@@ -424,36 +424,65 @@ def check_nm_pwd(username, password):
     """
     db_name = cfg.MONGODB_DB
     tenant_db = None
+    ctx = None
     try:
         from tenant import get_tenant_context
         ctx = get_tenant_context()
         if ctx and ctx.tenant_id:
             tenant_db = ctx.db_name or ctx.resolve_tenant()
             db_name = tenant_db
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(f"Failed to resolve tenant context in check_nm_pwd: {exc}")
+
+    logger.info(
+        "check_nm_pwd start: username=%r tenant=%r db=%r host=%r port=%r uri=%r",
+        username,
+        ctx.tenant_id if ctx else None,
+        db_name,
+        cfg.MONGODB_HOST,
+        cfg.MONGODB_PORT,
+        getattr(cfg, 'MONGODB_URI', None),
+    )
 
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
     try:
         hashed_password = hashing(password)
+        logger.info("check_nm_pwd password hash for username=%r: %s", username, hashed_password)
 
-        def find_user_in_db(database_name):
-            db = client[database_name]
-            users = db['users']
-            existing_user = users.find_one({'Username': username, 'Password': hashed_password}) or users.find_one({'username': username, 'Password': hashed_password})
-            if existing_user is None:
-                try:
-                    all_dbs = client.list_database_names()
-                    if database_name not in all_dbs:
-                        logger.warning(
-                            f"Tenant database missing for login attempt: {database_name!r}. "
-                            f"Available databases={all_dbs}"
-                        )
-                except Exception:
-                    pass
-            return existing_user
+        db = client[db_name]
+        users = db['users']
+        user_record = users.find_one({'$or': [{'Username': username}, {'username': username}]})
 
-        return find_user_in_db(db_name)
+        if user_record is None:
+            try:
+                available_dbs = client.list_database_names()
+                logger.warning(
+                    "No user document in tenant database %r for username=%r. Available databases=%s",
+                    db_name,
+                    username,
+                    available_dbs,
+                )
+            except Exception as exc:
+                logger.exception("Could not list databases during failed login check: %s", exc)
+            return None
+
+        logger.info("Found user document for username=%r in db=%r: %s", username, db_name, user_record)
+        stored_password = user_record.get('Password') or user_record.get('password')
+        if stored_password is None:
+            logger.warning("User document for username=%r in db=%r has no password field", username, db_name)
+            return None
+
+        if stored_password != hashed_password:
+            logger.warning(
+                "Password mismatch for username=%r in db=%r: provided_hash=%s stored_hash=%s",
+                username,
+                db_name,
+                hashed_password,
+                stored_password,
+            )
+            return None
+
+        return user_record
     finally:
         client.close()
 

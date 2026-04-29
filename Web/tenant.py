@@ -123,12 +123,15 @@ class TenantContext:
         host = request.host.lower()
         _, port = _parse_port_from_host(host)
         self.port = port
+        logger.info(f"Tenant resolution start: request.host={host} request.headers={dict(request.headers)}")
         if port:
             tenant_from_port = _tenant_id_for_port(port)
             if tenant_from_port:
                 self.tenant_id = tenant_from_port
                 self.config = get_tenant_config(tenant_from_port)
-                logger.info(f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port}")
+                logger.info(
+                    f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port} config={self.config}"
+                )
                 return self._get_db_name(tenant_from_port)
             logger.info(f"Tenant port not mapped: host={host} port={port}")
 
@@ -146,7 +149,9 @@ class TenantContext:
                 self.subdomain = potential_subdomain
                 self.tenant_id = potential_subdomain
                 self.config = get_tenant_config(potential_subdomain)
-                logger.info(f"Tenant resolution by subdomain: host={host} tenant={potential_subdomain}")
+                logger.info(
+                    f"Tenant resolution by subdomain: host={host} tenant={potential_subdomain} config={self.config}"
+                )
                 return self._get_db_name(potential_subdomain)
             logger.info(f"Tenant subdomain ignored: {potential_subdomain}")
 
