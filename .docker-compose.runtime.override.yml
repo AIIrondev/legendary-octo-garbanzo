@@ -1,6 +1,8 @@
 services:
   app:
     working_dir: /app/Web
-    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "30", "--graceful-timeout", "20", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
+    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "2", "--timeout", "30", "--graceful-timeout", "20", "--worker-connections", "100", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
     image: ghcr.io/aiirondev/legendary-octo-garbanzo:latest
     build: null
+    ports:
+      - "10000:8000"
