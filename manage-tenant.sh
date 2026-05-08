@@ -175,14 +175,16 @@ EOF
 
 restart_app_container() {
     local env_file="$PWD/.docker-build.env"
-    local compose_args=( -f "$PWD/docker-compose-multitenant.yml" )
+    # If HOST_WORKDIR is set, use it for absolute paths so docker daemon sees correct host paths
+    local work_base="${HOST_WORKDIR:-.}"
+    local compose_args=( -f "$work_base/docker-compose-multitenant.yml" )
     # Pass along COMPOSE_PROJECT_NAME if set so the internal docker-compose sees it
     if [ -n "$COMPOSE_PROJECT_NAME" ]; then
         compose_args=( -p "$COMPOSE_PROJECT_NAME" "${compose_args[@]}" )
     fi
 
-    if [ -f "$PWD/.docker-compose.runtime.override.yml" ]; then
-        compose_args+=( -f "$PWD/.docker-compose.runtime.override.yml" )
+    if [ -f "$work_base/.docker-compose.runtime.override.yml" ]; then
+        compose_args+=( -f "$work_base/.docker-compose.runtime.override.yml" )
     fi
     if [ -f "$env_file" ]; then
         compose_args+=( --env-file "$env_file" )
