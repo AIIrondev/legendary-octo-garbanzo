@@ -401,12 +401,42 @@ def _is_library_module_path(path):
     )
     return path.startswith(library_prefixes)
 
+def _is_inventory_module_path(path):
+    """Return True when the current request path belongs to the inventory module."""
+    if not path:
+        return False
+
+    inventory_prefixes = (
+        '/scanner',
+        '/inventory',
+        '/upload_admin',
+        '/manage_filters',
+        '/manage_locations',
+        '/admin_borrowings',
+        '/admin_damaged_items'
+    )
+    return path.startswith(inventory_prefixes)
+
+@app.before_request
+def _enforce_module_access():
+    endpoint = request.endpoint or ''
+    if endpoint == 'static' or endpoint.startswith('static') or request.path.startswith('/api/'):
+        return None
+    
+    if not cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(request.path):
+        return "Bibliotheks-Modul ist deaktiviert.", 403
+    
+    if not cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(request.path):
+        return "Inventar-Modul ist deaktiviert.", 403
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
     if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
         return 'library'
-    return 'inventory'
+    if cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(path):
+        return 'inventory'
+    # Default fallback:
+    return 'library' if cfg.LIBRARY_MODULE_ENABLED else 'inventory'
 
 
 def _get_current_user_permissions():
@@ -1118,6 +1148,7 @@ def inject_version():
         'csrf_token': csrf_token,
         'CURRENT_MODULE': current_module,
         'school_periods': SCHOOL_PERIODS,
+        'inventory_module_enabled': cfg.INVENTORY_MODULE_ENABLED,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
         'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
         'is_admin': is_admin,
@@ -2741,6 +2772,13 @@ def home():
     if 'username' not in session:
         flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
+        
+    if not cfg.INVENTORY_MODULE_ENABLED:
+        if cfg.LIBRARY_MODULE_ENABLED:
+            return redirect(url_for('library_view'))
+        else:
+            return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
+
     elif not us.check_admin(session['username']):
         return render_template(
             'main.html',
@@ -2773,6 +2811,13 @@ def home_admin():
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
+        
+    if not cfg.INVENTORY_MODULE_ENABLED:
+        if cfg.LIBRARY_MODULE_ENABLED:
+            return redirect(url_for('library_admin'))
+        else:
+            return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
+
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))

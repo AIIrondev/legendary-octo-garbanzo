@@ -74,6 +74,9 @@ DEFAULTS = {
         "10": {"start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)"}
     },
     'modules': {
+        'inventory': {
+            'enabled': True
+        },
         'library': {
             'enabled': False
         },
@@ -190,6 +193,7 @@ class _TenantAwareBool:
         return f"_TenantAwareBool(module_name={self.module_name!r}, value={self.resolve()!r})"
 
 
+INVENTORY_MODULE_ENABLED = _TenantAwareBool('inventory', _get(_conf, ['modules', 'inventory', 'enabled'], DEFAULTS['modules']['inventory']['enabled']))
 LIBRARY_MODULE_ENABLED = _TenantAwareBool('library', _get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
 STUDENT_CARDS_MODULE_ENABLED = _TenantAwareBool('student_cards', _get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
 STUDENT_DEFAULT_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'default_borrow_days'], DEFAULTS['modules']['student_cards']['default_borrow_days']))

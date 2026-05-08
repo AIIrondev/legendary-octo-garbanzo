@@ -20,11 +20,13 @@ show_help() {
     echo "  restart-tenant <id>          'Restart' a single tenant (clears cache/sessions)"
     echo "  restart-all                  Restart all application containers (zero-downtime reload)"
     echo "  list                         List active tenants"
+    echo "  module <tenant_id> <module>=<on|off>... Enable/disable modules for a tenant"
     echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./manage-tenant.sh add school_a 10001"
     echo "  ./manage-tenant.sh remove test_tenant"
+    echo "  ./manage-tenant.sh module school_a inventory=off library=on"
     echo "  ./manage-tenant.sh restart-all"
     echo "  ./manage-tenant.sh -h"
     exit 1
@@ -489,6 +491,59 @@ else:
 PY
         else
             echo "Error: Application container not running."
+        fi
+        ;;
+
+    module)
+        if [ -z "$TENANT_ID" ] || [ -z "${3:-}" ]; then
+            echo "Error: Usage: manage-tenant.sh module <tenant_id> <module_name>=<on|off> [...]"
+            exit 1
+        fi
+        
+        # Pass all remaining arguments to python script
+        shift 2
+        
+        if python3 - "$CONFIG_FILE" "$TENANT_ID" "$@" <<'PY'
+import json, sys, os
+path = sys.argv[1]
+tenant_id = sys.argv[2]
+module_args = sys.argv[3:]
+
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+
+tenants = cfg.setdefault('tenants', {})
+tenant_cfg = tenants.setdefault(tenant_id, {})
+if 'port' not in tenant_cfg:
+    print(f"Warning: Tenant {tenant_id} doesn't have a port mapping in config.json.", file=sys.stderr)
+
+modules = tenant_cfg.setdefault('modules', {})
+
+for arg in module_args:
+    if '=' not in arg:
+        print(f"Warning: Ignoring invalid argument format '{arg}'. Expected name=on|off.", file=sys.stderr)
+        continue
+    mod_name, state_str = arg.split('=', 1)
+    state = str(state_str).lower() in ('on', '1', 'true', 'yes')
+    module_cfg = modules.setdefault(mod_name, {})
+    module_cfg['enabled'] = state
+    print(f"Module '{mod_name}' set to '{'on' if state else 'off'}' for tenant '{tenant_id}'.")
+
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+PY
+        then
+            echo "Module configurations updated successfully."
+            if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+                restart_app_container
+            fi
+        else
+            echo "Failed to update module configuration."
+            exit 1
         fi
         ;;
 
