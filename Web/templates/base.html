@@ -179,6 +179,8 @@
         #loginNavbar {
             padding-top: 0;
             padding-bottom: 0;
+            min-height: 56px;
+            overflow: visible;
         }
 
         .navbar .container-fluid {
@@ -190,9 +192,10 @@
         }
 
         #loginNavbar .container-fluid {
-            padding-top: 6px;
-            padding-bottom: 6px;
+            padding-top: 4px;
+            padding-bottom: 4px;
             align-items: center;
+            min-height: 56px;
         }
         
         .navbar-brand {
@@ -219,8 +222,9 @@
             max-width: min(75vw, 460px);
             object-fit: contain;
             filter: none;
-            margin-top: 6px;
+            margin-top: 0;
             margin-bottom: 0;
+            transform: translateY(28px);
         }
 
         .navbar-text.tenant-badge {
@@ -372,8 +376,9 @@
             #loginNavbar .invario-logo {
                 height: 74px;
                 max-width: 80vw;
-                margin-top: 4px;
+                margin-top: 0;
                 margin-bottom: 0;
+                transform: translateY(20px);
             }
         }
 
