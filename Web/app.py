@@ -406,7 +406,7 @@ def _is_inventory_module_path(path):
     if not path:
         return False
         
-    if path == '/' or path == '/home':
+    if path == '/' or path.startswith('/home'):
         return True
 
     inventory_prefixes = (
@@ -416,7 +416,10 @@ def _is_inventory_module_path(path):
         '/manage_filters',
         '/manage_locations',
         '/admin_borrowings',
-        '/admin_damaged_items'
+        '/admin_damaged_items',
+        '/admin/borrowings',
+        '/admin/damaged_items',
+        '/terminplan',
     )
     return path.startswith(inventory_prefixes)
 
