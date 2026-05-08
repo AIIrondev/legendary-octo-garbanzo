@@ -11,7 +11,7 @@
 services:
   # Management Container for multi-tenant scripts
   tenant-manager:
-    image: docker:cli
+    image: python:3.12-alpine
     container_name: tenant-manager
     restart: "no"
     profiles:
@@ -19,7 +19,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace
-    entrypoint: ["sh", "-c", "cd /workspace && ./manage-tenant.sh \"$$@\"", "--"]
+    entrypoint: >
+      sh -c "apk add --no-cache bash docker-cli && cd /workspace && ./manage-tenant.sh \"$$@\"" --
 
   redis:
     image: redis:7-alpine

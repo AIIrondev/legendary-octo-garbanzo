@@ -434,8 +434,6 @@ def _enforce_module_access():
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
-    # Check if referer indicates we came from library
-    referrer = request.referrer or ''
     
     if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
         session['last_module'] = 'library'
