@@ -176,12 +176,23 @@
             z-index: 1900;
         }
 
+        #loginNavbar {
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
         .navbar .container-fluid {
             gap: 8px;
             /* Ensure container respects safe areas on all sides */
             padding-left: max(env(safe-area-inset-left, 0), 12px);
             padding-right: max(env(safe-area-inset-right, 0), 12px);
             padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        #loginNavbar .container-fluid {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            align-items: center;
         }
         
         .navbar-brand {
@@ -208,7 +219,7 @@
             max-width: min(75vw, 460px);
             object-fit: contain;
             filter: none;
-            margin-top: 20px;
+            margin-top: 6px;
             margin-bottom: 0;
         }
 
@@ -361,7 +372,7 @@
             #loginNavbar .invario-logo {
                 height: 74px;
                 max-width: 80vw;
-                margin-top: 20px;
+                margin-top: 4px;
                 margin-bottom: 0;
             }
         }
