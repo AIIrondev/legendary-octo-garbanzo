@@ -1032,234 +1032,248 @@
         </div>
     </div>
     {% endif %}
+        {% if 'username' in session %}
     {% if CURRENT_MODULE != 'library' and inventory_module_enabled %}
-    <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryNavContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="inventoryNavContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="inventoryNavList">
-                    {% if current_permissions.pages.get('home', True) %}
-                    <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link {% if current_path == url_for('home') %}nav-active{% endif %}" href="{{ url_for('home') }}" data-tutorial-tip="Starten Sie hier mit dem Materialbestand und suchen Sie nach Artikeln.">Artikel</a>
-                    </li>
-                    {% endif %}
-                    {% if 'username' in session %}
-                    {% if current_permissions.pages.get('my_borrowed_items', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}" data-tutorial-tip="Ihre aktuellen Ausleihen und Rückgaben finden Sie hier.">Meine Ausleihen</a>
-                    </li>
-                    {% endif %}
-                    {% if current_permissions.pages.get('tutorial_page', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link quick-link-pill {% if current_path == url_for('tutorial_page') %}nav-active{% endif %}" href="{{ url_for('tutorial_page') }}" data-tutorial-tip="Öffnen Sie das Tutorial, um das System Schritt für Schritt kennenzulernen.">Tutorial</a>
-                    </li>
-                    {% endif %}
-                    {% endif %}
-                    {% if 'username' in session and current_permissions.pages.get('upload_admin', True) and current_permissions.actions.get('can_insert', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}" data-tutorial-tip="Hier können Sie neue Artikel ins Inventar einpflegen.">➕ Hochladen</a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item" data-nav-fixed="true">
-                        <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
-                            <span class="theme-icon-light" style="display: none;">☀️</span>
-                            <span class="theme-icon-dark" style="display: none;">🌙</span>
-                        </button>
-                    </li>
-
-                    <li class="nav-item dropdown ms-lg-auto">
-                        <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
-                            Mehr Optionen
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
-                            {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
-                            <li><h6 class="dropdown-header">Verwaltung</h6></li>
-                            {% if current_permissions.pages.get('manage_filters', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('manage_locations', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('admin_borrowings', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('admin_damaged_items', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
-                            {% endif %}
-                            {% if current_permissions.actions.get('can_view_logs', True) and current_permissions.pages.get('admin_audit_dashboard', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('admin_audit_dashboard') }}">Audit Dashboard</a></li>
-                            {% endif %}
-                            {% if current_permissions.actions.get('can_view_logs', True) and current_permissions.pages.get('logs', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
-                            {% endif %}
-                            <li><hr class="dropdown-divider"></li>
-                            {% if current_permissions.actions.get('can_manage_users', True) %}
-                            <li><h6 class="dropdown-header">System</h6></li>
-                            {% if current_permissions.pages.get('user_del', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('register', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
-                            {% endif %}
-                            <li><hr class="dropdown-divider"></li>
-                            {% endif %}
-                            {% endif %}
-                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item d-none" id="inv-nav-overflow-anchor" aria-hidden="true"></li>
-                </ul>
-                <div class="d-flex">
-                    {% if 'username' in session %}
-                        <div class="function-search-wrap">
-                            <form class="function-search-form" data-function-search="true">
-                                <input
-                                    class="function-search-input"
-                                    type="search"
-                                    name="function_search"
-                                    placeholder="Funktion suchen..."
-                                    list="function-search-options"
-                                    autocomplete="off"
-                                >
-                                <button class="function-search-btn" type="submit">Los</button>
-                            </form>
-                        </div>
-                        {% if current_tenant_db %}
-                        <span class="navbar-text tenant-badge" title="Aktive Tenant-Datenbank">{{ current_tenant_db }}</span>
-                    {% endif %}
-                    <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
-                        <div class="dropdown me-2 user-menu-wrap">
-                            <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
-                                👤
-                                <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
+        <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryNavContent">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="inventoryNavContent">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="inventoryNavList">
+                        {% if current_permissions.pages.get('home', True) %}
+                        <li class="nav-item" data-nav-fixed="true">
+                            <a class="nav-link {% if current_path == url_for('home') %}nav-active{% endif %}" href="{{ url_for('home') }}" data-tutorial-tip="Starten Sie hier mit dem Materialbestand und suchen Sie nach Artikeln.">Artikel</a>
+                        </li>
+                        {% endif %}
+                        {% if 'username' in session %}
+                        {% if current_permissions.pages.get('my_borrowed_items', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}" data-tutorial-tip="Ihre aktuellen Ausleihen und Rückgaben finden Sie hier.">Meine Ausleihen</a>
+                        </li>
+                        {% endif %}
+                        {% if current_permissions.pages.get('tutorial_page', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link quick-link-pill {% if current_path == url_for('tutorial_page') %}nav-active{% endif %}" href="{{ url_for('tutorial_page') }}" data-tutorial-tip="Öffnen Sie das Tutorial, um das System Schritt für Schritt kennenzulernen.">Tutorial</a>
+                        </li>
+                        {% endif %}
+                        {% endif %}
+                        {% if 'username' in session and current_permissions.pages.get('upload_admin', True) and current_permissions.actions.get('can_insert', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link nav-priority-link {% if current_path == url_for('upload_admin') %}nav-active{% endif %}" href="{{ url_for('upload_admin') }}" data-tutorial-tip="Hier können Sie neue Artikel ins Inventar einpflegen.">➕ Hochladen</a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item" data-nav-fixed="true">
+                            <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
+                                <span class="theme-icon-light" style="display: none;">☀️</span>
+                                <span class="theme-icon-dark" style="display: none;">🌙</span>
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
-                                {% if current_permissions.pages.get('notifications_view', True) %}
-                                <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                        </li>
+
+                        <li class="nav-item dropdown ms-lg-auto">
+                            <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
+                                Mehr Optionen
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
+                                {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
+                                <li><h6 class="dropdown-header">Verwaltung</h6></li>
+                                {% if current_permissions.pages.get('manage_filters', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('manage_locations', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('admin_borrowings', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('admin_damaged_items', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
+                                {% endif %}
+                                {% if current_permissions.actions.get('can_view_logs', True) and current_permissions.pages.get('admin_audit_dashboard', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_audit_dashboard') }}">Audit Dashboard</a></li>
+                                {% endif %}
+                                {% if current_permissions.actions.get('can_view_logs', True) and current_permissions.pages.get('logs', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                {% if current_permissions.actions.get('can_manage_users', True) %}
+                                <li><h6 class="dropdown-header">System</h6></li>
+                                {% if current_permissions.pages.get('user_del', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('register', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                                {% endif %}
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
                             </ul>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </nav>
-    {% endif %}
-
-    {% if library_module_enabled and CURRENT_MODULE == 'library' %}
-    <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('library_view') }}" data-icon="📚">Bibliothek</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#libraryNavContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="libraryNavContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="libraryNavList">
-                    {% if current_permissions.pages.get('library_view', True) %}
-                    <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link {% if current_path == url_for('library_view') %}nav-active{% endif %}" href="{{ url_for('library_view') }}" data-tutorial-tip="Die Bibliothek zeigt Ihnen alle Medien und verfügbaren Bücher.">Medien</a>
-                    </li>
-                    {% endif %}
-                    {% if 'username' in session %}
-                    {% if current_permissions.pages.get('my_borrowed_items', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}" data-tutorial-tip="Hier sehen Sie Ihre bibliotheksbezogenen Ausleihen.">Meine Medien</a>
-                    </li>
-                    {% endif %}
-                    {% if current_permissions.pages.get('tutorial_page', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link quick-link-pill {% if current_path == url_for('tutorial_page') %}nav-active{% endif %}" href="{{ url_for('tutorial_page') }}" data-tutorial-tip="Nutzen Sie das Tutorial, um die Bibliotheksfunktionen kennenzulernen.">Tutorial</a>
-                    </li>
-                    {% endif %}
-                    {% endif %}
-                    {% if 'username' in session and current_permissions.actions.get('can_insert', True) and current_permissions.pages.get('library_admin', True) %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}" data-tutorial-tip="Neue Bibliotheksmedien können hier aufgenommen werden.">📖 Hochladen</a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item" data-nav-fixed="true">
-                        <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
-                            <span class="theme-icon-light" style="display: none;">☀️</span>
-                            <span class="theme-icon-dark" style="display: none;">🌙</span>
-                        </button>
-                    </li>
-
-                    <li class="nav-item dropdown ms-lg-auto">
-                        <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
-                            Mehr Optionen
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
-                            {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
-                            <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
-                            {% if current_permissions.pages.get('library_loans_admin', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('admin_damaged_items', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
-                            {% endif %}
-                            {% if student_cards_module_enabled %}
-                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Bibliotheksausweis</a></li>
-                            {% endif %}
-                            <li><hr class="dropdown-divider"></li>
-                            {% if current_permissions.actions.get('can_manage_users', True) %}
-                            <li><h6 class="dropdown-header">System</h6></li>
-                            {% if current_permissions.pages.get('user_del', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
-                            {% endif %}
-                            {% if current_permissions.pages.get('register', True) %}
-                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
-                            {% endif %}
-                            <li><hr class="dropdown-divider"></li>
-                            {% endif %}
-                            {% endif %}
-                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item d-none" id="lib-nav-overflow-anchor" aria-hidden="true"></li>
-                </ul>
-                <div class="d-flex">
-                    {% if 'username' in session %}
-                        <div class="function-search-wrap">
-                            <form class="function-search-form" data-function-search="true">
-                                <input
-                                    class="function-search-input"
-                                    type="search"
-                                    name="function_search"
-                                    placeholder="Funktion suchen..."
-                                    list="function-search-options"
-                                    autocomplete="off"
-                                >
-                                <button class="function-search-btn" type="submit">Los</button>
-                            </form>
-                        </div>
+                        </li>
+                        <li class="nav-item d-none" id="inv-nav-overflow-anchor" aria-hidden="true"></li>
+                    </ul>
+                    <div class="d-flex">
+                        {% if 'username' in session %}
+                            <div class="function-search-wrap">
+                                <form class="function-search-form" data-function-search="true">
+                                    <input
+                                        class="function-search-input"
+                                        type="search"
+                                        name="function_search"
+                                        placeholder="Funktion suchen..."
+                                        list="function-search-options"
+                                        autocomplete="off"
+                                    >
+                                    <button class="function-search-btn" type="submit">Los</button>
+                                </form>
+                            </div>
+                            {% if current_tenant_db %}
+                            <span class="navbar-text tenant-badge" title="Aktive Tenant-Datenbank">{{ current_tenant_db }}</span>
+                        {% endif %}
                         <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
-                        <div class="dropdown me-2 user-menu-wrap">
-                            <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
-                                👤
-                                <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libUserMenuDropdown">
-                                {% if current_permissions.pages.get('notifications_view', True) %}
-                                <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
-                            </ul>
-                        </div>
-                    {% endif %}
+                            <div class="dropdown me-2 user-menu-wrap">
+                                <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
+                                    👤
+                                    <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
+                                    {% if current_permissions.pages.get('notifications_view', True) %}
+                                    <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
+        </nav>
+        {% endif %}
+
+        {% if library_module_enabled and CURRENT_MODULE == 'library' %}
+        <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="{{ url_for('library_view') }}" data-icon="📚">Bibliothek</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#libraryNavContent">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="libraryNavContent">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="libraryNavList">
+                        {% if current_permissions.pages.get('library_view', True) %}
+                        <li class="nav-item" data-nav-fixed="true">
+                            <a class="nav-link {% if current_path == url_for('library_view') %}nav-active{% endif %}" href="{{ url_for('library_view') }}" data-tutorial-tip="Die Bibliothek zeigt Ihnen alle Medien und verfügbaren Bücher.">Medien</a>
+                        </li>
+                        {% endif %}
+                        {% if 'username' in session %}
+                        {% if current_permissions.pages.get('my_borrowed_items', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link quick-link-pill {% if current_path == url_for('my_borrowed_items') %}nav-active{% endif %}" href="{{ url_for('my_borrowed_items') }}" data-tutorial-tip="Hier sehen Sie Ihre bibliotheksbezogenen Ausleihen.">Meine Medien</a>
+                        </li>
+                        {% endif %}
+                        {% if current_permissions.pages.get('tutorial_page', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link quick-link-pill {% if current_path == url_for('tutorial_page') %}nav-active{% endif %}" href="{{ url_for('tutorial_page') }}" data-tutorial-tip="Nutzen Sie das Tutorial, um die Bibliotheksfunktionen kennenzulernen.">Tutorial</a>
+                        </li>
+                        {% endif %}
+                        {% endif %}
+                        {% if 'username' in session and current_permissions.actions.get('can_insert', True) and current_permissions.pages.get('library_admin', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link nav-priority-link {% if current_path == url_for('library_admin') %}nav-active{% endif %}" href="{{ url_for('library_admin') }}" data-tutorial-tip="Neue Bibliotheksmedien können hier aufgenommen werden.">📖 Hochladen</a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item" data-nav-fixed="true">
+                            <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
+                                <span class="theme-icon-light" style="display: none;">☀️</span>
+                                <span class="theme-icon-dark" style="display: none;">🌙</span>
+                            </button>
+                        </li>
+
+                        <li class="nav-item dropdown ms-lg-auto">
+                            <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">
+                                Mehr Optionen
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
+                                {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
+                                <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
+                                {% if current_permissions.pages.get('library_loans_admin', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('admin_damaged_items', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
+                                {% endif %}
+                                {% if student_cards_module_enabled %}
+                                <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Bibliotheksausweis</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                {% if current_permissions.actions.get('can_manage_users', True) %}
+                                <li><h6 class="dropdown-header">System</h6></li>
+                                {% if current_permissions.pages.get('user_del', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('register', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item d-none" id="lib-nav-overflow-anchor" aria-hidden="true"></li>
+                    </ul>
+                    <div class="d-flex">
+                        {% if 'username' in session %}
+                            <div class="function-search-wrap">
+                                <form class="function-search-form" data-function-search="true">
+                                    <input
+                                        class="function-search-input"
+                                        type="search"
+                                        name="function_search"
+                                        placeholder="Funktion suchen..."
+                                        list="function-search-options"
+                                        autocomplete="off"
+                                    >
+                                    <button class="function-search-btn" type="submit">Los</button>
+                                </form>
+                            </div>
+                            <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                            <div class="dropdown me-2 user-menu-wrap">
+                                <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
+                                    👤
+                                    <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libUserMenuDropdown">
+                                    {% if current_permissions.pages.get('notifications_view', True) %}
+                                    <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </nav>
+        {% endif %}
+
+    {% else %}
+    <nav class="navbar navbar-expand-lg navbar-dark" id="loginNavbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="🔹">Invario</a>
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('impressum') }}">Impressum</a>
+                </li>
+            </ul>
         </div>
     </nav>
     {% endif %}

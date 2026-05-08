@@ -405,6 +405,9 @@ def _is_inventory_module_path(path):
     """Return True when the current request path belongs to the inventory module."""
     if not path:
         return False
+        
+    if path == '/' or path == '/home':
+        return True
 
     inventory_prefixes = (
         '/scanner',
@@ -431,11 +434,25 @@ def _enforce_module_access():
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
+    # Check if referer indicates we came from library
+    referrer = request.referrer or ''
+    
     if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
+        session['last_module'] = 'library'
         return 'library'
     if cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(path):
+        session['last_module'] = 'inventory'
         return 'inventory'
-    # Default fallback:
+        
+    last_module = session.get('last_module')
+    if last_module == 'library' and cfg.LIBRARY_MODULE_ENABLED:
+        return 'library'
+    if last_module == 'inventory' and cfg.INVENTORY_MODULE_ENABLED:
+        return 'inventory'
+        
+    # Default fallback: prefer inventory if enabled, otherwise library, else inventory
+    if cfg.INVENTORY_MODULE_ENABLED:
+        return 'inventory'
     return 'library' if cfg.LIBRARY_MODULE_ENABLED else 'inventory'
 
 
