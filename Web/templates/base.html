@@ -192,6 +192,24 @@
             flex-shrink: 0;
         }
 
+        #loginNavbar .navbar-brand {
+            padding-right: 0;
+        }
+
+        #loginNavbar .navbar-brand::before {
+            content: none;
+            margin-right: 0;
+        }
+
+        #loginNavbar .invario-logo {
+            display: block;
+            height: 48px;
+            width: auto;
+            max-width: min(58vw, 280px);
+            object-fit: contain;
+            filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.45));
+        }
+
         .navbar-text.tenant-badge {
             font-size: 0.82rem;
             color: rgba(255,255,255,0.9);
@@ -336,6 +354,11 @@
             .navbar-nav .nav-link {
                 font-size: 0.75rem;
                 padding: 0.4rem 0.5rem;
+            }
+
+            #loginNavbar .invario-logo {
+                height: 34px;
+                max-width: 62vw;
             }
         }
 
@@ -1269,7 +1292,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark" id="loginNavbar">
         <div class="container-fluid">
             <a class="navbar-brand py-0" href="{{ url_for('home') }}">
-                <img src="{{ url_for('static', filename='img/invario-logo.png') }}" alt="Invario" height="100" class="d-inline-block align-top" style="max-height: 48px;">
+                <img src="{{ url_for('static', filename='img/invario-logo.png') }}" alt="Invario" class="invario-logo">
             </a>
             <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
                 <li class="nav-item">
