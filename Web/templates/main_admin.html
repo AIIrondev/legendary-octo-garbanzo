@@ -2353,10 +2353,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     {% if school_info and school_info.school_number %} | Schulnummer: {{ school_info.school_number }}{% endif %}
                 </div>
             </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <a href="{{ url_for('admin_school_settings') }}" class="btn btn-primary">Schulstammdaten bearbeiten</a>
-                <a href="{{ url_for('admin_audit_dashboard') }}" class="btn btn-outline-secondary">Audit-Export öffnen</a>
-            </div>
         </div>
         <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
         <div id="bulk-delete-drawer" class="bulk-delete-drawer" aria-hidden="true">

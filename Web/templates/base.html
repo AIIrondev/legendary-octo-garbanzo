@@ -1127,6 +1127,7 @@
                                 {% if current_permissions.pages.get('manage_locations', True) %}
                                 <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
                                 {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_school_settings') }}">Schulstammdaten</a></li>
                                 {% if current_permissions.pages.get('admin_borrowings', True) %}
                                 <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
                                 {% endif %}
@@ -1252,6 +1253,7 @@
                                 {% if student_cards_module_enabled %}
                                 <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Bibliotheksausweis</a></li>
                                 {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_school_settings') }}">Schulstammdaten</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 {% if current_permissions.actions.get('can_manage_users', True) %}
                                 <li><h6 class="dropdown-header">System</h6></li>
@@ -1529,6 +1531,7 @@
         <option value="Defekte Items"></option>
         <option value="Filter verwalten"></option>
         <option value="Orte verwalten"></option>
+        <option value="Schulstammdaten"></option>
         <option value="Audit Dashboard"></option>
         <option value="Logs"></option>
         <option value="Benutzer verwalten"></option>
@@ -1598,6 +1601,7 @@
                 { label: 'Defekte Items', keywords: ['defekte items', 'defekt', 'schaden'], url: {{ url_for('admin_damaged_items')|tojson }} },
                 { label: 'Filter verwalten', keywords: ['filter verwalten', 'filter'], url: {{ url_for('manage_filters')|tojson }} },
                 { label: 'Orte verwalten', keywords: ['orte verwalten', 'orte', 'location'], url: {{ url_for('manage_locations')|tojson }} },
+                { label: 'Schulstammdaten', keywords: ['schule', 'settings', 'stammdaten', 'school settings'], url: {{ url_for('admin_school_settings')|tojson }} },
                 { label: 'Audit Dashboard', keywords: ['audit', 'audit dashboard'], url: {{ url_for('admin_audit_dashboard')|tojson }} },
                 { label: 'Logs', keywords: ['logs', 'protokoll'], url: {{ url_for('logs')|tojson }} },
                 { label: 'Benutzer verwalten', keywords: ['benutzer verwalten', 'user'], url: {{ url_for('user_del')|tojson }} },
