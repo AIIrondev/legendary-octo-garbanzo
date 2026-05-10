@@ -299,8 +299,9 @@ class DIN5008AuditPDF:
             'EventHashCell',
             parent=cell_style,
             fontName='Courier',
-            fontSize=7.5,
+            fontSize=7.2,
             leading=9,
+            wordWrap='CJK',
         )
 
         def _safe(value):
@@ -325,8 +326,12 @@ class DIN5008AuditPDF:
 
         def _fmt_ip(value):
             text = _safe(value)
-            # For long IPv6 values use soft wrapping points.
-            return text.replace(':', ':<br/>') if len(text) > 18 else text
+            # Keep IPv4 intact. For long IPv6 values insert only one line break in the middle.
+            if ':' in text and len(text) > 24:
+                parts = text.split(':')
+                if len(parts) > 4:
+                    return ':'.join(parts[:4]) + ':<br/>' + ':'.join(parts[4:])
+            return text
 
         # Build table data
         if self.export_type == 'quick':
@@ -366,7 +371,7 @@ class DIN5008AuditPDF:
                 actor = _safe(row.get('actor', ''))
                 source = _safe(row.get('source', 'System'))
                 ip = _fmt_ip(row.get('ip', ''))
-                entry_hash = _chunk_text(_safe(row.get('entry_hash', ''))[:24], chunk=4)
+                entry_hash = _chunk_text(_safe(row.get('entry_hash', ''))[:40], chunk=8)
                 
                 table_data.append([
                     Paragraph(chain_idx, cell_style),
@@ -378,7 +383,8 @@ class DIN5008AuditPDF:
                     Paragraph(entry_hash, hash_style),
                 ])
             
-            colWidths = [1.0*cm, 2.8*cm, 3.8*cm, 2.3*cm, 1.7*cm, 2.3*cm, 2.1*cm]
+            # Give IP and hash columns significantly more room for readability.
+            colWidths = [0.9*cm, 2.4*cm, 2.8*cm, 2.0*cm, 1.4*cm, 3.3*cm, 4.2*cm]
         
         # Create table
         events_table = Table(table_data, colWidths=colWidths, repeatRows=1)
