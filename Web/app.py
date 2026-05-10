@@ -657,7 +657,28 @@ def _save_school_logo_upload(upload_file, tenant_id=None, tenant_db=None):
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     upload_file.save(logo_path)
-    return logo_filename
+
+    # Generate a thumbnail for consistent navbar sizing
+    try:
+        thumb_filename = f'school-logo-{safe_tenant}-thumb.png'
+        thumb_path = os.path.join(app.config['UPLOAD_FOLDER'], thumb_filename)
+
+        with Image.open(logo_path) as img:
+            # Ensure RGBA for transparency and convert if needed
+            if img.mode not in ('RGBA', 'RGB'):
+                img = img.convert('RGBA')
+
+            # Target max size: width up to 520px, height up to 114px (matches CSS constraints)
+            max_thumb_size = (520, 114)
+            img.thumbnail(max_thumb_size, Image.LANCZOS)
+
+            # Save as PNG for predictable rendering in web UI
+            img.save(thumb_path, format='PNG', optimize=True)
+    except Exception as e:
+        app.logger.warning(f"Thumbnail generation failed for {logo_path}: {e}")
+        thumb_filename = None
+
+    return (logo_filename, thumb_filename)
 
 
 def _parse_money_value(value):
@@ -1231,6 +1252,7 @@ def inject_version():
         'current_permissions': current_permissions,
         'current_tenant_db': current_tenant_db,
         'current_tenant_id': current_tenant_id,
+        'school_info': _get_school_info_for_export(),
         'permission_action_options': PERMISSION_ACTION_OPTIONS,
         'permission_page_options': PERMISSION_PAGE_OPTIONS,
         'permission_presets': us.get_permission_preset_definitions(),
@@ -9919,14 +9941,31 @@ def admin_school_settings():
         if uploaded_logo and getattr(uploaded_logo, 'filename', ''):
             try:
                 previous_logo_path = current_school.get('logo_path') if isinstance(current_school, dict) else ''
-                saved_logo_filename = _save_school_logo_upload(uploaded_logo, tenant_id=tenant_id, tenant_db=tenant_db)
+                previous_thumb_path = current_school.get('logo_thumb') if isinstance(current_school, dict) else ''
+                saved = _save_school_logo_upload(uploaded_logo, tenant_id=tenant_id, tenant_db=tenant_db)
+                if isinstance(saved, (list, tuple)):
+                    saved_logo_filename, saved_thumb_filename = saved
+                else:
+                    saved_logo_filename, saved_thumb_filename = saved, None
+
                 if saved_logo_filename:
                     school_info['logo_path'] = saved_logo_filename
+                    if saved_thumb_filename:
+                        school_info['logo_thumb'] = saved_thumb_filename
+
+                    # remove previous files if different
                     if previous_logo_path and previous_logo_path != saved_logo_filename:
                         previous_logo_file = os.path.join(app.config['UPLOAD_FOLDER'], previous_logo_path)
                         if os.path.exists(previous_logo_file):
                             try:
                                 os.remove(previous_logo_file)
+                            except Exception:
+                                pass
+                    if previous_thumb_path and previous_thumb_path != saved_thumb_filename:
+                        previous_thumb_file = os.path.join(app.config['UPLOAD_FOLDER'], previous_thumb_path)
+                        if os.path.exists(previous_thumb_file):
+                            try:
+                                os.remove(previous_thumb_file)
                             except Exception:
                                 pass
             except Exception as exc:
