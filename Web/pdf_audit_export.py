@@ -285,66 +285,141 @@ class DIN5008AuditPDF:
                                  spaceAfter=8,
                              )))
         
+        # Build table data with wrapped cells for better readability on A4 pages
+        cell_style = ParagraphStyle(
+            'EventCell',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8,
+            leading=9.5,
+            textColor=HexColor('#1f2937'),
+            alignment=TA_LEFT,
+        )
+        hash_style = ParagraphStyle(
+            'EventHashCell',
+            parent=cell_style,
+            fontName='Courier',
+            fontSize=7.5,
+            leading=9,
+        )
+
+        def _safe(value):
+            return str(value or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        def _fmt_ts(value):
+            text = _safe(value)
+            if len(text) >= 19 and text[4] == '-' and text[7] == '-':
+                # Convert 2026-05-10 16:19:07... -> 10.05.2026 16:19
+                return f"{text[8:10]}.{text[5:7]}.{text[0:4]} {text[11:16]}"
+            return text[:16]
+
+        def _fmt_event(value):
+            text = _safe(value).replace('_', ' ').strip()
+            return text[:60]
+
+        def _chunk_text(value, chunk=4, sep=' '):
+            text = _safe(value)
+            if not text:
+                return ''
+            return sep.join(text[i:i + chunk] for i in range(0, len(text), chunk))
+
+        def _fmt_ip(value):
+            text = _safe(value)
+            # For long IPv6 values use soft wrapping points.
+            return text.replace(':', ':<br/>') if len(text) > 18 else text
+
         # Build table data
         if self.export_type == 'quick':
             # Quick-Check: Minimal columns
             table_data = [
-                ['Index', 'Zeit', 'Ereignis', 'Benutzer', 'Hashwert (gekürzt)'],
+                ['Idx', 'Zeit', 'Ereignis', 'Benutzer', 'Hash (gekürzt)'],
             ]
             
             for row in audit_rows[:20]:  # Limit to 20 rows for quick check
-                chain_idx = str(row.get('chain_index', ''))
-                timestamp = str(row.get('timestamp') or row.get('created_at', ''))[:16]
-                event_type = str(row.get('event_type', ''))
-                actor = str(row.get('actor', ''))
-                entry_hash = str(row.get('entry_hash', ''))[:12] + '...'
+                chain_idx = _safe(row.get('chain_index', ''))
+                timestamp = _fmt_ts(row.get('timestamp') or row.get('created_at', ''))
+                event_type = _fmt_event(row.get('event_type', ''))
+                actor = _safe(row.get('actor', ''))
+                entry_hash = _chunk_text(_safe(row.get('entry_hash', ''))[:20], chunk=4)
+                if entry_hash:
+                    entry_hash += ' ...'
                 
-                table_data.append([chain_idx, timestamp, event_type, actor, entry_hash])
+                table_data.append([
+                    Paragraph(chain_idx, cell_style),
+                    Paragraph(timestamp, cell_style),
+                    Paragraph(event_type, cell_style),
+                    Paragraph(actor, cell_style),
+                    Paragraph(entry_hash, hash_style),
+                ])
             
-            colWidths = [1.2*cm, 1.8*cm, 2.2*cm, 2*cm, 3.8*cm]
+            colWidths = [1.1*cm, 2.7*cm, 4.8*cm, 3.1*cm, 4.9*cm]
         else:
             # Official Report: Full columns
             table_data = [
-                ['Idx', 'Zeitstempel', 'Ereignistyp', 'Benutzer', 'Quelle', 'IP-Adresse', 'Hashwert'],
+                ['Idx', 'Zeit', 'Ereignis', 'Benutzer', 'Quelle', 'IP', 'Hash'],
             ]
             
             for row in audit_rows:
-                chain_idx = str(row.get('chain_index', ''))
-                timestamp = str(row.get('timestamp') or row.get('created_at', ''))[:19]
-                event_type = str(row.get('event_type', ''))
-                actor = str(row.get('actor', ''))
-                source = str(row.get('source', 'System'))[:15]
-                ip = str(row.get('ip', ''))
-                entry_hash = str(row.get('entry_hash', ''))[:16]
+                chain_idx = _safe(row.get('chain_index', ''))
+                timestamp = _fmt_ts(row.get('timestamp') or row.get('created_at', ''))
+                event_type = _fmt_event(row.get('event_type', ''))
+                actor = _safe(row.get('actor', ''))
+                source = _safe(row.get('source', 'System'))
+                ip = _fmt_ip(row.get('ip', ''))
+                entry_hash = _chunk_text(_safe(row.get('entry_hash', ''))[:24], chunk=4)
                 
-                table_data.append([chain_idx, timestamp, event_type, actor, source, ip, entry_hash])
+                table_data.append([
+                    Paragraph(chain_idx, cell_style),
+                    Paragraph(timestamp, cell_style),
+                    Paragraph(event_type, cell_style),
+                    Paragraph(actor, cell_style),
+                    Paragraph(source, cell_style),
+                    Paragraph(ip, cell_style),
+                    Paragraph(entry_hash, hash_style),
+                ])
             
-            colWidths = [0.8*cm, 1.8*cm, 1.5*cm, 1.5*cm, 1.2*cm, 1.5*cm, 2.2*cm]
+            colWidths = [1.0*cm, 2.8*cm, 3.8*cm, 2.3*cm, 1.7*cm, 2.3*cm, 2.1*cm]
         
         # Create table
-        events_table = Table(table_data, colWidths=colWidths)
+        events_table = Table(table_data, colWidths=colWidths, repeatRows=1)
         events_table.setStyle(TableStyle([
             # Header styling
             ('BACKGROUND', (0, 0), (-1, 0), HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#ffffff')),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
             
             # Body styling
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#bdc3c7')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ecf0f1'), HexColor('#ffffff')]),
-            ('TOPPADDING', (0, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-            ('LEFTPADDING', (0, 1), (-1, -1), 3),
-            ('RIGHTPADDING', (0, 1), (-1, -1), 3),
+            ('TOPPADDING', (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ('LEFTPADDING', (0, 1), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 4),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+            ('ALIGN', (-1, 1), (-1, -1), 'LEFT'),
         ]))
         
         story.append(events_table)
+        story.append(Paragraph(
+            "Hinweis: Zeitangaben sind auf Minuten gerundet; Hashwerte werden aus Platzgründen gekürzt dargestellt.",
+            ParagraphStyle(
+                'TableHint',
+                parent=styles['Normal'],
+                fontSize=7.5,
+                leading=9,
+                textColor=HexColor('#6b7280'),
+                alignment=TA_LEFT,
+                spaceBefore=4,
+            )
+        ))
         story.append(Spacer(1, 0.2 * cm))
     
     def _add_mismatches(self, story, mismatches):
