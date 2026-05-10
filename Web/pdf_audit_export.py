@@ -7,6 +7,7 @@ PDF/A archiving standards for German schools and educational authorities.
 import io
 import json
 import datetime
+import os
 import qrcode
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -109,6 +110,20 @@ class DIN5008AuditPDF:
             fontName='Helvetica',
             textColor=HexColor('#000000'),
         )
+
+        logo_path = self.school_info.get('logo_path', '')
+        resolved_logo_path = None
+        if logo_path:
+            candidate_paths = [
+                logo_path,
+                os.path.join(cfg.UPLOAD_FOLDER, logo_path),
+                os.path.join('/opt/Inventarsystem/Web/uploads', logo_path),
+                os.path.join('/var/Inventarsystem/Web/uploads', logo_path),
+            ]
+            for candidate_path in candidate_paths:
+                if candidate_path and os.path.exists(candidate_path):
+                    resolved_logo_path = candidate_path
+                    break
         
         school_info_text = f"""
         <b>{school_name}</b><br/>
@@ -116,8 +131,28 @@ class DIN5008AuditPDF:
         {postal_code} {city}<br/>
         <i>Schulnummer: {school_number}</i>
         """
-        
-        story.append(Paragraph(school_info_text, header_style))
+
+        if resolved_logo_path:
+            logo_image = Image(resolved_logo_path)
+            try:
+                logo_image._restrictSize(3.4 * cm, 3.4 * cm)
+            except Exception:
+                pass
+
+            school_table = Table(
+                [[logo_image, Paragraph(school_info_text, header_style)]],
+                colWidths=[3.8 * cm, self.USABLE_WIDTH - 3.8 * cm],
+            )
+            school_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(school_table)
+        else:
+            story.append(Paragraph(school_info_text, header_style))
         
         # Information block (right side simulation)
         story.append(Spacer(1, 0.3 * cm))

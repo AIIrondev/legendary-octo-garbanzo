@@ -636,6 +636,30 @@ def _get_school_info_for_export():
         }
 
 
+def _save_school_logo_upload(upload_file, tenant_id=None, tenant_db=None):
+    """Save an uploaded school logo to the shared upload folder with a tenant-specific filename."""
+    if not upload_file or not getattr(upload_file, 'filename', ''):
+        return None
+
+    is_allowed, error_message = allowed_file(upload_file.filename, upload_file, max_size_mb=cfg.IMAGE_MAX_UPLOAD_MB)
+    if not is_allowed:
+        raise ValueError(error_message)
+
+    safe_tenant = re.sub(r'[^a-zA-Z0-9_\-]+', '_', str(tenant_id or tenant_db or 'default').strip())
+    safe_tenant = safe_tenant.strip('_') or 'default'
+    _, original_ext = os.path.splitext(secure_filename(upload_file.filename))
+    extension = (original_ext or '').lower()
+    if not extension:
+        raise ValueError('Das Logo benötigt eine Dateiendung.')
+
+    logo_filename = f'school-logo-{safe_tenant}{extension}'
+    logo_path = os.path.join(app.config['UPLOAD_FOLDER'], logo_filename)
+
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    upload_file.save(logo_path)
+    return logo_filename
+
+
 def _parse_money_value(value):
     """Parse a user-facing money value into a float when possible."""
     if value is None:
@@ -9890,6 +9914,27 @@ def admin_school_settings():
             'it_admin': sanitize_form_value(request.form.get('it_admin')),
             'logo_path': sanitize_form_value(request.form.get('logo_path')),
         }
+
+        uploaded_logo = request.files.get('logo_upload')
+        if uploaded_logo and getattr(uploaded_logo, 'filename', ''):
+            try:
+                previous_logo_path = current_school.get('logo_path') if isinstance(current_school, dict) else ''
+                saved_logo_filename = _save_school_logo_upload(uploaded_logo, tenant_id=tenant_id, tenant_db=tenant_db)
+                if saved_logo_filename:
+                    school_info['logo_path'] = saved_logo_filename
+                    if previous_logo_path and previous_logo_path != saved_logo_filename:
+                        previous_logo_file = os.path.join(app.config['UPLOAD_FOLDER'], previous_logo_path)
+                        if os.path.exists(previous_logo_file):
+                            try:
+                                os.remove(previous_logo_file)
+                            except Exception:
+                                pass
+            except Exception as exc:
+                flash(f'Logo konnte nicht hochgeladen werden: {exc}', 'error')
+                return redirect(url_for('admin_school_settings'))
+
+        if not school_info.get('logo_path') and current_school.get('logo_path'):
+            school_info['logo_path'] = current_school.get('logo_path', '')
 
         missing_fields = [
             label for label, key in [

@@ -61,6 +61,15 @@ DEFAULTS = {
         'logs': os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'logs'),
         'deleted_archives': os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'deleted_archives'),
     },
+    'school': {
+        'name': 'Schulname',
+        'address': 'Schulstraße 1',
+        'postal_code': '00000',
+        'city': 'Ort',
+        'school_number': '000000',
+        'it_admin': 'IT-Beauftragte oder IT-Beauftragter',
+        'logo_path': '',
+    },
     'schoolPeriods': {
         "1": {"start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)"},
         "2": {"start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)"},
@@ -163,6 +172,7 @@ SSL_KEY = _get(_conf, ['ssl', 'key'], DEFAULTS['ssl']['key'])
 
 # School periods
 SCHOOL_PERIODS = _get(_conf, ['schoolPeriods'], DEFAULTS['schoolPeriods'])
+SCHOOL_INFO_DEFAULT = _get(_conf, ['school'], DEFAULTS['school'])
 
 # Optional feature modules
 TENANT_CONFIGS = _get(_conf, ['tenants'], {})
