@@ -2345,15 +2345,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 </div>
             </div>
         </h1>
-        <div class="admin-school-banner" style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:center; margin:0 0 14px; padding:14px 16px; border:1px solid #dbe3ee; border-radius:12px; background: var(--ui-surface); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);">
-            <div>
-                <div style="font-weight:700; font-size:1rem; color:var(--ui-title);">Schulstammdaten</div>
-                <div style="font-size:0.92rem; color:var(--ui-text-muted);">
-                    {{ school_info.name if school_info else 'Schulname nicht konfiguriert' }}
-                    {% if school_info and school_info.school_number %} | Schulnummer: {{ school_info.school_number }}{% endif %}
-                </div>
-            </div>
-        </div>
         <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
         <div id="bulk-delete-drawer" class="bulk-delete-drawer" aria-hidden="true">
             <div class="bulk-delete-content">
