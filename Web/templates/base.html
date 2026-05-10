@@ -1312,11 +1312,13 @@
     <nav class="navbar navbar-expand-lg navbar-dark" id="loginNavbar">
         <div class="container-fluid">
                     <a class="navbar-brand py-0" href="{{ url_for('home') }}">
-                        {% if school_info and (school_info.logo_thumb or school_info.logo_path) %}
-                            {% if school_info.logo_thumb %}
-                                <img src="{{ url_for('uploaded_file', filename=school_info.logo_thumb) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
+                        {% set school_logo_thumb = school_info.get('logo_thumb') if school_info else '' %}
+                        {% set school_logo_path = school_info.get('logo_path') if school_info else '' %}
+                        {% if school_logo_thumb or school_logo_path %}
+                            {% if school_logo_thumb %}
+                                <img src="{{ url_for('uploaded_file', filename=school_logo_thumb) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
                             {% else %}
-                                <img src="{{ url_for('uploaded_file', filename=school_info.logo_path) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
+                                <img src="{{ url_for('uploaded_file', filename=school_logo_path) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
                             {% endif %}
                         {% else %}
                             <img src="{{ url_for('static', filename='img/invario-logo.png') }}" alt="Invario" class="invario-logo">

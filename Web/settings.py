@@ -69,6 +69,8 @@ DEFAULTS = {
         'school_number': '000000',
         'it_admin': 'IT-Beauftragte oder IT-Beauftragter',
         'logo_path': '',
+        'logo_thumb': '',
+        'logo_thumb': '',
     },
     'schoolPeriods': {
         "1": {"start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)"},

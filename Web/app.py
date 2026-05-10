@@ -9935,6 +9935,7 @@ def admin_school_settings():
             'school_number': sanitize_form_value(request.form.get('school_number')),
             'it_admin': sanitize_form_value(request.form.get('it_admin')),
             'logo_path': sanitize_form_value(request.form.get('logo_path')),
+            'logo_thumb': sanitize_form_value(request.form.get('logo_thumb')),
         }
 
         uploaded_logo = request.files.get('logo_upload')
@@ -9950,8 +9951,7 @@ def admin_school_settings():
 
                 if saved_logo_filename:
                     school_info['logo_path'] = saved_logo_filename
-                    if saved_thumb_filename:
-                        school_info['logo_thumb'] = saved_thumb_filename
+                    school_info['logo_thumb'] = saved_thumb_filename or ''
 
                     # remove previous files if different
                     if previous_logo_path and previous_logo_path != saved_logo_filename:
@@ -9974,6 +9974,8 @@ def admin_school_settings():
 
         if not school_info.get('logo_path') and current_school.get('logo_path'):
             school_info['logo_path'] = current_school.get('logo_path', '')
+        if not school_info.get('logo_thumb') and current_school.get('logo_thumb'):
+            school_info['logo_thumb'] = current_school.get('logo_thumb', '')
 
         missing_fields = [
             label for label, key in [
