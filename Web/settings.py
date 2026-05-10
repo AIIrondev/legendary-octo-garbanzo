@@ -348,3 +348,65 @@ def MongoClient(*args, **kwargs):
         cached_client = _MongoClientProxy(client)
         _MONGO_CLIENT_CACHE[cache_key] = cached_client
         return cached_client
+
+
+def get_school_info():
+    """Return the tenant-scoped school metadata used for PDFs and admin views."""
+    school_info = dict(SCHOOL_INFO_DEFAULT)
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        if 'settings' not in db.list_collection_names():
+            return school_info
+
+        settings_collection = db['settings']
+        settings_document = settings_collection.find_one({'setting_type': 'school_info'})
+        if not settings_document:
+            return school_info
+
+        configured_school = settings_document.get('school', {})
+        if isinstance(configured_school, dict):
+            for key, value in configured_school.items():
+                if value is not None:
+                    school_info[key] = value
+        return school_info
+    except Exception:
+        return school_info
+    finally:
+        if client:
+            client.close()
+
+
+def update_school_info(school_info):
+    """Persist tenant-scoped school metadata into MongoDB and refresh the in-memory cache."""
+    if not isinstance(school_info, dict):
+        raise TypeError('school_info must be a dict')
+
+    updated_school = dict(SCHOOL_INFO_DEFAULT)
+    for key in updated_school.keys():
+        value = school_info.get(key, updated_school[key])
+        if value is None:
+            value = ''
+        updated_school[key] = str(value).strip()
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        settings_collection = db['settings']
+        settings_collection.update_one(
+            {'setting_type': 'school_info'},
+            {
+                '$set': {
+                    'setting_type': 'school_info',
+                    'school': updated_school,
+                }
+            },
+            upsert=True,
+        )
+    finally:
+        if client:
+            client.close()
+
+    return dict(updated_school)

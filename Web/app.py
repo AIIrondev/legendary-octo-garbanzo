@@ -610,7 +610,9 @@ def _get_school_info_for_export():
     Returns default info if not configured.
     """
     try:
-        # Try to load from settings or config
+        if hasattr(cfg, 'get_school_info'):
+            return cfg.get_school_info()
+
         school_info = {
             'name': 'Schulname',
             'address': 'Schuladresse',
@@ -618,19 +620,8 @@ def _get_school_info_for_export():
             'city': 'Stadt',
             'school_number': '000000',
             'it_admin': 'IT-Beauftragter/in',
+            'logo_path': '',
         }
-        
-        # Try to load from config.json if available
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.json')
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    if 'school' in config:
-                        school_info.update(config.get('school', {}))
-            except Exception:
-                pass
-        
         return school_info
     except Exception:
         # Return defaults if anything fails
@@ -641,6 +632,7 @@ def _get_school_info_for_export():
             'city': 'Stadt',
             'school_number': '000000',
             'it_admin': 'IT-Beauftragter/in',
+            'logo_path': '',
         }
 
 
@@ -2886,7 +2878,8 @@ def home_admin():
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
-        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
+        school_info=_get_school_info_for_export(),
     )
 
 
@@ -9857,6 +9850,75 @@ def manage_locations():
         location_values=location_values,
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
+
+
+@app.route('/admin/school-settings', methods=['GET', 'POST'])
+def admin_school_settings():
+    """Admin page for configuring school metadata used in exports."""
+    if 'username' not in session:
+        flash('Bitte melden Sie sich mit einem administrativen Konto an.', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Für diese Seite sind Administratorrechte erforderlich.', 'error')
+        return redirect(url_for('login'))
+
+    permissions = _get_current_user_permissions()
+    if not _action_access_allowed(permissions, 'can_manage_settings'):
+        flash('Sie haben keine Berechtigung, die Schulstammdaten zu ändern.', 'error')
+        return redirect(url_for('home_admin'))
+
+    current_school = _get_school_info_for_export()
+    tenant_context = None
+    tenant_id = None
+    tenant_db = cfg.MONGODB_DB
+    try:
+        tenant_context = get_tenant_context()
+    except Exception:
+        tenant_context = None
+    if tenant_context:
+        tenant_id = tenant_context.tenant_id
+        tenant_db = tenant_context.db_name or tenant_db
+
+    if request.method == 'POST':
+        school_info = {
+            'name': sanitize_form_value(request.form.get('name')),
+            'address': sanitize_form_value(request.form.get('address')),
+            'postal_code': sanitize_form_value(request.form.get('postal_code')),
+            'city': sanitize_form_value(request.form.get('city')),
+            'school_number': sanitize_form_value(request.form.get('school_number')),
+            'it_admin': sanitize_form_value(request.form.get('it_admin')),
+            'logo_path': sanitize_form_value(request.form.get('logo_path')),
+        }
+
+        missing_fields = [
+            label for label, key in [
+                ('Schulname', 'name'),
+                ('Adresse', 'address'),
+                ('PLZ', 'postal_code'),
+                ('Ort', 'city'),
+                ('Schulnummer', 'school_number'),
+            ] if not school_info.get(key)
+        ]
+
+        if missing_fields:
+            flash(f'Bitte füllen Sie die Pflichtfelder aus: {", ".join(missing_fields)}.', 'error')
+        else:
+            try:
+                updated_school = cfg.update_school_info(school_info)
+                current_school = updated_school
+                flash('Schulstammdaten wurden erfolgreich gespeichert.', 'success')
+            except Exception as exc:
+                app.logger.error(f'Could not update school settings: {exc}\n{traceback.format_exc()}')
+                flash('Die Schulstammdaten konnten nicht gespeichert werden.', 'error')
+
+    return render_template(
+        'admin_school_settings.html',
+        school_info=current_school,
+        tenant_id=tenant_id,
+        tenant_db=tenant_db,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
     )
 
 @app.route('/check_code_unique/<code>')
