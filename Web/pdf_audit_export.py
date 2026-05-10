@@ -17,7 +17,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER, TA_JUSTIFY
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import settings as cfg
 
+
+__version__ = cfg.APP_VERSION
 
 class DIN5008AuditPDF:
     """
@@ -137,7 +140,7 @@ class DIN5008AuditPDF:
         Erstellungsdatum: {created_date}<br/>
         Uhrzeit: {created_time}<br/>
         Verantwortliche Person: {responsible_person}<br/>
-        System: Invario v2.6.5
+        System: Invario v{__version__}
         """
         
         story.append(Paragraph(info_text, info_style))

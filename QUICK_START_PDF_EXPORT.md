@@ -49,6 +49,15 @@ Bearbeite `config.json`:
 
 Falls nicht konfiguriert, werden Platzhalter verwendet.
 
+Alternativ können Sie die Schulinformationen tenant-spezifisch mit dem Manage-Skript setzen:
+
+```bash
+# Beispiel: Schulinformationen für Tenant 'school_a' setzen
+./manage-tenant.sh school school_a name="Grundschule Albert-Schweitzer-Straße" address="Albert-Schweitzer-Straße 1" postal_code=12345 city="Musterstadt" school_number=042123 it_admin="Max Mustermann"
+```
+
+Hinweis: `manage-tenant.sh school` schreibt die Daten unter `tenants.<tenant_id>.school` in `config.json` und löst bei aktiver App-Container-Instanz einen Neustart aus, damit die Änderungen wirksam werden.
+
 ### Schritt 2: System starten
 
 ```bash

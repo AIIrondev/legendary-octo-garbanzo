@@ -21,6 +21,7 @@ show_help() {
     echo "  restart-all                  Restart all application containers (zero-downtime reload)"
     echo "  list                         List active tenants"
     echo "  module <tenant_id> <module>=<on|off>... Enable/disable modules for a tenant"
+    echo "  school <tenant_id> [key]=[value]...  Set school configuration for tenant (name,address,postal_code,city,school_number,it_admin)"
     echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
@@ -561,6 +562,62 @@ PY
             fi
         else
             echo "Failed to update module configuration."
+            exit 1
+        fi
+        ;;
+
+    school)
+        # Usage: manage-tenant.sh school <tenant_id> key=value [...]
+        if [ -z "$TENANT_ID" ] || [ -z "${3:-}" ]; then
+            echo "Error: Usage: manage-tenant.sh school <tenant_id> key=value [...]"
+            exit 1
+        fi
+
+        # Pass all remaining args to python to update tenants[tenant_id]['school']
+        shift 2
+
+        if python3 - "$CONFIG_FILE" "$TENANT_ID" "$@" <<'PY'
+import json, sys, os
+path = sys.argv[1]
+tenant_id = sys.argv[2]
+kv_args = sys.argv[3:]
+
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+
+tenants = cfg.setdefault('tenants', {})
+tenant_cfg = tenants.setdefault(tenant_id, {})
+school_cfg = tenant_cfg.setdefault('school', {})
+
+for arg in kv_args:
+    if '=' not in arg:
+        print(f"Warning: Ignoring invalid argument '{arg}'. Expected key=value.", file=sys.stderr)
+        continue
+    key, val = arg.split('=', 1)
+    key = key.strip()
+    val = val.strip()
+    # try to coerce numeric values
+    if val.isdigit():
+        val_parsed = int(val)
+    else:
+        val_parsed = val
+    school_cfg[key] = val_parsed
+    print(f"Set school.{key} = {val_parsed} for tenant {tenant_id}")
+
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+PY
+        then
+            echo "School configuration updated successfully in config.json for tenant '$TENANT_ID'."
+            if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+                restart_app_container
+            fi
+        else
+            echo "Failed to update school configuration for tenant '$TENANT_ID'."
             exit 1
         fi
         ;;
