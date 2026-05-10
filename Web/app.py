@@ -33,6 +33,7 @@ import items as it
 import ausleihung as au
 import audit_log as al
 import push_notifications as pn
+import pdf_audit_export as pdf_export
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
@@ -601,6 +602,46 @@ def _build_audit_review_markdown(verify_result, event_counts, audit_rows, genera
         lines.append('')
 
     return '\n'.join(lines)
+
+
+def _get_school_info_for_export():
+    """
+    Get school information for PDF exports from configuration or database.
+    Returns default info if not configured.
+    """
+    try:
+        # Try to load from settings or config
+        school_info = {
+            'name': 'Schulname',
+            'address': 'Schuladresse',
+            'postal_code': 'PLZ',
+            'city': 'Stadt',
+            'school_number': '000000',
+            'it_admin': 'IT-Beauftragter/in',
+        }
+        
+        # Try to load from config.json if available
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.json')
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    if 'school' in config:
+                        school_info.update(config.get('school', {}))
+            except Exception:
+                pass
+        
+        return school_info
+    except Exception:
+        # Return defaults if anything fails
+        return {
+            'name': 'Schulname',
+            'address': 'Schuladresse', 
+            'postal_code': 'PLZ',
+            'city': 'Stadt',
+            'school_number': '000000',
+            'it_admin': 'IT-Beauftragter/in',
+        }
 
 
 def _parse_money_value(value):
@@ -7606,6 +7647,146 @@ def admin_audit_export():
         response.headers['Content-Disposition'] = f'attachment; filename=audit-review-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.md'
         return response
     except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/audit/export/pdf/quick', methods=['GET'])
+def admin_audit_export_pdf_quick():
+    """Export audit report as professional PDF (Quick-Check version - compact for management)."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    try:
+        limit = int((request.args.get('limit') or '500').strip())
+    except Exception:
+        limit = 500
+    limit = max(1, min(limit, 5000))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        verify_result = al.verify_audit_chain(db)
+
+        event_counts = list(
+            db['audit_log'].aggregate([
+                {'$group': {'_id': '$event_type', 'count': {'$sum': 1}}},
+                {'$project': {'_id': 0, 'event_type': {'$ifNull': ['$_id', 'unknown']}, 'count': 1}},
+                {'$sort': {'count': -1, 'event_type': 1}}
+            ])
+        )
+
+        audit_rows = list(
+            db['audit_log'].find(
+                {},
+                {
+                    'chain_index': 1,
+                    'event_type': 1,
+                    'actor': 1,
+                    'source': 1,
+                    'ip': 1,
+                    'timestamp': 1,
+                    'created_at': 1,
+                    'entry_hash': 1,
+                    'prev_hash': 1,
+                    'payload': 1,
+                }
+            ).sort('chain_index', -1).limit(limit)
+        )
+
+        # Get school information from settings or use defaults
+        school_info = _get_school_info_for_export()
+
+        # Generate PDF
+        pdf_content = pdf_export.generate_audit_pdf(
+            verify_result=verify_result,
+            event_counts=event_counts,
+            audit_rows=audit_rows,
+            export_type='quick',
+            school_info=school_info
+        )
+
+        response = make_response(pdf_content)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=audit-quick-check-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.pdf'
+        return response
+
+    except Exception as exc:
+        app.logger.error(f"PDF Quick-Check export error: {str(exc)}\n{traceback.format_exc()}")
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/audit/export/pdf/official', methods=['GET'])
+def admin_audit_export_pdf_official():
+    """Export audit report as professional PDF (Official Report - full DIN 5008 compliant)."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    try:
+        limit = int((request.args.get('limit') or '1000').strip())
+    except Exception:
+        limit = 1000
+    limit = max(1, min(limit, 5000))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        verify_result = al.verify_audit_chain(db)
+
+        event_counts = list(
+            db['audit_log'].aggregate([
+                {'$group': {'_id': '$event_type', 'count': {'$sum': 1}}},
+                {'$project': {'_id': 0, 'event_type': {'$ifNull': ['$_id', 'unknown']}, 'count': 1}},
+                {'$sort': {'count': -1, 'event_type': 1}}
+            ])
+        )
+
+        audit_rows = list(
+            db['audit_log'].find(
+                {},
+                {
+                    'chain_index': 1,
+                    'event_type': 1,
+                    'actor': 1,
+                    'source': 1,
+                    'ip': 1,
+                    'timestamp': 1,
+                    'created_at': 1,
+                    'entry_hash': 1,
+                    'prev_hash': 1,
+                    'payload': 1,
+                }
+            ).sort('chain_index', -1).limit(limit)
+        )
+
+        # Get school information from settings or use defaults
+        school_info = _get_school_info_for_export()
+
+        # Generate PDF
+        pdf_content = pdf_export.generate_audit_pdf(
+            verify_result=verify_result,
+            event_counts=event_counts,
+            audit_rows=audit_rows,
+            export_type='official',
+            school_info=school_info
+        )
+
+        response = make_response(pdf_content)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=audit-official-report-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.pdf'
+        return response
+
+    except Exception as exc:
+        app.logger.error(f"PDF Official Report export error: {str(exc)}\n{traceback.format_exc()}")
         return jsonify({'ok': False, 'error': str(exc)}), 500
     finally:
         if client:
