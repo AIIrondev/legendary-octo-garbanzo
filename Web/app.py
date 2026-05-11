@@ -1641,6 +1641,20 @@ def _load_tabular_upload(uploaded_file):
     workbook.close()
     return header_row, data_rows
 
+def _deny_if_unauthenticated_file_access():
+    """Block file-serving routes unless a user is logged in."""
+    if 'username' not in session:
+        return Response('Forbidden', status=403)
+    return None
+
+
+def _student_card_id_slug(value):
+    """Build a compact identifier fragment from a name or class value."""
+    normalized = _normalize_excel_header(value)
+    if not normalized:
+        return ''
+    return re.sub(r'[^a-z0-9]+', '', normalized).upper()
+
 """-------------------------------------------------------------Filter----------------------------------------------------------------------------- """
 FILTER_SELECT_ALL_TOKEN = '__ALL__'
 
@@ -1701,36 +1715,10 @@ def _is_public_host(hostname):
         if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified:
             return False
         public_seen = True
-
+ 
     return public_seen
 
-
-def _deny_if_unauthenticated_file_access():
-    """Block file-serving routes unless a user is logged in."""
-    if 'username' not in session:
-        return Response('Forbidden', status=403)
-    return None
-
-
-def _student_card_id_slug(value):
-    """Build a compact identifier fragment from a name or class value."""
-    normalized = _normalize_excel_header(value)
-    if not normalized:
-        return ''
-    return re.sub(r'[^a-z0-9]+', '', normalized).upper()
-
-
-def _name_to_alias(full_name):
-    """Convert clear names to deterministic aliases, e.g. Simon Frings -> SimFri."""
-    text = sanitize_form_value(full_name)
-    if not text:
-        return 'User'
-
-    parts = [p for p in re.split(r'\s+', text) if p]
-    if len(parts) >= 2:
-        return us.build_name_synonym(parts[0], parts[-1])
-    return us.build_name_synonym(parts[0], '')
-
+"""-------------------------------------------------------------Student Cards Excel Import----------------------------------------------------------------------------- """
 
 def _build_student_card_excel_id(student_name, class_name, row_number, used_ids):
     """Create a stable student-card ID without embedding personal names."""
@@ -1858,8 +1846,6 @@ def _upload_student_cards_excel():
                 student_name = f'{first_name} {last_name}'.strip()
                 validation_warnings.append((row_number, 'Schülername wurde aus Vorname und Nachname zusammengesetzt'))
 
-            student_name_alias = _name_to_alias(student_name)
-
             if not ausweis_id and not student_name and not class_name:
                 continue
 
@@ -1884,7 +1870,7 @@ def _upload_student_cards_excel():
             planned_rows.append({
                 'row_number': row_number,
                 'ausweis_id': ausweis_id,
-                'student_name': student_name_alias,
+                'student_name': student_name,
                 'class_name': class_name,
                 'notes': notes,
                 'default_borrow_days': default_borrow_days,
@@ -2290,6 +2276,7 @@ def upload_student_cards_excel():
     """Bulk import student cards from Excel."""
     return _upload_student_cards_excel()
 
+"""-------------------------------------------------------------File Serving-----------------------------------------------------------------------------"""
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -2581,26 +2568,10 @@ def catch_all_files(filename):
             os.path.join(BASE_DIR, 'static')
         ]
         
-        # Check development paths first
         for directory in possible_dirs:
             file_path = os.path.join(directory, filename)
             if os.path.isfile(file_path):
                 return send_from_directory(directory, os.path.basename(filename))
-        
-        # Check production paths if available
-        if os.path.exists("/var/Inventarsystem/Web"):
-            prod_dirs = [
-                "/var/Inventarsystem/Web/uploads",
-                "/var/Inventarsystem/Web/thumbnails",
-                "/var/Inventarsystem/Web/previews",
-                # "/var/Inventarsystem/Web/QRCodes",  # QR Code serving deactivated
-                "/var/Inventarsystem/Web/static"
-            ]
-            
-            for directory in prod_dirs:
-                file_path = os.path.join(directory, filename)
-                if os.path.isfile(file_path):
-                    return send_from_directory(directory, os.path.basename(filename))
         
         # Check if this looks like an image request
         if any(filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'svg']):
@@ -2621,6 +2592,7 @@ def catch_all_files(filename):
         print(f"Error in catch-all route for {filename}: {str(e)}")
         return Response(f"Error serving file: {str(e)}", status=500)
 
+"""-------------------------------------------------------------Main Views-----------------------------------------------------------------------------"""
 
 @app.route('/test_connection', methods=['GET'])
 def test_connection():
@@ -3481,7 +3453,7 @@ def student_cards_admin():
         action = request.form.get('action', 'add')
         ausweis_id = request.form.get('ausweis_id', '').strip().upper()
         student_name = request.form.get('student_name', '').strip()
-        student_name_alias = _name_to_alias(student_name)
+        student_name_alias = student_name 
         default_borrow_days = request.form.get('default_borrow_days', 14)
         class_name = request.form.get('class_name', '').strip()
         notes = request.form.get('notes', '').strip()
@@ -8365,13 +8337,12 @@ def admin_anonymize_names():
 
         for card_doc in student_cards_col.find({}, {'SchülerName': 1, 'Klasse': 1, 'Notizen': 1}):
             decrypted = _decrypt_student_card_doc(card_doc)
-            alias = _name_to_alias(decrypted.get('SchülerName', ''))
             class_name = sanitize_form_value(decrypted.get('Klasse', ''))
             notes = sanitize_form_value(decrypted.get('Notizen', ''))
 
             encrypted_payload = encrypt_document_fields(
                 {
-                    'SchülerName': alias,
+                    'SchülerName': decrypted.get('SchülerName', ''),
                     'Klasse': class_name,
                     'Notizen': notes,
                 },

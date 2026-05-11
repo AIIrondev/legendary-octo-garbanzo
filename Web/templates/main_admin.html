@@ -2643,7 +2643,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 <div id="schedule-modal" class="item-modal">
     <div class="modal-content">
         <span class="close-modal" onclick="closeScheduleModal()">&times;</span>
-        <h2>Termin planen</h2>
+        <h2>Reservieren</h2>
         <form id="schedule-form">
             <input type="hidden" id="schedule-item-id" name="item_id">
             <div class="form-group" id="schedule-specific-item-group" style="display:none;">
@@ -3654,7 +3654,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 </form>
                                 <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-card-${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
-                                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Reservieren</button>` : ''}
                             </div>
                         `;
                         itemsContainer.appendChild(card);
@@ -4531,7 +4531,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-modal-${item._id}')">Bearbeiten</button>
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                 ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
-                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Reservieren</button>` : ''}
                 <form method="POST" action="/delete_item/${item._id}" style="display:inline;" onsubmit="return confirm('Sind Sie sicher?')">
                     <button class="delete-button" type="submit">Löschen</button>
                 </form>
