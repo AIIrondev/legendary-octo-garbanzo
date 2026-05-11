@@ -205,11 +205,31 @@ class _TenantAwareBool:
         return f"_TenantAwareBool(module_name={self.module_name!r}, value={self.resolve()!r})"
 
 
+from module_registry import registry as MODULES
+
 INVENTORY_MODULE_ENABLED = _TenantAwareBool('inventory', _get(_conf, ['modules', 'inventory', 'enabled'], DEFAULTS['modules']['inventory']['enabled']))
 LIBRARY_MODULE_ENABLED = _TenantAwareBool('library', _get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
 STUDENT_CARDS_MODULE_ENABLED = _TenantAwareBool('student_cards', _get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
+
+def _match_inventory(path):
+    if not path: return False
+    if path == '/' or path.startswith('/home'): return True
+    return path.startswith(('/scanner', '/inventory', '/upload_admin', '/manage_filters', '/manage_locations', '/admin_borrowings', '/admin_damaged_items', '/admin/borrowings', '/admin/damaged_items', '/terminplan'))
+
+def _match_library(path):
+    if not path: return False
+    return path.startswith(('/library', '/library_', '/student_cards'))
+
+def _match_student_cards(path):
+    if not path: return False
+    return path.startswith(('/student_cards'))
+
+# Register core modules into the pipeline
+MODULES.register('inventory', INVENTORY_MODULE_ENABLED, _match_inventory)
+MODULES.register('library', LIBRARY_MODULE_ENABLED, _match_library)
+MODULES.register('student_cards', STUDENT_CARDS_MODULE_ENABLED, _match_student_cards)
+
 STUDENT_DEFAULT_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'default_borrow_days'], DEFAULTS['modules']['student_cards']['default_borrow_days']))
-STUDENT_MAX_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'max_borrow_days'], DEFAULTS['modules']['student_cards']['max_borrow_days']))
 
 # Upload/paths
 ALLOWED_EXTENSIONS = set(_get(_conf, ['allowed_extensions'], DEFAULTS['upload']['allowed_extensions']))

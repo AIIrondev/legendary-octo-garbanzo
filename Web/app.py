@@ -269,40 +269,6 @@ def _get_csrf_token():
 def _is_csrf_exempt_request():
     return request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
 
-def _is_library_module_path(path):
-    """Return True when the current request path belongs to the library module."""
-    if not path:
-        return False
-
-    library_prefixes = (
-        '/library',
-        '/library_',
-        '/student_cards',
-    )
-    return path.startswith(library_prefixes)
-
-def _is_inventory_module_path(path):
-    """Return True when the current request path belongs to the inventory module."""
-    if not path:
-        return False
-        
-    if path == '/' or path.startswith('/home'):
-        return True
-
-    inventory_prefixes = (
-        '/scanner',
-        '/inventory',
-        '/upload_admin',
-        '/manage_filters',
-        '/manage_locations',
-        '/admin_borrowings',
-        '/admin_damaged_items',
-        '/admin/borrowings',
-        '/admin/damaged_items',
-        '/terminplan',
-    )
-    return path.startswith(inventory_prefixes)
-
 
 @app.before_request
 def _enforce_csrf_protection():
@@ -390,11 +356,14 @@ def _enforce_module_access():
     if endpoint == 'static' or endpoint.startswith('static') or request.path.startswith('/api/'):
         return None
     
-    if not cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(request.path):
-        return "Bibliotheks-Modul ist deaktiviert.", 403
-    
-    if not cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(request.path):
-        return "Inventar-Modul ist deaktiviert.", 403
+    for name, matcher in cfg.MODULES._path_matchers.items():
+        if matcher(request.path) and not cfg.MODULES.is_enabled(name):
+            msg = {
+                'library': "Bibliotheks-Modul ist deaktiviert.",
+                'inventory': "Inventar-Modul ist deaktiviert.",
+                'student_cards': "Schülerausweis-Modul ist deaktiviert."
+            }.get(name, f"{name.capitalize()}-Modul ist deaktiviert.")
+            return msg, 403
 
 """ -----------------------------------------------------------After Request Handlers----------------------------------------------------------------------------- """
 
@@ -440,24 +409,18 @@ def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
-    
-    if cfg.LIBRARY_MODULE_ENABLED and _is_library_module_path(path):
-        session['last_module'] = 'library'
-        return 'library'
-    if cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(path):
-        session['last_module'] = 'inventory'
-        return 'inventory'
+    mod = cfg.MODULES.get_module_for_path(path)
+    if mod:
+        session['last_module'] = mod
+        return mod
         
     last_module = session.get('last_module')
-    if last_module == 'library' and cfg.LIBRARY_MODULE_ENABLED:
-        return 'library'
-    if last_module == 'inventory' and cfg.INVENTORY_MODULE_ENABLED:
-        return 'inventory'
+    if last_module and cfg.MODULES.is_enabled(last_module):
+        return last_module
         
-    # Default fallback: prefer inventory if enabled, otherwise library, else inventory
-    if cfg.INVENTORY_MODULE_ENABLED:
+    if cfg.MODULES.is_enabled('inventory'):
         return 'inventory'
-    return 'library' if cfg.LIBRARY_MODULE_ENABLED else 'inventory'
+    return 'library' if cfg.MODULES.is_enabled('library') else 'inventory'
 
 """---------------------------------------------User Access Permissions----------------------------------------------------------------------------- """
 
