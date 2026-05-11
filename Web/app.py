@@ -2637,25 +2637,23 @@ def home_admin():
     """
     Admin homepage route.
     Only accessible by users with admin privileges.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
     """
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
         
-    inv = cfg.MODULES.is_enabled('inventory')
-    lib = cfg.MODULES.is_enabled('library')
-
-    if not inv and not lib:
-        return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
-    elif not inv and lib:
-        return redirect(url_for('library_admin'))
-    elif not lib and inv:
-        pass # render_template main_admin.html
+    if not cfg.MODULES.is_enabled('inventory'):
+        if cfg.MODULES.is_enabled('library'):
+            return redirect(url_for('library_admin'))
+        else:
+            return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
 
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-        
     return render_template(
         'main_admin.html',
         username=session['username'],
@@ -2665,6 +2663,568 @@ def home_admin():
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
         school_info=_get_school_info_for_export(),
     )
+
+
+@app.route('/tutorial')
+def tutorial_page():
+    """Guided onboarding page (2-5 minutes) for first-time users."""
+    if 'username' not in session:
+        flash('Bitte mit registriertem Konto anmelden!', 'error')
+        return redirect(url_for('login'))
+
+    return render_template(
+        'tutorial.html',
+        username=session['username'],
+        is_admin=us.check_admin(session['username']),
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+    )
+
+@app.route('/library')
+def library_view():
+    """
+    Dedicated page for viewing library items (books, CDs, etc.).
+    Only available when library module is enabled.
+    Table-only view with customizable filter.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
+    if 'username' not in session:
+        flash('Bitte mit registriertem Konto anmelden!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.MODULES.is_enabled('library'):
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home'))
+    
+    return render_template(
+        'library_table.html',
+        username=session['username'],
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        is_admin=us.check_admin(session['username']),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+    )
+
+
+@app.route('/library_loans_admin')
+def library_loans_admin():
+    """Admin overview for library borrowings and damaged library items."""
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.MODULES.is_enabled('library'):
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    _ensure_audit_indexes_once()
+
+    def fmt_dt(dt):
+        try:
+            return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+        except Exception:
+            return str(dt) if dt else ''
+
+    def fmt_money(value):
+        return _format_money_value(value)
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
+
+        library_items = list(items_col.find(
+            {'ItemType': {'$in': LIBRARY_ITEM_TYPES}, 'Deleted': {'$ne': True}},
+            {'Name': 1, 'Code_4': 1, 'Anschaffungskosten': 1, 'Condition': 1, 'HasDamage': 1, 'DamageReports': 1, 'Verfuegbar': 1, 'User': 1, 'ItemType': 1, 'Author': 1, 'ISBN': 1}
+        ))
+        item_map = {str(item['_id']): item for item in library_items if item.get('_id')}
+        item_ids = list(item_map.keys())
+
+        active_records = []
+        if item_ids:
+            active_records = list(ausleihungen_col.find(
+                {'Item': {'$in': item_ids}, 'Status': {'$in': ['active', 'planned', 'completed']}},
+                {'User': 1, 'Item': 1, 'Status': 1, 'Start': 1, 'End': 1, 'Period': 1, 'Notes': 1, 'InvoiceData': 1}
+            ).sort('Start', -1))
+
+        active_item_ids = set()
+        loan_entries = []
+        for record in active_records:
+            item_id = str(record.get('Item') or '')
+            item_doc = item_map.get(item_id)
+            if item_id and record.get('Status') == 'active':
+                active_item_ids.add(item_id)
+
+            if not item_doc:
+                continue
+
+            invoice_data = record.get('InvoiceData') or {}
+            condition_value = str(item_doc.get('Condition', '')).strip().lower()
+            item_has_damage = bool(item_doc.get('HasDamage')) or condition_value == 'destroyed' or bool(item_doc.get('DamageReports'))
+            damage_reports = item_doc.get('DamageReports', []) or []
+
+            loan_entries.append({
+                'id': str(record.get('_id')),
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'item_code': item_doc.get('Code_4', ''),
+                'item_author': item_doc.get('Author', ''),
+                'item_isbn': item_doc.get('ISBN', ''),
+                'user': record.get('User', ''),
+                'status': record.get('Status', ''),
+                'start': fmt_dt(record.get('Start')),
+                'end': fmt_dt(record.get('End')),
+                'period': record.get('Period', ''),
+                'notes': record.get('Notes', ''),
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'invoice_amount': fmt_money(invoice_data.get('amount')) if invoice_data.get('amount') is not None else fmt_money(item_doc.get('Anschaffungskosten')),
+                'invoice_paid': bool(invoice_data.get('paid', False)),
+                'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
+                'invoice_corrections_count': len(record.get('InvoiceCorrections', []) or []),
+                'has_damage': item_has_damage,
+                'damage_count': len(damage_reports),
+                'damage_text': (damage_reports[0].get('description', '') if damage_reports else ''),
+            })
+
+        damaged_items = []
+        for item_doc in library_items:
+            item_id = str(item_doc.get('_id') or '')
+            condition_value = str(item_doc.get('Condition', '')).strip().lower()
+            damage_reports = item_doc.get('DamageReports', []) or []
+            item_has_damage = bool(item_doc.get('HasDamage')) or condition_value == 'destroyed' or bool(damage_reports)
+            if not item_has_damage or item_id in active_item_ids:
+                continue
+
+            damaged_items.append({
+                'id': item_id,
+                'name': item_doc.get('Name', ''),
+                'code': item_doc.get('Code_4', ''),
+                'author': item_doc.get('Author', ''),
+                'isbn': item_doc.get('ISBN', ''),
+                'condition': item_doc.get('Condition', ''),
+                'damage_count': len(damage_reports),
+                'damage_text': (damage_reports[0].get('description', '') if damage_reports else ''),
+                'available': bool(item_doc.get('Verfuegbar', False)),
+                'last_updated': fmt_dt(item_doc.get('LastUpdated')),
+            })
+
+        return render_template(
+            'library_borrowings_admin.html',
+            loan_entries=loan_entries,
+            damaged_items=damaged_items,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading library loans admin view: {e}")
+        flash('Fehler beim Laden der Bibliotheksverwaltung.', 'error')
+        return redirect(url_for('home_admin'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/api/library_items')
+def api_library_items():
+    """
+    API endpoint to fetch library items (books, CDs, DVDs, media).
+    Supports pagination via query params: offset, limit.
+    """
+    if 'username' not in session:
+        return jsonify({'items': []}), 401
+    
+    offset_raw = request.args.get('offset', '0')
+    limit_raw = request.args.get('limit', '120')
+
+    try:
+        offset = max(0, int(offset_raw))
+    except (TypeError, ValueError):
+        offset = 0
+
+    try:
+        limit = int(limit_raw)
+    except (TypeError, ValueError):
+        limit = 120
+    limit = min(max(limit, 1), 500)
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_db = db['items']
+        ausleihungen_db = db['ausleihungen']
+
+        query = {
+            'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']},
+            'Deleted': {'$ne': True}
+        }
+
+        projection = {
+            'Name': 1,
+            'Autor': 1,
+            'Author': 1,
+            'ISBN': 1,
+            'Code_4': 1,
+            'Code4': 1,
+            'ItemType': 1,
+            'Verfuegbar': 1,
+            'Condition': 1,
+            'HasDamage': 1,
+            'User': 1,
+            'Ort': 1,
+            'Beschreibung': 1,
+            'Image': 1
+        }
+
+        total_count = items_db.count_documents(query)
+        
+        library_items = list(
+            items_db.find(query, projection)
+            .sort([('Name', 1), ('_id', 1)])
+            .skip(offset)
+            .limit(limit)
+        )
+
+        item_ids = [str(item.get('_id')) for item in library_items if item.get('_id')]
+        active_records = []
+        if item_ids:
+            active_records = list(ausleihungen_db.find(
+                {'Item': {'$in': item_ids}, 'Status': 'active'},
+                {'Item': 1, 'User': 1}
+            ))
+
+        active_item_ids = set()
+        active_user_by_item = {}
+        for rec in active_records:
+            item_id = str(rec.get('Item') or '')
+            if not item_id:
+                continue
+            active_item_ids.add(item_id)
+            if item_id not in active_user_by_item:
+                active_user_by_item[item_id] = rec.get('User', '')
+        
+        client.close()
+        
+        # Convert ObjectId to string for JSON serialization
+        for item in library_items:
+            item_id = str(item['_id'])
+            item['_id'] = item_id
+            if item.get('Code4') in (None, '') and item.get('Code_4') not in (None, ''):
+                item['Code4'] = item.get('Code_4')
+
+            condition_value = str(item.get('Condition', '')).strip().lower()
+            has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
+            has_active_borrow = item_id in active_item_ids
+
+            if has_damage and not has_active_borrow:
+                item['LibraryDisplayStatus'] = 'damaged'
+            elif has_active_borrow or item.get('Verfuegbar') is False:
+                item['LibraryDisplayStatus'] = 'borrowed'
+            else:
+                item['LibraryDisplayStatus'] = 'available'
+
+            item['BorrowedBy'] = active_user_by_item.get(item_id) or item.get('User', '')
+
+        count = len(library_items)
+        return jsonify({
+            'items': library_items,
+            'offset': offset,
+            'limit': limit,
+            'count': count,
+            'total': total_count,
+            'has_more': (offset + count) < total_count
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching library items: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/library_scan_action', methods=['POST'])
+def api_library_scan_action():
+    """
+    Scan-based library workflow:
+    - scan student card id
+    - scan media code (ISBN/Code_4)
+    - borrow if available, otherwise return (toggle behavior)
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+    if not cfg.MODULES.is_enabled('library'):
+        return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
+    if not cfg.MODULES.is_enabled('student_cards'):
+        return jsonify({'ok': False, 'message': 'Schülerausweis-Modul ist deaktiviert.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    student_card_id = us.normalize_student_card_id(payload.get('student_card_id') or payload.get('card_id'))
+    item_code_raw = str(payload.get('item_code') or payload.get('code') or '').strip()
+    duration_raw = str(payload.get('borrow_duration_days') or '').strip()
+
+    if not student_card_id:
+        return jsonify({'ok': False, 'message': 'Schülerausweis-ID fehlt.'}), 400
+    if not item_code_raw:
+        return jsonify({'ok': False, 'message': 'Mediencode fehlt.'}), 400
+
+    normalized_isbn = normalize_and_validate_isbn(item_code_raw)
+    normalized_code = item_code_raw.upper()
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        student_cards_col = db['student_cards']
+        items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
+
+        card_doc = student_cards_col.find_one({'AusweisId': student_card_id})
+        if not card_doc:
+            return jsonify({'ok': False, 'message': 'Ungültige Schülerausweis-ID.'}), 404
+        card_doc = _decrypt_student_card_doc(card_doc)
+
+        query_or = [
+            {'Code_4': item_code_raw},
+            {'Code_4': normalized_code},
+        ]
+        if normalized_isbn:
+            query_or.append({'ISBN': normalized_isbn})
+
+        item_doc = items_col.find_one({
+            'ItemType': {'$in': LIBRARY_ITEM_TYPES},
+            '$or': query_or
+        })
+
+        if not item_doc:
+            return jsonify({'ok': False, 'message': 'Kein Bibliotheksmedium für diesen Code gefunden.'}), 404
+
+        item_id = str(item_doc['_id'])
+        borrower_name = card_doc.get('SchülerName') or f"Ausweis {student_card_id}"
+        now = datetime.datetime.now()
+
+        if item_doc.get('Verfuegbar', True):
+            borrow_duration_days = None
+            if duration_raw:
+                try:
+                    parsed_duration = int(duration_raw)
+                    if 1 <= parsed_duration <= cfg.STUDENT_MAX_BORROW_DAYS:
+                        borrow_duration_days = parsed_duration
+                    else:
+                        return jsonify({
+                            'ok': False,
+                            'message': f'Ausleihdauer muss zwischen 1 und {cfg.STUDENT_MAX_BORROW_DAYS} Tagen liegen.'
+                        }), 400
+                except ValueError:
+                    return jsonify({'ok': False, 'message': 'Ungültige Ausleihdauer.'}), 400
+            else:
+                try:
+                    card_default = int(card_doc.get('StandardAusleihdauer', cfg.STUDENT_DEFAULT_BORROW_DAYS))
+                except (TypeError, ValueError):
+                    card_default = cfg.STUDENT_DEFAULT_BORROW_DAYS
+                borrow_duration_days = max(1, min(card_default, cfg.STUDENT_MAX_BORROW_DAYS))
+
+            end_date = now + datetime.timedelta(days=borrow_duration_days) if borrow_duration_days else None
+            it.update_item_status(item_id, False, borrower_name)
+            au.add_ausleihung(item_id, borrower_name, now, end_date=end_date)
+
+            _append_audit_event_standalone(
+                event_type='ausleihung_borrowed',
+                payload={
+                    'channel': 'library_scan',
+                    'item_id': item_id,
+                    'item_name': item_doc.get('Name', ''),
+                    'borrower': borrower_name,
+                    'student_card_id': student_card_id,
+                    'borrow_duration_days': borrow_duration_days,
+                }
+            )
+
+            return jsonify({
+                'ok': True,
+                'action': 'borrowed',
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'student_card_id': student_card_id,
+                'borrower': borrower_name,
+                'borrow_duration_days': borrow_duration_days,
+                'message': f"{item_doc.get('Name', 'Medium')} wurde ausgeliehen."
+            }), 200
+
+        # Toggle back: item is currently borrowed -> return
+        current_borrower = str(item_doc.get('User') or '').strip()
+        if current_borrower and current_borrower != borrower_name and not us.check_admin(session['username']):
+            return jsonify({
+                'ok': False,
+                'message': f"Medium ist aktuell an '{current_borrower}' ausgeliehen und kann mit diesem Ausweis nicht zurückgegeben werden."
+            }), 409
+
+        update_result = ausleihungen_col.update_many(
+            {'Item': item_id, 'Status': 'active'},
+            {'$set': {
+                'Status': 'completed',
+                'End': now,
+                'LastUpdated': now
+            }}
+        )
+        it.update_item_status(item_id, True, borrower_name)
+
+        _append_audit_event_standalone(
+            event_type='ausleihung_returned',
+            payload={
+                'channel': 'library_scan',
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'borrower': borrower_name,
+                'student_card_id': student_card_id,
+                'completed_records': update_result.modified_count,
+            }
+        )
+
+        return jsonify({
+            'ok': True,
+            'action': 'returned',
+            'item_id': item_id,
+            'item_name': item_doc.get('Name', ''),
+            'student_card_id': student_card_id,
+            'borrower': borrower_name,
+            'completed_records': update_result.modified_count,
+            'message': f"{item_doc.get('Name', 'Medium')} wurde zurückgegeben."
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error in library scan action: {e}")
+        return jsonify({'ok': False, 'message': 'Fehler beim Verarbeiten des Scan-Vorgangs.'}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/api/item_detail/<item_id>')
+def api_item_detail(item_id):
+    """
+    API endpoint to fetch detail view HTML for a library item.
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        item = it.get_item(item_id)
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen_col = db['ausleihungen']
+
+        active_borrow = ausleihungen_col.find_one(
+            {'Item': str(item.get('_id')), 'Status': 'active'},
+            {'User': 1}
+        )
+        client.close()
+
+        condition_value = str(item.get('Condition', '')).strip().lower()
+        has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
+        if has_damage and not active_borrow:
+            status_label = 'Defekt/Zerstört'
+        elif item.get('Verfuegbar') is False or active_borrow:
+            status_label = 'Ausgeliehen'
+        else:
+            status_label = 'Verfügbar'
+
+        borrower_value = ''
+        if active_borrow:
+            borrower_value = active_borrow.get('User', '')
+        elif item.get('User'):
+            borrower_value = item.get('User')
+        
+        # Basic detail HTML
+        detail_html = f"""
+        <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
+        <p><strong>Autor/Künstler:</strong> {html.escape(item.get('Autor', item.get('Author', '-')))}</p>
+        <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
+        <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
+        <p><strong>Status:</strong> {html.escape(status_label)}</p>
+        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
+        """
+        return detail_html, 200
+    except Exception as e:
+        app.logger.error(f"Error fetching item detail: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/library_item/<item_id>/update', methods=['POST'])
+def api_library_item_update(item_id):
+    """Admin-only API to edit library item core fields from the library table view."""
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'message': 'Administratorrechte erforderlich.'}), 403
+    if not cfg.MODULES.is_enabled('library'):
+        return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+
+    name = sanitize_form_value(payload.get('name'))
+    description = sanitize_form_value(payload.get('beschreibung'))
+    location = sanitize_form_value(payload.get('ort'))
+    author = sanitize_form_value(payload.get('autor'))
+    media_type = sanitize_form_value(payload.get('item_type')).lower() or 'book'
+    code_4 = sanitize_form_value(payload.get('code_4'))
+    isbn_raw = sanitize_form_value(payload.get('isbn'))
+
+    if not name or not description or not location:
+        return jsonify({'ok': False, 'message': 'Name, Ort und Beschreibung sind erforderlich.'}), 400
+
+    if media_type not in LIBRARY_ITEM_TYPES:
+        return jsonify({'ok': False, 'message': 'Ungültiger Medientyp.'}), 400
+
+    normalized_isbn = ''
+    if isbn_raw:
+        normalized_isbn = normalize_and_validate_isbn(isbn_raw)
+        if not normalized_isbn:
+            return jsonify({'ok': False, 'message': 'Ungültige ISBN (nur ISBN-10/13).'}), 400
+
+    if code_4 and not it.is_code_unique(code_4, exclude_id=item_id):
+        return jsonify({'ok': False, 'message': 'Der Code wird bereits verwendet.'}), 409
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+
+        current = items_col.find_one({'_id': ObjectId(item_id)})
+        if not current:
+            client.close()
+            return jsonify({'ok': False, 'message': 'Element nicht gefunden.'}), 404
+        if current.get('ItemType') not in LIBRARY_ITEM_TYPES:
+            client.close()
+            return jsonify({'ok': False, 'message': 'Element ist kein Bibliotheksmedium.'}), 400
+
+        update_doc = {
+            'Name': name,
+            'Beschreibung': description,
+            'Ort': location,
+            'Autor': author,
+            'Code_4': code_4,
+            'ItemType': media_type,
+            'LastUpdated': datetime.datetime.now()
+        }
+
+        if normalized_isbn:
+            update_doc['ISBN'] = normalized_isbn
+        elif 'ISBN' in current:
+            update_doc['ISBN'] = ''
+
+        items_col.update_one({'_id': ObjectId(item_id)}, {'$set': update_doc})
+        client.close()
+
+        return jsonify({'ok': True, 'message': 'Bibliotheksmedium aktualisiert.'}), 200
+    except Exception as e:
+        app.logger.error(f"Error updating library item {item_id}: {e}")
+        return jsonify({'ok': False, 'message': 'Fehler beim Aktualisieren des Bibliotheksmediums.'}), 500
 
 
 @app.route('/upload_admin')
