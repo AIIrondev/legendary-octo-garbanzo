@@ -230,6 +230,7 @@ MODULES.register('library', LIBRARY_MODULE_ENABLED, _match_library)
 MODULES.register('student_cards', STUDENT_CARDS_MODULE_ENABLED, _match_student_cards)
 
 STUDENT_DEFAULT_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'default_borrow_days'], DEFAULTS['modules']['student_cards']['default_borrow_days']))
+STUDENT_MAX_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'max_borrow_days'], DEFAULTS['modules']['student_cards']['max_borrow_days']))
 
 # Upload/paths
 ALLOWED_EXTENSIONS = set(_get(_conf, ['allowed_extensions'], DEFAULTS['upload']['allowed_extensions']))
