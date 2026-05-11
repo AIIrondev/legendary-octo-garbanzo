@@ -20,28 +20,12 @@
       <h4 style="margin:0 0 10px 0; color:#1a1a1a;">📄 PDF-Export (DIN 5008 konform)</h4>
       <p style="margin:0 0 10px 0; font-size:0.9rem; color:#666;">Professionelle Berichte für Schulträger und Behörden</p>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a class="btn btn-primary" href="{{ url_for('admin_audit_export_pdf_quick') }}" style="flex:1; text-align:center;">
-          🚀 Schnell-Check (kompakt)
-        </a>
         <a class="btn btn-primary" href="{{ url_for('admin_audit_export_pdf_official') }}" style="flex:1; text-align:center;">
           📋 Amtlicher Bericht (DIN 5008)
         </a>
       </div>
     </div>
 
-    <!-- Other Formats Section -->
-    <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; background: var(--ui-surface);">
-      <h4 style="margin:0 0 10px 0; color:#1a1a1a;">📊 Weitere Formate</h4>
-      <p style="margin:0 0 10px 0; font-size:0.9rem; color:#666;">Technische Exporte für System-Integration</p>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a class="btn btn-outline-secondary" href="{{ url_for('admin_audit_export', format='md') }}" style="flex:1; text-align:center;">
-          📝 Markdown
-        </a>
-        <a class="btn btn-outline-secondary" href="{{ url_for('admin_audit_export', format='json') }}" style="flex:1; text-align:center;">
-          ⚙️ JSON
-        </a>
-      </div>
-    </div>
   </div>
 
   <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:16px 0 20px;">

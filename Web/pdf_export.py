@@ -668,3 +668,123 @@ def generate_audit_pdf(verify_result, event_counts, audit_rows, export_type='off
         return pdf_gen.generate_quick_check(verify_result, event_counts, audit_rows)
     else:
         return pdf_gen.generate_official_report(verify_result, event_counts, audit_rows)
+
+def _build_invoice_pdf(invoice_data):
+    """Render a PDF invoice for a damaged borrowed item."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor, black, white
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfgen import canvas
+
+    pdf_buffer = io.BytesIO()
+    c = canvas.Canvas(pdf_buffer, pagesize=A4)
+    page_width, page_height = A4
+
+    margin_x = 20 * mm
+    margin_top = 20 * mm
+    usable_width = page_width - (2 * margin_x)
+    current_y = page_height - margin_top
+
+    dark_color = HexColor('#0F172A')
+    accent_color = HexColor('#B91C1C')
+    light_color = HexColor('#F8FAFC')
+    border_color = HexColor('#CBD5E1')
+    text_color = HexColor('#1E293B')
+    muted_color = HexColor('#64748B')
+
+    def draw_wrapped_lines(text, x_pos, y_pos, width, font_name='Helvetica', font_size=11, leading=14, color=text_color):
+        if not text:
+            return y_pos
+        c.setFont(font_name, font_size)
+        c.setFillColor(color)
+        for line in simpleSplit(str(text), font_name, font_size, width):
+            c.drawString(x_pos, y_pos, line)
+            y_pos -= leading
+        return y_pos
+
+    def draw_label_value(label, value, x_pos, y_pos, label_width=45 * mm):
+        c.setFont('Helvetica-Bold', 10)
+        c.setFillColor(muted_color)
+        c.drawString(x_pos, y_pos, label)
+        c.setFont('Helvetica', 10)
+        c.setFillColor(text_color)
+        c.drawString(x_pos + label_width, y_pos, str(value or '-'))
+        return y_pos - 7 * mm
+
+    c.setFillColor(light_color)
+    c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+
+    c.setFillColor(dark_color)
+    c.rect(0, page_height - 28 * mm, page_width, 28 * mm, fill=1, stroke=0)
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 20)
+    c.drawString(margin_x, page_height - 16 * mm, 'RECHNUNG')
+    c.setFont('Helvetica', 10)
+    c.drawString(margin_x, page_height - 23 * mm, 'Inventarsystem - Schadensersatz für zerstörtes Ausleihobjekt')
+
+    current_y = page_height - 40 * mm
+    c.setStrokeColor(border_color)
+    c.setLineWidth(1)
+    c.line(margin_x, current_y, page_width - margin_x, current_y)
+    current_y -= 12 * mm
+
+    invoice_number = invoice_data.get('invoice_number', '-')
+    created_at = invoice_data.get('created_at_display', '-')
+    borrower = invoice_data.get('borrower', '-')
+    item_name = invoice_data.get('item_name', '-')
+    item_code = invoice_data.get('item_code', '-')
+    item_id = invoice_data.get('item_id', '-')
+    damage_reason = invoice_data.get('damage_reason', '-')
+    amount_text = invoice_data.get('amount_text', '-')
+
+    current_y = draw_label_value('Rechnungsnummer:', invoice_number, margin_x, current_y)
+    current_y = draw_label_value('Datum:', created_at, margin_x, current_y)
+    current_y = draw_label_value('Empfänger:', borrower, margin_x, current_y)
+    current_y = draw_label_value('Ausleihe / Element:', item_name, margin_x, current_y)
+    current_y = draw_label_value('Element-ID:', item_id, margin_x, current_y)
+    current_y = draw_label_value('Code:', item_code, margin_x, current_y)
+    current_y = current_y - 3 * mm
+
+    c.setFillColor(dark_color)
+    c.setFont('Helvetica-Bold', 12)
+    c.drawString(margin_x, current_y, 'Schadensbeschreibung')
+    current_y -= 6 * mm
+    current_y = draw_wrapped_lines(damage_reason, margin_x, current_y, usable_width, font_size=10, leading=13, color=text_color)
+    current_y -= 4 * mm
+
+    c.setFillColor(dark_color)
+    c.setFont('Helvetica-Bold', 12)
+    c.drawString(margin_x, current_y, 'Rechnungsbetrag')
+    current_y -= 8 * mm
+
+    c.setFillColor(accent_color)
+    c.setStrokeColor(accent_color)
+    c.rect(margin_x, current_y - 12 * mm, usable_width, 16 * mm, fill=1, stroke=0)
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawString(margin_x + 5 * mm, current_y - 2 * mm, amount_text)
+    current_y -= 20 * mm
+
+    current_y = draw_wrapped_lines(
+        'Bitte begleichen Sie diesen Betrag zeitnah bei der Verwaltung. Der Betrag ergibt sich aus dem zerstörten Ausleihobjekt und der dokumentierten Schadensmeldung.',
+        margin_x,
+        current_y,
+        usable_width,
+        font_size=10,
+        leading=13,
+        color=muted_color,
+    )
+
+    footer_y = 18 * mm
+    c.setStrokeColor(border_color)
+    c.setLineWidth(0.8)
+    c.line(margin_x, footer_y + 8 * mm, page_width - margin_x, footer_y + 8 * mm)
+    c.setFillColor(muted_color)
+    c.setFont('Helvetica', 9)
+    c.drawString(margin_x, footer_y, 'Inventarsystem - Rechnungserstellung')
+    c.drawRightString(page_width - margin_x, footer_y, f'{amount_text}')
+
+    c.save()
+    pdf_buffer.seek(0)
+    return pdf_buffer

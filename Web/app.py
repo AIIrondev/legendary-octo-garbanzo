@@ -33,7 +33,7 @@ import items as it
 import ausleihung as au
 import audit_log as al
 import push_notifications as pn
-import pdf_audit_export as pdf_export
+import pdf_export 
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
@@ -104,6 +104,28 @@ app.config['SESSION_COOKIE_SECURE'] = cfg.SSL_ENABLED if os.getenv('INVENTAR_SES
 app.config['PREFERRED_URL_SCHEME'] = 'https' if app.config['SESSION_COOKIE_SECURE'] else 'http'
 # app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+"""--------------------------------------------------------------Path Init-------------------------------------------------------"""
+
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+# QR Code directory creation deactivated
+# if not os.path.exists(app.config['QR_CODE_FOLDER']):
+#     os.makedirs(app.config['QR_CODE_FOLDER'])
+
+BACKUP_FOLDER = cfg.BACKUP_FOLDER
+if not os.path.exists(BACKUP_FOLDER):
+    try:
+        os.makedirs(BACKUP_FOLDER, exist_ok=True)
+    except PermissionError:
+        # Fallback: use a backup directory inside the application directory (writable)
+        fallback_backup = os.path.join(BASE_DIR, 'backups')
+        try:
+            os.makedirs(fallback_backup, exist_ok=True)
+            BACKUP_FOLDER = fallback_backup
+            print(f"Warnung: Konnte BACKUP_FOLDER nicht erstellen. Fallback genutzt: {BACKUP_FOLDER}")
+        except Exception as e:
+            print(f"Fehler: Backup-Verzeichnis konnte nicht erstellt werden: {e}")
 
 
 def print(*args, **kwargs):
@@ -235,40 +257,7 @@ PERMISSION_ACTION_ENDPOINTS = {
 APP_VERSION = __version__
 RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
 
-
-@app.after_request
-def _set_security_headers(response):
-    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
-    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
-    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
-    if cfg.SSL_ENABLED:
-        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-    
-    # Optimize caching for static resources (images, etc.)
-    path = request.path
-    
-    # Aggressive caching for optimized images (480p) - they're immutable
-    if '/image/optimized/' in path:
-        response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
-    
-    # Moderate caching for thumbnails
-    elif '/thumbnails/' in path:
-        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
-    
-    # Moderate caching for previews
-    elif '/previews/' in path:
-        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
-    
-    # Short cache for regular uploads (in case they're updated/deleted)
-    elif '/uploads/' in path:
-        response.headers['Cache-Control'] = 'public, max-age=3600'  # 1 hour
-    
-    # Ensure WebP images are served with correct content-type
-    if path.endswith('.webp') or '.webp' in path:
-        response.headers['Content-Type'] = 'image/webp'
-    
-    return response
-
+""" -----------------------------------------------------------------------Before Request Handlers---------------------------------------------------------------------------- """
 
 def _get_csrf_token():
     token = session.get('_csrf_token')
@@ -277,16 +266,42 @@ def _get_csrf_token():
         session['_csrf_token'] = token
     return token
 
-
 def _is_csrf_exempt_request():
     return request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
 
+def _is_library_module_path(path):
+    """Return True when the current request path belongs to the library module."""
+    if not path:
+        return False
 
-def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
-    if request.is_json or request.path.startswith('/api/') or request.path in {'/download_book_cover', '/proxy_image', '/log_mobile_issue'}:
-        return jsonify({'error': message}), 400
-    flash(message, 'error')
-    return redirect(request.referrer or url_for('home'))
+    library_prefixes = (
+        '/library',
+        '/library_',
+        '/student_cards',
+    )
+    return path.startswith(library_prefixes)
+
+def _is_inventory_module_path(path):
+    """Return True when the current request path belongs to the inventory module."""
+    if not path:
+        return False
+        
+    if path == '/' or path.startswith('/home'):
+        return True
+
+    inventory_prefixes = (
+        '/scanner',
+        '/inventory',
+        '/upload_admin',
+        '/manage_filters',
+        '/manage_locations',
+        '/admin_borrowings',
+        '/admin_damaged_items',
+        '/admin/borrowings',
+        '/admin/damaged_items',
+        '/terminplan',
+    )
+    return path.startswith(inventory_prefixes)
 
 
 @app.before_request
@@ -307,7 +322,6 @@ def _enforce_csrf_protection():
         return _csrf_error_response()
 
     return None
-
 
 @app.before_request
 def _enforce_user_permissions():
@@ -349,7 +363,6 @@ def _enforce_user_permissions():
 
     return None
 
-
 @app.before_request
 def _enforce_active_session_user():
     endpoint = request.endpoint or ''
@@ -371,59 +384,6 @@ def _enforce_active_session_user():
     flash('Ihre Sitzung ist nicht mehr gültig. Bitte erneut anmelden.', 'error')
     return redirect(url_for('login'))
 
-
-def _get_asset_version():
-    """Return a cache-busting asset version tied to deployment state."""
-    env_version = os.getenv('INVENTAR_ASSET_VERSION', '').strip()
-    if env_version:
-        return env_version
-
-    try:
-        if os.path.exists(RELEASE_STATE_FILE):
-            with open(RELEASE_STATE_FILE, 'r', encoding='utf-8') as f:
-                release_tag = f.read().strip()
-                if release_tag:
-                    return release_tag
-    except Exception:
-        pass
-
-    return APP_VERSION
-
-
-def _is_library_module_path(path):
-    """Return True when the current request path belongs to the library module."""
-    if not path:
-        return False
-
-    library_prefixes = (
-        '/library',
-        '/library_',
-        '/student_cards',
-    )
-    return path.startswith(library_prefixes)
-
-def _is_inventory_module_path(path):
-    """Return True when the current request path belongs to the inventory module."""
-    if not path:
-        return False
-        
-    if path == '/' or path.startswith('/home'):
-        return True
-
-    inventory_prefixes = (
-        '/scanner',
-        '/inventory',
-        '/upload_admin',
-        '/manage_filters',
-        '/manage_locations',
-        '/admin_borrowings',
-        '/admin_damaged_items',
-        '/admin/borrowings',
-        '/admin/damaged_items',
-        '/terminplan',
-    )
-    return path.startswith(inventory_prefixes)
-
 @app.before_request
 def _enforce_module_access():
     endpoint = request.endpoint or ''
@@ -435,6 +395,48 @@ def _enforce_module_access():
     
     if not cfg.INVENTORY_MODULE_ENABLED and _is_inventory_module_path(request.path):
         return "Inventar-Modul ist deaktiviert.", 403
+
+""" -----------------------------------------------------------After Request Handlers----------------------------------------------------------------------------- """
+
+@app.after_request
+def _set_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if cfg.SSL_ENABLED:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    
+    # Optimize caching for static resources (images, etc.)
+    path = request.path
+    
+    # Aggressive caching for optimized images (480p) - they're immutable
+    if '/image/optimized/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'  # 30 days
+    
+    # Moderate caching for thumbnails
+    elif '/thumbnails/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
+    
+    # Moderate caching for previews
+    elif '/previews/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=604800'  # 7 days
+    
+    # Short cache for regular uploads (in case they're updated/deleted)
+    elif '/uploads/' in path:
+        response.headers['Cache-Control'] = 'public, max-age=3600'  # 1 hour
+    
+    # Ensure WebP images are served with correct content-type
+    if path.endswith('.webp') or '.webp' in path:
+        response.headers['Content-Type'] = 'image/webp'
+    
+    return response
+
+
+def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
+    if request.is_json or request.path.startswith('/api/') or request.path in {'/download_book_cover', '/proxy_image', '/log_mobile_issue'}:
+        return jsonify({'error': message}), 400
+    flash(message, 'error')
+    return redirect(request.referrer or url_for('home'))
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
@@ -457,6 +459,7 @@ def _get_current_module(path):
         return 'inventory'
     return 'library' if cfg.LIBRARY_MODULE_ENABLED else 'inventory'
 
+"""---------------------------------------------User Access Permissions----------------------------------------------------------------------------- """
 
 def _get_current_user_permissions():
     username = session.get('username')
@@ -496,43 +499,7 @@ def _permission_denied_fallback_endpoint(permissions, current_endpoint=None):
             return candidate
     return 'logout'
 
-
-def _append_audit_event(db, event_type, payload):
-    """Write an audit entry; never break business flow on audit failures."""
-    try:
-        al.append_audit_event(
-            db=db,
-            event_type=event_type,
-            actor=session.get('username', 'system'),
-            payload=payload,
-            request_ip=request.remote_addr,
-            source='web',
-        )
-    except Exception as exc:
-        app.logger.warning(f"Audit write failed for {event_type}: {exc}")
-
-
-_AUDIT_INDEXES_READY = False
-
-
-def _ensure_audit_indexes_once():
-    """Ensure audit indexes exist once per process."""
-    global _AUDIT_INDEXES_READY
-    if _AUDIT_INDEXES_READY:
-        return
-
-    client = None
-    try:
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        al.ensure_audit_indexes(db)
-        _AUDIT_INDEXES_READY = True
-    except Exception as exc:
-        app.logger.warning(f"Could not ensure audit indexes: {exc}")
-    finally:
-        if client:
-            client.close()
-
+"""-------------------------------------------------------------Audit Logging----------------------------------------------------------------------------- """
 
 def _append_audit_event_standalone(event_type, payload):
     """Write audit event by opening a short-lived DB connection."""
@@ -540,69 +507,43 @@ def _append_audit_event_standalone(event_type, payload):
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
-        _append_audit_event(db, event_type, payload)
+        try:
+            al.append_audit_event(
+                db=db,
+                event_type=event_type,
+                actor=session.get('username', 'system'),
+                payload=payload,
+                request_ip=request.remote_addr,
+                source='web',
+            )
+        except Exception as exc:
+            app.logger.warning(f"Audit write failed for {event_type}: {exc}")
     except Exception as exc:
         app.logger.warning(f"Standalone audit write failed for {event_type}: {exc}")
     finally:
         if client:
             client.close()
 
+AUDIT_INDEXES_READY = False
 
-def _build_audit_review_markdown(verify_result, event_counts, audit_rows, generated_at=None):
-    """Build a detailed, downloadable markdown review for audit status and events."""
-    ts = generated_at or datetime.datetime.utcnow().isoformat() + 'Z'
-    lines = []
-    lines.append('# Audit Review Export')
-    lines.append('')
-    lines.append(f'- Generated at: {ts}')
-    lines.append(f"- Chain status: {'OK' if verify_result.get('ok') else 'ERROR'}")
-    lines.append(f"- Total entries: {verify_result.get('count', 0)}")
-    lines.append(f"- Last chain index: {verify_result.get('last_chain_index', 0)}")
-    lines.append(f"- Last hash: {verify_result.get('last_hash', '')}")
-    lines.append(f"- Mismatch count: {len(verify_result.get('mismatches', []) or [])}")
-    lines.append('')
+def _ensure_audit_indexes_once():
+    """Ensure audit indexes exist once per process."""
+    if AUDIT_INDEXES_READY:
+        return
 
-    lines.append('## Event Type Distribution')
-    lines.append('')
-    if event_counts:
-        for item in event_counts:
-            lines.append(f"- {item.get('event_type', 'unknown')}: {item.get('count', 0)}")
-    else:
-        lines.append('- No events available')
-    lines.append('')
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        al.ensure_audit_indexes(db)
+        AUDIT_INDEXES_READY = True
+    except Exception as exc:
+        app.logger.warning(f"Could not ensure audit indexes: {exc}")
+    finally:
+        if client:
+            client.close()
 
-    mismatches = verify_result.get('mismatches', []) or []
-    lines.append('## Chain Mismatches')
-    lines.append('')
-    if mismatches:
-        for mismatch in mismatches:
-            lines.append(
-                f"- index={mismatch.get('chain_index')} | error={mismatch.get('error')} | expected={mismatch.get('expected')} | found={mismatch.get('found')}"
-            )
-    else:
-        lines.append('- None')
-    lines.append('')
-
-    lines.append('## Recent Events')
-    lines.append('')
-    for row in audit_rows:
-        lines.append(f"### Event #{row.get('chain_index')}")
-        lines.append(f"- Timestamp: {row.get('timestamp') or row.get('created_at')}")
-        lines.append(f"- Type: {row.get('event_type', '')}")
-        lines.append(f"- Actor: {row.get('actor', '')}")
-        lines.append(f"- Source: {row.get('source', '')}")
-        lines.append(f"- IP: {row.get('ip', '')}")
-        lines.append(f"- Entry hash: {row.get('entry_hash', '')}")
-        lines.append(f"- Prev hash: {row.get('prev_hash', '')}")
-        payload_json = json.dumps(row.get('payload', {}), ensure_ascii=False, sort_keys=True, indent=2, default=str)
-        lines.append('- Payload:')
-        lines.append('```json')
-        lines.append(payload_json)
-        lines.append('```')
-        lines.append('')
-
-    return '\n'.join(lines)
-
+"""-------------------------------------------------------------School Info & Logo Handling----------------------------------------------------------------------------- """
 
 def _get_school_info_for_export():
     """
@@ -680,6 +621,7 @@ def _save_school_logo_upload(upload_file, tenant_id=None, tenant_db=None):
 
     return (logo_filename, thumb_filename)
 
+"""---------------------------------------------Invoice Generation----------------------------------------------------------------------------- """
 
 def _parse_money_value(value):
     """Parse a user-facing money value into a float when possible."""
@@ -687,17 +629,14 @@ def _parse_money_value(value):
         return None
     if isinstance(value, (int, float)):
         return float(value)
-
     text = str(value).strip()
     if not text:
         return None
-
     cleaned = re.sub(r'[^0-9,\.\-]', '', text)
     if ',' in cleaned and '.' in cleaned:
         cleaned = cleaned.replace('.', '').replace(',', '.')
     else:
         cleaned = cleaned.replace(',', '.')
-
     try:
         return float(cleaned)
     except ValueError:
@@ -717,127 +656,6 @@ def _build_invoice_number(borrow_id, created_at):
     """Build a stable, human-readable invoice number."""
     short_id = str(borrow_id)[-6:].upper()
     return f"INV-{created_at.strftime('%Y%m%d-%H%M%S')}-{short_id}"
-
-
-def _build_invoice_pdf(invoice_data):
-    """Render a PDF invoice for a damaged borrowed item."""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.lib.colors import HexColor, black, white
-    from reportlab.lib.utils import simpleSplit
-    from reportlab.pdfgen import canvas
-
-    pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=A4)
-    page_width, page_height = A4
-
-    margin_x = 20 * mm
-    margin_top = 20 * mm
-    usable_width = page_width - (2 * margin_x)
-    current_y = page_height - margin_top
-
-    dark_color = HexColor('#0F172A')
-    accent_color = HexColor('#B91C1C')
-    light_color = HexColor('#F8FAFC')
-    border_color = HexColor('#CBD5E1')
-    text_color = HexColor('#1E293B')
-    muted_color = HexColor('#64748B')
-
-    def draw_wrapped_lines(text, x_pos, y_pos, width, font_name='Helvetica', font_size=11, leading=14, color=text_color):
-        if not text:
-            return y_pos
-        c.setFont(font_name, font_size)
-        c.setFillColor(color)
-        for line in simpleSplit(str(text), font_name, font_size, width):
-            c.drawString(x_pos, y_pos, line)
-            y_pos -= leading
-        return y_pos
-
-    def draw_label_value(label, value, x_pos, y_pos, label_width=45 * mm):
-        c.setFont('Helvetica-Bold', 10)
-        c.setFillColor(muted_color)
-        c.drawString(x_pos, y_pos, label)
-        c.setFont('Helvetica', 10)
-        c.setFillColor(text_color)
-        c.drawString(x_pos + label_width, y_pos, str(value or '-'))
-        return y_pos - 7 * mm
-
-    c.setFillColor(light_color)
-    c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
-
-    c.setFillColor(dark_color)
-    c.rect(0, page_height - 28 * mm, page_width, 28 * mm, fill=1, stroke=0)
-    c.setFillColor(white)
-    c.setFont('Helvetica-Bold', 20)
-    c.drawString(margin_x, page_height - 16 * mm, 'RECHNUNG')
-    c.setFont('Helvetica', 10)
-    c.drawString(margin_x, page_height - 23 * mm, 'Inventarsystem - Schadensersatz für zerstörtes Ausleihobjekt')
-
-    current_y = page_height - 40 * mm
-    c.setStrokeColor(border_color)
-    c.setLineWidth(1)
-    c.line(margin_x, current_y, page_width - margin_x, current_y)
-    current_y -= 12 * mm
-
-    invoice_number = invoice_data.get('invoice_number', '-')
-    created_at = invoice_data.get('created_at_display', '-')
-    borrower = invoice_data.get('borrower', '-')
-    item_name = invoice_data.get('item_name', '-')
-    item_code = invoice_data.get('item_code', '-')
-    item_id = invoice_data.get('item_id', '-')
-    damage_reason = invoice_data.get('damage_reason', '-')
-    amount_text = invoice_data.get('amount_text', '-')
-
-    current_y = draw_label_value('Rechnungsnummer:', invoice_number, margin_x, current_y)
-    current_y = draw_label_value('Datum:', created_at, margin_x, current_y)
-    current_y = draw_label_value('Empfänger:', borrower, margin_x, current_y)
-    current_y = draw_label_value('Ausleihe / Element:', item_name, margin_x, current_y)
-    current_y = draw_label_value('Element-ID:', item_id, margin_x, current_y)
-    current_y = draw_label_value('Code:', item_code, margin_x, current_y)
-    current_y = current_y - 3 * mm
-
-    c.setFillColor(dark_color)
-    c.setFont('Helvetica-Bold', 12)
-    c.drawString(margin_x, current_y, 'Schadensbeschreibung')
-    current_y -= 6 * mm
-    current_y = draw_wrapped_lines(damage_reason, margin_x, current_y, usable_width, font_size=10, leading=13, color=text_color)
-    current_y -= 4 * mm
-
-    c.setFillColor(dark_color)
-    c.setFont('Helvetica-Bold', 12)
-    c.drawString(margin_x, current_y, 'Rechnungsbetrag')
-    current_y -= 8 * mm
-
-    c.setFillColor(accent_color)
-    c.setStrokeColor(accent_color)
-    c.rect(margin_x, current_y - 12 * mm, usable_width, 16 * mm, fill=1, stroke=0)
-    c.setFillColor(white)
-    c.setFont('Helvetica-Bold', 16)
-    c.drawString(margin_x + 5 * mm, current_y - 2 * mm, amount_text)
-    current_y -= 20 * mm
-
-    current_y = draw_wrapped_lines(
-        'Bitte begleichen Sie diesen Betrag zeitnah bei der Verwaltung. Der Betrag ergibt sich aus dem zerstörten Ausleihobjekt und der dokumentierten Schadensmeldung.',
-        margin_x,
-        current_y,
-        usable_width,
-        font_size=10,
-        leading=13,
-        color=muted_color,
-    )
-
-    footer_y = 18 * mm
-    c.setStrokeColor(border_color)
-    c.setLineWidth(0.8)
-    c.line(margin_x, footer_y + 8 * mm, page_width - margin_x, footer_y + 8 * mm)
-    c.setFillColor(muted_color)
-    c.setFont('Helvetica', 9)
-    c.drawString(margin_x, footer_y, 'Inventarsystem - Rechnungserstellung')
-    c.drawRightString(page_width - margin_x, footer_y, f'{amount_text}')
-
-    c.save()
-    pdf_buffer.seek(0)
-    return pdf_buffer
 
 
 def _prepare_invoice_pdf_payload(invoice_data, borrow_doc=None, item_doc=None):
@@ -876,6 +694,7 @@ def _prepare_invoice_pdf_payload(invoice_data, borrow_doc=None, item_doc=None):
         'amount_text': amount_text or '-',
     }
 
+"""---------------------------------------------Notification System----------------------------------------------------------------------------- """
 
 def _create_notification(db, *, audience, notif_type, title, message, target_user=None, reference=None, unique_key=None, severity='info'):
     """Create a notification entry with optional deduplication via unique_key."""
@@ -1201,7 +1020,7 @@ def create_return_reminders():
 def inject_version():
     """Inject global template variables."""
     is_admin = False
-    asset_version = _get_asset_version()
+    asset_version = APP_VERSION
     csrf_token = _get_csrf_token()
     unread_notification_count = 0
     current_permissions = us.build_default_permission_payload('standard_user')
@@ -1258,27 +1077,8 @@ def inject_version():
         'permission_presets': us.get_permission_preset_definitions(),
     }
 
-# Create necessary directories at startup
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
-# QR Code directory creation deactivated
-# if not os.path.exists(app.config['QR_CODE_FOLDER']):
-#     os.makedirs(app.config['QR_CODE_FOLDER'])
 
-# Create backup directories
-BACKUP_FOLDER = cfg.BACKUP_FOLDER
-if not os.path.exists(BACKUP_FOLDER):
-    try:
-        os.makedirs(BACKUP_FOLDER, exist_ok=True)
-    except PermissionError:
-        # Fallback: use a backup directory inside the application directory (writable)
-        fallback_backup = os.path.join(BASE_DIR, 'backups')
-        try:
-            os.makedirs(fallback_backup, exist_ok=True)
-            BACKUP_FOLDER = fallback_backup
-            print(f"Warnung: Konnte BACKUP_FOLDER nicht erstellen. Fallback genutzt: {BACKUP_FOLDER}")
-        except Exception as e:
-            print(f"Fehler: Backup-Verzeichnis konnte nicht erstellt werden: {e}")
+"""-------------------------------------------------------------Scheduled Tasks----------------------------------------------------------------------------- """
 
 def create_daily_backup():
     """
@@ -1514,6 +1314,8 @@ def _shutdown_scheduler():
 
 atexit.register(_shutdown_scheduler)
 
+"""-------------------------------------------------------------File Upload Validation----------------------------------------------------------------------------- """
+
 def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     """
     Check if a file has an allowed extension and valid content.
@@ -1654,6 +1456,7 @@ def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     
     return True, ""
 
+"""-------------------------------------------------------------Form Value Sanitization----------------------------------------------------------------------------- """
 
 def strip_whitespace(value):
     """
@@ -1688,43 +1491,6 @@ def sanitize_form_value(value):
     if isinstance(value, list):
         return [html.escape(item) if isinstance(item, str) else item for item in value]
     return value
-
-
-FILTER_SELECT_ALL_TOKEN = '__ALL__'
-
-
-def expand_filter_selection(selected_values, filter_num):
-    """Expand special filter token into all predefined values for a filter."""
-    if not isinstance(selected_values, list):
-        return []
-
-    has_select_all = False
-    cleaned_values = []
-    seen = set()
-
-    for raw_value in selected_values:
-        value = str(raw_value).strip() if raw_value is not None else ''
-        if not value:
-            continue
-        if value == FILTER_SELECT_ALL_TOKEN:
-            has_select_all = True
-            continue
-        if value not in seen:
-            cleaned_values.append(value)
-            seen.add(value)
-
-    if not has_select_all:
-        return cleaned_values
-
-    predefined_values = it.get_predefined_filter_values(filter_num)
-    for predefined_value in predefined_values:
-        value = str(predefined_value).strip() if predefined_value is not None else ''
-        if value and value not in seen:
-            cleaned_values.append(value)
-            seen.add(value)
-
-    return cleaned_values
-
 
 def normalize_isbn(isbn_raw):
     """Return only digits/X from ISBN input in canonical uppercase form."""
@@ -1875,6 +1641,41 @@ def _load_tabular_upload(uploaded_file):
     workbook.close()
     return header_row, data_rows
 
+"""-------------------------------------------------------------Filter----------------------------------------------------------------------------- """
+FILTER_SELECT_ALL_TOKEN = '__ALL__'
+
+
+def expand_filter_selection(selected_values, filter_num):
+    """Expand special filter token into all predefined values for a filter."""
+    if not isinstance(selected_values, list):
+        return []
+
+    has_select_all = False
+    cleaned_values = []
+    seen = set()
+
+    for raw_value in selected_values:
+        value = str(raw_value).strip() if raw_value is not None else ''
+        if not value:
+            continue
+        if value == FILTER_SELECT_ALL_TOKEN:
+            has_select_all = True
+            continue
+        if value not in seen:
+            cleaned_values.append(value)
+            seen.add(value)
+
+    if not has_select_all:
+        return cleaned_values
+
+    predefined_values = it.get_predefined_filter_values(filter_num)
+    for predefined_value in predefined_values:
+        value = str(predefined_value).strip() if predefined_value is not None else ''
+        if value and value not in seen:
+            cleaned_values.append(value)
+            seen.add(value)
+
+    return cleaned_values
 
 def _is_public_host(hostname):
     """Return True only for hosts that resolve to public IPs."""
@@ -3295,10 +3096,9 @@ def api_library_scan_action():
             it.update_item_status(item_id, False, borrower_name)
             au.add_ausleihung(item_id, borrower_name, now, end_date=end_date)
 
-            _append_audit_event(
-                db,
-                'ausleihung_borrowed',
-                {
+            _append_audit_event_standalone(
+                event_type='ausleihung_borrowed',
+                payload={
                     'channel': 'library_scan',
                     'item_id': item_id,
                     'item_name': item_doc.get('Name', ''),
@@ -3337,10 +3137,9 @@ def api_library_scan_action():
         )
         it.update_item_status(item_id, True, borrower_name)
 
-        _append_audit_event(
-            db,
-            'ausleihung_returned',
-            {
+        _append_audit_event_standalone(
+            event_type='ausleihung_returned',
+            payload={
                 'channel': 'library_scan',
                 'item_id': item_id,
                 'item_name': item_doc.get('Name', ''),
@@ -5911,10 +5710,9 @@ def _soft_delete_item_groups(db, root_item_ids, username):
     except Exception as archive_err:
         app.logger.warning(f"Soft-delete media archive failed: {archive_err}")
 
-    _append_audit_event(
-        db,
-        'inventory_item_soft_deleted',
-        {
+    _append_audit_event_standalone(
+        event_type='inventory_item_soft_deleted',
+        payload={
             'root_item_ids': root_item_ids,
             'group_item_ids': unique_group_item_ids,
             'soft_deleted_items': soft_deleted_items,
@@ -6510,8 +6308,8 @@ def ausleihen(id):
             au.add_ausleihung(unit_id, effective_borrower, start_date, end_date=end_date)
 
         _append_audit_event_standalone(
-            'ausleihung_borrowed',
-            {
+            event_type='ausleihung_returned',
+            payload={
                 'channel': 'inventory_route',
                 'item_id': id,
                 'borrower': effective_borrower,
@@ -6600,8 +6398,8 @@ def ausleihen(id):
         start_date = datetime.datetime.now()
         au.add_ausleihung(id, effective_borrower, start_date, end_date=end_date)
         _append_audit_event_standalone(
-            'ausleihung_borrowed',
-            {
+            event_type='ausleihung_returned',
+            payload={
                 'channel': 'inventory_route',
                 'item_id': id,
                 'borrower': effective_borrower,
@@ -6649,8 +6447,8 @@ def ausleihen(id):
             })
 
         _append_audit_event_standalone(
-            'ausleihung_borrowed',
-            {
+            event_type='ausleihung_returned',
+            payload={
                 'channel': 'inventory_route',
                 'item_id': id,
                 'borrower': effective_borrower,
@@ -6730,8 +6528,8 @@ def zurueckgeben(id):
                 flash('Element erfolgreich zurückgegeben', 'success')
 
             _append_audit_event_standalone(
-                'ausleihung_returned',
-                {
+                event_type='ausleihung_returned',
+                payload={
                     'channel': 'inventory_route',
                     'item_id': id,
                     'returned_by': username,
@@ -7545,6 +7343,7 @@ def admin_borrowings():
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
     )
 
+"""-----------------------------------------------------------Audit Routes-------------------------------------------------------"""
 
 @app.route('/admin/audit/verify', methods=['GET'])
 def admin_verify_audit_chain():
@@ -7565,7 +7364,6 @@ def admin_verify_audit_chain():
     finally:
         if client:
             client.close()
-
 
 @app.route('/admin/audit', methods=['GET'])
 def admin_audit_dashboard():
@@ -7613,154 +7411,6 @@ def admin_audit_dashboard():
     finally:
         if client:
             client.close()
-
-
-@app.route('/admin/audit/export', methods=['GET'])
-def admin_audit_export():
-    """Export a detailed audit review in markdown or json format."""
-    if 'username' not in session or not us.check_admin(session['username']):
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
-
-    fmt = (request.args.get('format') or 'md').strip().lower()
-    try:
-        limit = int((request.args.get('limit') or '1000').strip())
-    except Exception:
-        limit = 1000
-    limit = max(1, min(limit, 5000))
-
-    client = None
-    try:
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        al.ensure_audit_indexes(db)
-        verify_result = al.verify_audit_chain(db)
-
-        event_counts = list(
-            db['audit_log'].aggregate([
-                {'$group': {'_id': '$event_type', 'count': {'$sum': 1}}},
-                {'$project': {'_id': 0, 'event_type': {'$ifNull': ['$_id', 'unknown']}, 'count': 1}},
-                {'$sort': {'count': -1, 'event_type': 1}}
-            ])
-        )
-
-        audit_rows = list(
-            db['audit_log'].find(
-                {},
-                {
-                    'chain_index': 1,
-                    'event_type': 1,
-                    'actor': 1,
-                    'source': 1,
-                    'ip': 1,
-                    'timestamp': 1,
-                    'created_at': 1,
-                    'entry_hash': 1,
-                    'prev_hash': 1,
-                    'payload': 1,
-                }
-            ).sort('chain_index', -1).limit(limit)
-        )
-
-        generated_at = datetime.datetime.utcnow().isoformat() + 'Z'
-
-        if fmt == 'json':
-            export_payload = {
-                'generated_at': generated_at,
-                'verify_result': verify_result,
-                'event_counts': event_counts,
-                'events': audit_rows,
-            }
-            response = make_response(json.dumps(export_payload, ensure_ascii=False, indent=2, default=str))
-            response.headers['Content-Type'] = 'application/json; charset=utf-8'
-            response.headers['Content-Disposition'] = f'attachment; filename=audit-review-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.json'
-            return response
-
-        markdown_content = _build_audit_review_markdown(
-            verify_result=verify_result,
-            event_counts=event_counts,
-            audit_rows=audit_rows,
-            generated_at=generated_at,
-        )
-        response = make_response(markdown_content)
-        response.headers['Content-Type'] = 'text/markdown; charset=utf-8'
-        response.headers['Content-Disposition'] = f'attachment; filename=audit-review-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.md'
-        return response
-    except Exception as exc:
-        return jsonify({'ok': False, 'error': str(exc)}), 500
-    finally:
-        if client:
-            client.close()
-
-
-@app.route('/admin/audit/export/pdf/quick', methods=['GET'])
-def admin_audit_export_pdf_quick():
-    """Export audit report as professional PDF (Quick-Check version - compact for management)."""
-    if 'username' not in session or not us.check_admin(session['username']):
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
-
-    try:
-        limit = int((request.args.get('limit') or '500').strip())
-    except Exception:
-        limit = 500
-    limit = max(1, min(limit, 5000))
-
-    client = None
-    try:
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        al.ensure_audit_indexes(db)
-        verify_result = al.verify_audit_chain(db)
-
-        event_counts = list(
-            db['audit_log'].aggregate([
-                {'$group': {'_id': '$event_type', 'count': {'$sum': 1}}},
-                {'$project': {'_id': 0, 'event_type': {'$ifNull': ['$_id', 'unknown']}, 'count': 1}},
-                {'$sort': {'count': -1, 'event_type': 1}}
-            ])
-        )
-
-        audit_rows = list(
-            db['audit_log'].find(
-                {},
-                {
-                    'chain_index': 1,
-                    'event_type': 1,
-                    'actor': 1,
-                    'source': 1,
-                    'ip': 1,
-                    'timestamp': 1,
-                    'created_at': 1,
-                    'entry_hash': 1,
-                    'prev_hash': 1,
-                    'payload': 1,
-                }
-            ).sort('chain_index', -1).limit(limit)
-        )
-
-        # Get school information from settings or use defaults
-        school_info = _get_school_info_for_export()
-
-        # Generate PDF
-        pdf_content = pdf_export.generate_audit_pdf(
-            verify_result=verify_result,
-            event_counts=event_counts,
-            audit_rows=audit_rows,
-            export_type='quick',
-            school_info=school_info
-        )
-
-        response = make_response(pdf_content)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=audit-quick-check-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.pdf'
-        return response
-
-    except Exception as exc:
-        app.logger.error(f"PDF Quick-Check export error: {str(exc)}\n{traceback.format_exc()}")
-        return jsonify({'ok': False, 'error': str(exc)}), 500
-    finally:
-        if client:
-            client.close()
-
 
 @app.route('/admin/audit/export/pdf/official', methods=['GET'])
 def admin_audit_export_pdf_official():
@@ -7831,6 +7481,7 @@ def admin_audit_export_pdf_official():
         if client:
             client.close()
 
+"""-----------------------------------------------------------Image Cache Management Routes-------------------------------------------------------"""
 
 @app.route('/admin/image_cache_stats', methods=['GET'])
 def admin_image_cache_stats():
@@ -7920,8 +7571,7 @@ def admin_image_cache_cleanup():
             return jsonify({'ok': False, 'error': result['error']}), 500
         
         # Log the action
-        _append_audit_event(
-            db=MongoClient(MONGODB_HOST, MONGODB_PORT)[MONGODB_DB],
+        _append_audit_event_standalone(
             event_type='admin_image_cache_cleanup',
             payload={
                 'max_age_days': max_age_days,
@@ -7940,6 +7590,7 @@ def admin_image_cache_cleanup():
         app.logger.error(f"Error during image cache cleanup: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+"""-----------------------------------------------------------Borrowing Management Routes-------------------------------------------------------"""
 
 @app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
 def admin_reset_borrowing(borrow_id):
@@ -7978,10 +7629,9 @@ def admin_reset_borrowing(borrow_id):
                 except Exception:
                     pass
             flash('Aktive Ausleihe wurde zurückgesetzt (abgeschlossen).', 'success')
-            _append_audit_event(
-                db,
-                'ausleihung_admin_reset',
-                {
+            _append_audit_event_standalone(
+                event_type='ausleihung_admin_reset',
+                payload={
                     'borrow_id': borrow_id,
                     'from_status': 'active',
                     'to_status': 'completed',
@@ -7992,10 +7642,9 @@ def admin_reset_borrowing(borrow_id):
         elif status == 'planned':
             ausleihungen.update_one({'_id': rec['_id']}, {'$set': {'Status': 'cancelled', 'LastUpdated': now}})
             flash('Geplante Ausleihe wurde storniert.', 'success')
-            _append_audit_event(
-                db,
-                'ausleihung_admin_reset',
-                {
+            _append_audit_event_standalone(
+                event_type='ausleihung_admin_reset',
+                payload={
                     'borrow_id': borrow_id,
                     'from_status': 'planned',
                     'to_status': 'cancelled',
@@ -8141,10 +7790,9 @@ def admin_create_invoice(borrow_id):
         except Exception as log_err:
             app.logger.warning(f"Damage invoice log write failed for borrow {borrow_id}: {log_err}")
 
-        _append_audit_event(
-            db,
-            'invoice_created',
-            {
+        _append_audit_event_standalone(
+            event_type='invoice_created',
+            payload={
                 'borrow_id': borrow_id,
                 'invoice_number': invoice_number,
                 'amount': round(amount_value, 2),
@@ -8154,7 +7802,7 @@ def admin_create_invoice(borrow_id):
             }
         )
 
-        pdf_buffer = _build_invoice_pdf(invoice_data)
+        pdf_buffer = pdf_export._build_invoice_pdf(invoice_data)
         return send_file(
             pdf_buffer,
             mimetype='application/pdf',
@@ -8228,10 +7876,9 @@ def admin_mark_invoice_paid(borrow_id):
         except Exception as log_err:
             app.logger.warning(f"Damage invoice paid log write failed for borrow {borrow_id}: {log_err}")
 
-        _append_audit_event(
-            db,
-            'invoice_marked_paid',
-            {
+        _append_audit_event_standalone(
+            event_type='invoice_marked_paid',
+            payload={
                 'borrow_id': borrow_id,
                 'invoice_number': invoice_data.get('invoice_number', ''),
                 'amount': invoice_data.get('amount'),
@@ -8343,10 +7990,9 @@ def admin_finalize_invoice_and_repair(borrow_id):
         except Exception as log_err:
             app.logger.warning(f"Damage invoice finalize log write failed for borrow {borrow_id}: {log_err}")
 
-        _append_audit_event(
-            db,
-            'invoice_finalized_and_repaired',
-            {
+        _append_audit_event_standalone(
+            event_type='invoice_finalized_and_repaired',
+            payload={
                 'borrow_id': borrow_id,
                 'item_id': str(item_doc.get('_id')) if item_doc else '',
                 'invoice_number': invoice_data.get('invoice_number', ''),
@@ -8404,7 +8050,7 @@ def admin_view_invoice_pdf(borrow_id):
 
         pdf_payload = _prepare_invoice_pdf_payload(invoice_data, borrow_doc=borrow_doc, item_doc=item_doc)
         invoice_number = pdf_payload.get('invoice_number', 'rechnung')
-        pdf_buffer = _build_invoice_pdf(pdf_payload)
+        pdf_buffer = pdf_export._build_invoice_pdf(pdf_payload)
         return send_file(
             pdf_buffer,
             mimetype='application/pdf',
@@ -8474,10 +8120,9 @@ def admin_add_invoice_correction(borrow_id):
             }
         )
 
-        _append_audit_event(
-            db,
-            'invoice_correction_added',
-            {
+        _append_audit_event_standalone(
+            event_type='invoice_correction_added',
+            payload={
                 'borrow_id': borrow_id,
                 'invoice_number': invoice_data.get('invoice_number', ''),
                 'correction_number': correction_number,
@@ -9270,16 +8915,14 @@ def download_book_cover():
         print(f"Error downloading book cover: {e}")
        
         return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
-
+"""
 @app.route('/proxy_image')
 def proxy_image():
-    """
     Proxy endpoint to fetch images from external sources,
     bypassing CORS restrictions
     
     Returns:
         flask.Response: The image data or an error response
-    """
     url = request.args.get('url')
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -9332,8 +8975,9 @@ def proxy_image():
     except Exception as e:
         print(f"Error in proxy_image: {e}")
         return jsonify({"error": f"Error fetching image: {str(e)}"}), 500
+"""
 
-# Add missing get_period_times function
+
 def get_period_times(booking_date, period_num):
     """
     Get the start and end times for a given period on a specific date
@@ -9383,6 +9027,8 @@ def get_period_times(booking_date, period_num):
     except Exception as e:
         print(f"Error getting period times: {e}")
         return None
+
+"""---------------------------------------------------------Borrowing-----------------------------------------------------------------"""
 
 @app.route('/my_borrowed_items')
 def my_borrowed_items():
@@ -10194,8 +9840,8 @@ def schedule_appointment():
                 
                 # Log audit event
                 _append_audit_event_standalone(
-                    'ausleihung_started',
-                    {
+                    event_type='ausleihung_started',
+                    payload={
                         'borrow_id': str(appointment_id),
                         'item_id': item_id,
                         'item_name': item_name,
@@ -10329,8 +9975,8 @@ def cancel_ausleihung_route(id):
                     print(f"Warning: could not restore availability of item {item_id}: {status_err}")
 
             _append_audit_event_standalone(
-                'ausleihung_cancelled',
-                {
+                event_type='ausleihung_cancelled',
+                payload={
                     'borrow_id': id,
                     'item_id': str(ausleihung.get('Item') or ''),
                     'cancelled_by': username,
