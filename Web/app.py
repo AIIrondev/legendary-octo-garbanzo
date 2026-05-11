@@ -1026,9 +1026,9 @@ def inject_version():
         'csrf_token': csrf_token,
         'CURRENT_MODULE': current_module,
         'school_periods': SCHOOL_PERIODS,
-        'inventory_module_enabled': cfg.INVENTORY_MODULE_ENABLED,
-        'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
-        'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
+        'inventory_module_enabled': cfg.MODULES.is_enabled('inventory'),
+        'library_module_enabled': cfg.MODULES.is_enabled('library'),
+        'student_cards_module_enabled': cfg.MODULES.is_enabled('student_cards'),
         'is_admin': is_admin,
         'unread_notification_count': unread_notification_count,
         'current_permissions': current_permissions,
@@ -1713,7 +1713,7 @@ def _upload_student_cards_excel():
         flash('Administratorrechte erforderlich.', 'error')
         return redirect(url_for('home_admin'))
 
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -1908,7 +1908,7 @@ def _upload_excel_items(scope='inventory'):
     fallback_route = 'library_admin' if is_library_scope else 'upload_admin'
 
     if is_library_scope:
-        if not cfg.LIBRARY_MODULE_ENABLED:
+        if not cfg.MODULES.is_enabled('library'):
             flash('Bibliotheks-Modul ist deaktiviert.', 'error')
             return redirect(url_for('home'))
 
@@ -2606,8 +2606,8 @@ def home():
         flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
         
-    if not cfg.INVENTORY_MODULE_ENABLED:
-        if cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('inventory'):
+        if cfg.MODULES.is_enabled('library'):
             return redirect(url_for('library_view'))
         else:
             return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
@@ -2616,8 +2616,8 @@ def home():
         return render_template(
             'main.html',
             username=session['username'],
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
         )
@@ -2645,8 +2645,8 @@ def home_admin():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
         
-    if not cfg.INVENTORY_MODULE_ENABLED:
-        if cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('inventory'):
+        if cfg.MODULES.is_enabled('library'):
             return redirect(url_for('library_admin'))
         else:
             return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
@@ -2657,8 +2657,8 @@ def home_admin():
     return render_template(
         'main_admin.html',
         username=session['username'],
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
         school_info=_get_school_info_for_export(),
@@ -2676,8 +2676,8 @@ def tutorial_page():
         'tutorial.html',
         username=session['username'],
         is_admin=us.check_admin(session['username']),
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
@@ -2695,16 +2695,16 @@ def library_view():
     if 'username' not in session:
         flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         flash('Bibliotheks-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home'))
     
     return render_template(
         'library_table.html',
         username=session['username'],
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
         is_admin=us.check_admin(session['username']),
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
@@ -2719,7 +2719,7 @@ def library_loans_admin():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         flash('Bibliotheks-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -2820,8 +2820,8 @@ def library_loans_admin():
             'library_borrowings_admin.html',
             loan_entries=loan_entries,
             damaged_items=damaged_items,
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         )
     except Exception as e:
         app.logger.error(f"Error loading library loans admin view: {e}")
@@ -2956,9 +2956,9 @@ def api_library_scan_action():
     """
     if 'username' not in session:
         return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         return jsonify({'ok': False, 'message': 'Schülerausweis-Modul ist deaktiviert.'}), 403
 
     payload = request.get_json(silent=True) or {}
@@ -3162,7 +3162,7 @@ def api_library_item_update(item_id):
         return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
     if not us.check_admin(session['username']):
         return jsonify({'ok': False, 'message': 'Administratorrechte erforderlich.'}), 403
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
 
     payload = request.get_json(silent=True) or {}
@@ -3293,8 +3293,8 @@ def upload_admin():
         'upload_admin.html',
         username=session['username'],
         duplicate_data=duplicate_data,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         show_library_features=False,
         upload_mode='item',
         page_title='Artikel hochladen',
@@ -3315,7 +3315,7 @@ def library_admin():
     if not _action_access_allowed(permissions, 'can_insert'):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         flash('Bibliotheks-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -3359,8 +3359,8 @@ def library_admin():
         'upload_admin.html',
         username=session['username'],
         duplicate_data=duplicate_data,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         show_library_features=True,
         upload_mode='library',
         page_title='Bücher hochladen',
@@ -3380,7 +3380,7 @@ def student_cards_admin():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -3506,8 +3506,8 @@ def student_cards_admin():
         edit_mode=edit_mode,
         form_data=form_data,
         config={'default': cfg.STUDENT_DEFAULT_BORROW_DAYS},
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 
@@ -3523,7 +3523,7 @@ def student_cards_print():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -3555,7 +3555,7 @@ def student_card_barcode_print():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -3586,7 +3586,7 @@ def student_card_barcode_download():
     if not us.check_admin(session['username']):
         flash('Zugriff verweigert.', 'error')
         return redirect(url_for('login'))
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -3760,7 +3760,7 @@ def student_card_single_barcode_download(card_id):
     if not us.check_admin(session['username']):
         flash('Zugriff verweigert.', 'error')
         return redirect(url_for('login'))
-    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('student_cards'):
         flash('Schülerausweis-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -4629,7 +4629,7 @@ def upload_item():
 
     item_isbn = ''
     item_type = 'general'
-    if cfg.LIBRARY_MODULE_ENABLED:
+    if cfg.MODULES.is_enabled('library'):
         item_isbn = normalize_and_validate_isbn(isbn_raw)
         if isbn_raw and not item_isbn:
             error_msg = 'Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden.'
@@ -4641,7 +4641,7 @@ def upload_item():
             item_type = 'book'
 
     if upload_mode == 'library':
-        if not cfg.LIBRARY_MODULE_ENABLED:
+        if not cfg.MODULES.is_enabled('library'):
             error_msg = 'Bibliotheks-Modul ist deaktiviert.'
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
@@ -5816,7 +5816,7 @@ def edit_item(id):
 
     item_isbn = ''
     item_type = 'general'
-    if cfg.LIBRARY_MODULE_ENABLED:
+    if cfg.MODULES.is_enabled('library'):
         item_isbn = normalize_and_validate_isbn(isbn_raw)
         if isbn_raw and not item_isbn:
             flash('Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden.', 'error')
@@ -6099,7 +6099,7 @@ def ausleihen(id):
     
     username = session['username']
     requested_return_to = (request.form.get('return_to') or '').strip().lower()
-    if requested_return_to == 'library' and cfg.LIBRARY_MODULE_ENABLED:
+    if requested_return_to == 'library' and cfg.MODULES.is_enabled('library'):
         redirect_target = 'library_view'
     else:
         redirect_target = 'home_admin' if us.check_admin(username) else 'home'
@@ -6117,7 +6117,7 @@ def ausleihen(id):
 
     # Library media can only be borrowed with a valid student card.
     if is_library_item:
-        if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        if not cfg.MODULES.is_enabled('student_cards'):
             flash('Bibliotheksmedien können nur mit aktivem Schülerausweis-Modul ausgeliehen werden.', 'error')
             return redirect(url_for(redirect_target))
         if not student_card_id:
@@ -6146,7 +6146,7 @@ def ausleihen(id):
             if client:
                 client.close()
 
-    if cfg.STUDENT_CARDS_MODULE_ENABLED:
+    if cfg.MODULES.is_enabled('student_cards'):
         duration_raw = (request.form.get('borrow_duration_days') or '').strip()
         if duration_raw:
             try:
@@ -7066,8 +7066,8 @@ def register():
             return redirect(url_for('home'))
         return render_template(
             'register.html',
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
         )
@@ -7133,8 +7133,8 @@ def user_del():
     return render_template(
         'user_del.html',
         users=users_list,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 
@@ -7274,8 +7274,8 @@ def admin_borrowings():
     return render_template(
         'admin_borrowings.html',
         entries=entries,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 """-----------------------------------------------------------Audit Routes-------------------------------------------------------"""
@@ -7336,8 +7336,8 @@ def admin_audit_dashboard():
             'admin_audit.html',
             verify_result=verify_result,
             audit_rows=audit_rows,
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         )
     except Exception as exc:
         app.logger.error(f"Error loading audit dashboard: {exc}")
@@ -8083,7 +8083,7 @@ def library_item_invoices(item_id):
     if 'username' not in session or not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         flash('Bibliotheks-Modul ist deaktiviert.', 'error')
         return redirect(url_for('home_admin'))
 
@@ -8151,8 +8151,8 @@ def library_item_invoices(item_id):
                 'isbn': item_doc.get('ISBN', ''),
             },
             invoices=entries,
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         )
     except Exception as e:
         app.logger.error(f"Error loading invoice history for item {item_id}: {e}")
@@ -8478,8 +8478,8 @@ def logs():
     return render_template(
         'logs.html',
         items=formatted_items,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 
@@ -8544,8 +8544,8 @@ def manage_filters():
         'manage_filters.html',
         filter1_values=filter1_values,
         filter2_values=filter2_values,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 @app.route('/add_filter_value/<int:filter_num>', methods=['POST'])
@@ -8676,7 +8676,7 @@ def fetch_book_info(isbn):
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({"error": "Not authorized"}), 403
 
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         return jsonify({"error": "Bibliotheks-Modul ist deaktiviert."}), 403
 
     try:
@@ -8771,7 +8771,7 @@ def download_book_cover():
         return jsonify({"error": "Not authorized"}), 403
     if not us.check_admin(session['username']):
         return jsonify({"error": "Admin privileges required"}), 403
-    if not cfg.LIBRARY_MODULE_ENABLED:
+    if not cfg.MODULES.is_enabled('library'):
         return jsonify({"error": "Bibliotheks-Modul ist deaktiviert."}), 403
     
     try:
@@ -9138,8 +9138,8 @@ def notifications_view():
             user_notifications=user_notifications,
             admin_notifications=admin_notifications,
             is_admin_user=is_admin_user,
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         )
     except Exception as exc:
         app.logger.error(f"Error loading notifications: {exc}")
@@ -9370,8 +9370,8 @@ def admin_damaged_items():
         return render_template(
             'admin_damaged_items.html',
             damaged_items=damaged_rows,
-            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            library_module_enabled=cfg.MODULES.is_enabled('library'),
+            student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
         )
     except Exception as exc:
         app.logger.error(f"Error loading damaged-items admin view: {exc}")
@@ -9474,8 +9474,8 @@ def manage_locations():
     return render_template(
         'manage_locations.html',
         location_values=location_values,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
 
 
@@ -9583,8 +9583,8 @@ def admin_school_settings():
         school_info=current_school,
         tenant_id=tenant_id,
         tenant_db=tenant_db,
-        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
-        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        library_module_enabled=cfg.MODULES.is_enabled('library'),
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
     )
 
 @app.route('/check_code_unique/<code>')
