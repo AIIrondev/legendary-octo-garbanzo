@@ -96,6 +96,10 @@ def get_tenant_config(tenant_id=None):
 
     if tenant_id in TENANT_REGISTRY:
         return TENANT_REGISTRY[tenant_id] or {}
+        
+    for alias in _tenant_db_aliases(tenant_id):
+        if alias in TENANT_REGISTRY:
+            return TENANT_REGISTRY[alias] or {}
 
     return TENANT_REGISTRY.get('default', {}) or {}
 
