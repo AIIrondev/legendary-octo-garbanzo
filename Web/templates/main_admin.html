@@ -3252,12 +3252,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const openItem = urlParams.get('open_item_modal');
-        if (openItem) {
-            openEditModalFromServer(openItem);
-        }
-
         // Load saved filters
         loadFilterState();
         
@@ -5722,4 +5716,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 }
 </style>
+
+{% if open_item %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof openEditModalFromServer === 'function') {
+            setTimeout(function() {
+                openEditModalFromServer('{{ open_item }}');
+            }, 500);
+        }
+    });
+</script>
+{% endif %}
 {% endblock %}

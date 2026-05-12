@@ -353,7 +353,7 @@ def _enforce_active_session_user():
 @app.before_request
 def _enforce_module_access():
     endpoint = request.endpoint or ''
-    if endpoint == 'static' or endpoint.startswith('static') or request.path.startswith('/api/'):
+    if endpoint == 'static' or endpoint.startswith('static'):
         return None
     
     for name, matcher in cfg.MODULES._path_matchers.items():
@@ -363,7 +363,18 @@ def _enforce_module_access():
                 'inventory': "Inventar-Modul ist deaktiviert.",
                 'student_cards': "Schülerausweis-Modul ist deaktiviert."
             }.get(name, f"{name.capitalize()}-Modul ist deaktiviert.")
-            return msg, 403
+            
+            if request.path.startswith('/api/') or request.is_json:
+                return jsonify({'ok': False, 'message': msg}), 403
+            
+            flash(msg, 'info')
+            
+            if name != 'inventory' and cfg.MODULES.is_enabled('inventory'):
+                return redirect(url_for('home'))
+            elif name != 'library' and cfg.MODULES.is_enabled('library'):
+                return redirect(url_for('library_view'))
+            
+            return redirect(url_for('my_borrowed_items'))
 
 """ -----------------------------------------------------------After Request Handlers----------------------------------------------------------------------------- """
 
@@ -2619,7 +2630,8 @@ def home():
             library_module_enabled=cfg.MODULES.is_enabled('library'),
             student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
-            student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+            student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
+            open_item=request.args.get('open_item')
         )
     else:
         permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
@@ -2662,6 +2674,7 @@ def home_admin():
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
         school_info=_get_school_info_for_export(),
+        open_item=request.args.get('open_item')
     )
 
 
@@ -4667,16 +4680,26 @@ def upload_item():
 
     # Check if base code is unique for single-item uploads
     if code_4 and item_count == 1 and not it.is_code_unique(code_4[0]):
-        error_msg = 'Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.'
-        if is_mobile:
-            return jsonify({'success': False, 'message': error_msg}), 400
+        existing_item = it._get_items_collection().find_one({"code_4": code_4[0]})
+        if existing_item:
+            error_msg = 'Der Code wird bereits verwendet. Umleitung zum Eintrag.'
+            if is_mobile:
+                return jsonify({
+                    'success': False, 
+                    'message': error_msg,
+                    'existing_item_id': str(existing_item['_id']),
+                    'redirect_to_item': True
+                }), 400
+            
+            flash(error_msg, 'info')
+            return redirect(url_for(success_redirect_endpoint, open_item=str(existing_item['_id'])))
         else:
-            conflicting_items = it.get_item_by_code_4(code_4[0])
-            if conflicting_items:
-                flash('Der Code wird bereits verwendet. Das existierende Element wurde geöffnet.', 'info')
-                return redirect(url_for(success_redirect_endpoint, open_item_modal=str(conflicting_items[0]['_id'])))
-            flash(error_msg, 'error')
-            return redirect(url_for(success_redirect_endpoint))
+            error_msg = 'Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            else:
+                flash(error_msg, 'error')
+                return redirect(url_for(success_redirect_endpoint))
 
     # Validate optional per-item codes
     if individual_codes:
@@ -4699,10 +4722,6 @@ def upload_item():
                 error_msg = f'Der Einzelcode "{specific_code}" wird bereits verwendet.'
                 if is_mobile:
                     return jsonify({'success': False, 'message': error_msg}), 400
-                conflicting_items = it.get_item_by_code_4(specific_code)
-                if conflicting_items:
-                    flash(f'Der Einzelcode "{specific_code}" wird bereits verwendet. Das existierende Element wurde geöffnet.', 'info')
-                    return redirect(url_for(success_redirect_endpoint, open_item_modal=str(conflicting_items[0]['_id'])))
                 flash(error_msg, 'error')
                 return redirect(url_for(success_redirect_endpoint))
 
@@ -5834,10 +5853,6 @@ def edit_item(id):
     
     # Check if code is unique (excluding the current item)
     if code_4 and not it.is_code_unique(code_4, exclude_id=id):
-        conflicting_items = it.get_item_by_code_4(code_4)
-        if conflicting_items:
-            flash('Der Code wird bereits verwendet. Das existierende Element wurde stattdessen geöffnet.', 'info')
-            return redirect(url_for('home_admin', open_item_modal=str(conflicting_items[0]['_id'])))
         flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
         return redirect(url_for('home_admin'))
     

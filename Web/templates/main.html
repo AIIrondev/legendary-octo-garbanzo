@@ -4614,6 +4614,18 @@ function openItemQuick(id){
     }
 }
 </style>
+
+{% if open_item %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof openEditModalFromServer === 'function') {
+            setTimeout(function() {
+                openEditModalFromServer('{{ open_item }}');
+            }, 500);
+        }
+    });
+</script>
+{% endif %}
 {% endblock %}
 <style>
     /* Admin/Main Content Container align */
