@@ -4671,6 +4671,10 @@ def upload_item():
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
+            conflicting_items = it.get_item_by_code_4(code_4[0])
+            if conflicting_items:
+                flash('Der Code wird bereits verwendet. Das existierende Element wurde geöffnet.', 'info')
+                return redirect(url_for(success_redirect_endpoint, open_item_modal=str(conflicting_items[0]['_id'])))
             flash(error_msg, 'error')
             return redirect(url_for(success_redirect_endpoint))
 
@@ -4695,6 +4699,10 @@ def upload_item():
                 error_msg = f'Der Einzelcode "{specific_code}" wird bereits verwendet.'
                 if is_mobile:
                     return jsonify({'success': False, 'message': error_msg}), 400
+                conflicting_items = it.get_item_by_code_4(specific_code)
+                if conflicting_items:
+                    flash(f'Der Einzelcode "{specific_code}" wird bereits verwendet. Das existierende Element wurde geöffnet.', 'info')
+                    return redirect(url_for(success_redirect_endpoint, open_item_modal=str(conflicting_items[0]['_id'])))
                 flash(error_msg, 'error')
                 return redirect(url_for(success_redirect_endpoint))
 
@@ -5826,6 +5834,10 @@ def edit_item(id):
     
     # Check if code is unique (excluding the current item)
     if code_4 and not it.is_code_unique(code_4, exclude_id=id):
+        conflicting_items = it.get_item_by_code_4(code_4)
+        if conflicting_items:
+            flash('Der Code wird bereits verwendet. Das existierende Element wurde stattdessen geöffnet.', 'info')
+            return redirect(url_for('home_admin', open_item_modal=str(conflicting_items[0]['_id'])))
         flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
         return redirect(url_for('home_admin'))
     

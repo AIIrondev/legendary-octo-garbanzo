@@ -3252,6 +3252,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const openItem = urlParams.get('open_item_modal');
+        if (openItem) {
+            openEditModalFromServer(openItem);
+        }
+
         // Load saved filters
         loadFilterState();
         
