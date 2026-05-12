@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if error_code == 404 %}
+        Seite nicht gefunden - Inventarsystem
+    {% else %}
+        Fehler - Inventarsystem
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="error-container" style="text-align: center; padding: 60px 20px; min-height: 70vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+    <div style="max-width: 600px;">
+        <!-- Error Code Display -->
+        <div style="font-size: 120px; font-weight: bold; color: #ef4444; margin-bottom: 20px;">
+            {{ error_code }}
+        </div>
+
+        <!-- Error Title -->
+        <h1 style="font-size: 32px; margin: 20px 0; color: #1f2937;">
+            {% if error_code == 404 %}
+                Seite nicht gefunden
+            {% else %}
+                Ein Fehler ist aufgetreten
+            {% endif %}
+        </h1>
+
+        <!-- Error Message -->
+        <p style="font-size: 18px; color: #6b7280; margin: 20px 0 40px;">
+            {{ error_message or 'Es tut uns leid, aber die angeforderte Seite konnte nicht gefunden werden.' }}
+        </p>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="{{ url_for('home') }}" class="button" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: 500;">
+                Zur Startseite
+            </a>
+            <a href="javascript:history.back()" class="button" style="background-color: #6b7280; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: 500;">
+                Zurück
+            </a>
+        </div>
+
+        <!-- Additional Help -->
+        <div style="margin-top: 60px; padding: 20px; background-color: #f3f4f6; border-radius: 8px;">
+            <p style="color: #6b7280; font-size: 14px;">
+                Wenn Sie denken, dass dies ein Fehler ist, oder Sie Hilfe benötigen, 
+                <a href="{{ url_for('impressum') }}" style="color: #3b82f6; text-decoration: none;">kontaktieren Sie den Administrator</a>.
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error-container {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .button:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+        transition: all 0.2s ease;
+    }
+</style>
+{% endblock %}

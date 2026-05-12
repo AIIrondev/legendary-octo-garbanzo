@@ -25,9 +25,10 @@ Features:
 - Booking and reservation of items
 """
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response, send_file, abort
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
+from jinja2 import TemplateNotFound
 import user as us
 import items as it
 import ausleihung as au
@@ -410,6 +411,26 @@ def _set_security_headers(response):
         response.headers['Content-Type'] = 'image/webp'
     
     return response
+
+
+@app.errorhandler(TemplateNotFound)
+def handle_template_not_found(e):
+    """Handle missing template files with a 404 response."""
+    app.logger.error(f"Template not found: {e.name}")
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({'error': 'Template not found', 'status': 404}), 404
+    return abort(404)
+
+
+@app.errorhandler(404)
+def handle_not_found(e):
+    """Handle 404 errors with a user-friendly response."""
+    app.logger.warning(f"404 Not Found: {request.path}")
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({'error': 'Not found', 'status': 404}), 404
+    if 'username' in session:
+        return render_template('error.html', error_code=404, error_message='Seite nicht gefunden.'), 404
+    return redirect(url_for('login'))
 
 
 def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
