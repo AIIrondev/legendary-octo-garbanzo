@@ -1,41 +1,63 @@
-version: "3.8"
-
 services:
   app:
-    build: .
-    container_name: inventory-app
+    image: ghcr.io/aiirondev/legendary-octo-garbanzo:v0.7.39
+    container_name: inventarsystem-app
     restart: unless-stopped
-    environment:
-      - MONGO_URL=mongodb://mongodb:27017/inventar
-      - REDIS_URL=redis://redis:6379
-      - BASE_URL=https://inventar.maximiliangruendinger.de #alle öffentliche subdomains
+    ports:
+      - "10000:8000"
     depends_on:
       - mongodb
       - redis
+    environment:
+      INVENTAR_MONGODB_HOST: mongodb
+      INVENTAR_MONGODB_PORT: "27017"
+      INVENTAR_MONGODB_DB: Inventarsystem
+      INVENTAR_BACKUP_FOLDER: /data/backups
+      INVENTAR_LOGS_FOLDER: /data/logs
+    expose:
+      - "8000"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - app_uploads:/app/Web/uploads
+      - app_thumbnails:/app/Web/thumbnails
+      - app_previews:/app/Web/previews
+      - app_qrcodes:/app/Web/QRCodes
+      - app_backups:/data/backups
+      - app_logs:/data/logs
 
   mongodb:
-    image: mongo:latest
-    container_name: mongodb
+    image: mongo:7.0
+    container_name: inventarsystem-mongodb
     restart: unless-stopped
     volumes:
-      - mongo_data:/data/db
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   redis:
-    image: redis:alpine
-    container_name: redis
+    image: redis:7-alpine
+    container_name: inventarsystem-redis
     restart: unless-stopped
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    # Der Tunnel-Name 'homeserver' muss zu deiner credentials.json passen
-    command: tunnel run homeserver
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
     volumes:
-      - ./config.yml:/etc/cloudflared/config.yml
-      - ./credentials.json:/etc/cloudflared/credentials.json
-    depends_on:
-      - app
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  mongo_data:
+  mongodb_data:
+  app_uploads:
+  app_thumbnails:
+  app_previews:
+  app_qrcodes:
+  app_backups:
+  app_logs:
+  redis_data:
