@@ -498,8 +498,6 @@ def check_nm_pwd(username, password):
     finally:
         client.close()
 
-    return None
-
 
 def add_user(
     username,
@@ -536,16 +534,12 @@ def add_user(
         for key, value in page_permissions.items():
             permission_defaults['pages'][str(key)] = bool(value)
 
-    alias_first = name if str(name or '').strip() else username
-    alias_last = last_name if str(last_name or '').strip() else ''
-    name_alias = build_name_synonym(alias_first, alias_last)
-
     user_doc = {
         'Username': username,
         'Password': hashing(password),
         'Admin': False,
         'active_ausleihung': None,
-        'name': name_alias,
+        'name': name.strip() if name else '',
         'last_name': last_name.strip() if last_name else '',
         'IsStudent': bool(is_student),
         'PermissionPreset': permission_defaults['preset'],
