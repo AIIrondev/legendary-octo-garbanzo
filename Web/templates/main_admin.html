@@ -3850,7 +3850,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 });
             }, {
-                rootMargin: '30000px 30000px 30000px 30000px'
+                // Keep approx ~120 items rendered in DOM relative to scroll position.
+                // Assuming ~100-400px per item/row, this margin unloads elements beyond that range.
+                rootMargin: isMobileLayout ? '18000px 0px 18000px 0px' : '9000px 0px 9000px 0px'
             });
         }
         
