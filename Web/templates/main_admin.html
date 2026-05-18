@@ -403,6 +403,8 @@
         cursor: pointer;
         transition: transform 0.2s, box-shadow 0.2s;
         position: relative;
+        content-visibility: auto;
+        contain-intrinsic-size: 300px 450px;
     }
 
     .item-card.bulk-selected {
@@ -2876,30 +2878,29 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function rebuildFilter3Options() {
-        if (!allItems || allItems.length === 0) return;
+        if (!allItems) return;
         
         // Get current filter 1 and filter 2 selections
         const filter1Selections = activeFilters.filter1;
         const filter2Selections = activeFilters.filter2;
         
-        // If both filters are empty, show all filter3 values
+        // If both filters are empty, show all filter3 values from server
         if (filter1Selections.length === 0 && filter2Selections.length === 0) {
-            // Get all unique filter3 values
-            const allFilter3Values = new Set();
+            // Include dynamically added ones from loaded items too, just in case
+            const combinedFilter3Values = new Set(typeof allFilter3Values !== 'undefined' ? [...allFilter3Values] : []);
             allItems.forEach(item => {
                 const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : 
-                                     (item.Filter3 ? [item.Filter3] : []);
+                                   (item.Filter3 ? [item.Filter3] : []);
                 
                 filter3Array.forEach(value => {
                     if (value && typeof value === 'string' && value.trim() !== '') {
-                        allFilter3Values.add(value);
+                        combinedFilter3Values.add(value);
                     }
                 });
             });
             
             // Populate filter 3 dropdown with all values
-            populateFilterOptions('filter3-options', [...allFilter3Values].sort(), 3);
-            return;
+            populateFilterOptions('filter3-options', [...combinedFilter3Values].sort(), 3);
         }
         
         // Filter items based on filter1 and filter2 selections
