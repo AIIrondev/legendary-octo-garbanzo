@@ -10,13 +10,13 @@
 .planned-appointments-panel {
     margin: 15px 0;
     padding: 15px;
-    background-color: #e1f5fe;
+    background-color: var(--ui-surface-soft, #e1f5fe);
     border-left: 4px solid #03a9f4;
     border-radius: 4px;
 }
 
 .planned-appointments-panel h4 {
-    color: #0277bd;
+    color: var(--ui-title, #0277bd);
     margin-top: 0;
     margin-bottom: 10px;
     font-size: 1.1em;
@@ -30,9 +30,9 @@
 
 .appointment-item {
     padding: 10px;
-    background-color: #f9fdff;
+    background-color: var(--ui-surface, #f9fdff);
     border-radius: 4px;
-    border: 1px solid #b3e5fc;
+    border: 1px solid var(--ui-border, #b3e5fc);
 }
 
 .appointment-header {
@@ -44,7 +44,7 @@
 
 .appointment-date {
     font-weight: bold;
-    color: #0288d1;
+    color: var(--ui-title, #0288d1);
 }
 
 .appointment-period {
@@ -86,14 +86,14 @@
 .appointment-user {
     margin-left: auto;
     font-style: italic;
-    color: #546e7a;
+    color: var(--ui-text-muted, #546e7a);
 }
 
 .appointment-notes {
     font-size: 0.9em;
-    color: #455a64;
+    color: var(--ui-text, #455a64);
     margin-top: 5px;
     padding-top: 5px;
-    border-top: 1px solid #e1f5fe;
+    border-top: 1px solid var(--ui-border, #e1f5fe);
     font-style: italic;
 }

@@ -2740,6 +2740,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
     let allItems = []; // Cache for all items
+    let allFilter1Values = new Set();
+    let allFilter2Values = new Set();
+    let allFilter3Values = new Set();
     let bulkDeleteSelection = new Set();
     let bulkDeleteDrawerOpen = false;
     const studentCardsModuleEnabled = {{ 'true' if student_cards_module_enabled else 'false' }};
@@ -3259,6 +3262,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // Load predefined filter values for dropdowns
         loadPredefinedFilterValues(1);
         loadPredefinedFilterValues(2);
+        loadPredefinedFilterValues(3);
         
         // Set up edit form submission
         setupEditFormSubmission();
@@ -3283,11 +3287,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
             });
         });
         
-        // Fetch user status to get current username
-        fetch('/user_status')
-            .then(response => response.json())
-            .then(data => {
-                currentUsername = data.username;
+        // Fetch user status and global filters
+        Promise.all([
+            fetch('/user_status').then(response => response.json()),
+            fetch('/get_filter').then(response => response.json())
+        ])
+            .then(([userData, filterData]) => {
+                currentUsername = userData.username;
+                
+                if (filterData.filter1) {
+                    allFilter1Values = new Set(filterData.filter1.filter(value => value && typeof value === 'string' && value.trim() !== ''));
+                }
+                if (filterData.filter2) {
+                    allFilter2Values = new Set(filterData.filter2.filter(value => value && typeof value === 'string' && value.trim() !== ''));
+                }
+                if (filterData.filter3) {
+                    allFilter3Values = new Set(filterData.filter3.filter(value => value && typeof value === 'string' && value.trim() !== ''));
+                }
+                
                 // Now load items with username information
                 loadItems();
                 // Setup card images display after a short delay to ensure items are loaded
@@ -3296,7 +3313,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }, 300);
             })
             .catch(error => {
-                console.error('Error fetching user status:', error);
+                console.error('Error fetching user status or filters:', error);
                 loadItems(); // Load items anyway in case of error
             });
         
@@ -3697,10 +3714,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 });
                 
-                // Populate filter options
-                populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
-                populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
-                populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
+                // Populate filter options using server-provided full filter lists when available.
+                populateFilterOptions('filter1-options', allFilter1Values.size ? [...allFilter1Values].sort() : [...filter1Values].sort(), 1);
+                populateFilterOptions('filter2-options', allFilter2Values.size ? [...allFilter2Values].sort() : [...filter2Values].sort(), 2);
+                populateFilterOptions('filter3-options', allFilter3Values.size ? [...allFilter3Values].sort() : [...filter3Values].sort(), 3);
                 
                 if (!append) {
                     itemsContainer.scrollLeft = 0;
