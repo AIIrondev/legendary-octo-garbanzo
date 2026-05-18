@@ -22,16 +22,21 @@
 }
 
 :root[data-theme="dark"] {
-    --ui-bg: #09090b;
-    --ui-bg-accent: #121214;
-    --ui-surface: #121214;
-    --ui-surface-soft: #1e1e22;
-    --ui-border: #27272a;
-    --ui-text: #fafafa;
-    --ui-text-muted: #a1a1aa;
+    /* Tiefes Blau-Theme (Dark Blue) */
+    --ui-bg: #0b1120;
+    --ui-bg-accent: #111827;
+    --ui-surface: #1e293b;
+    --ui-surface-soft: #334155;
+    --ui-border: #475569;
+    --ui-text: #f8fafc;
+    --ui-text-muted: #94a3b8;
     --ui-title: #ffffff;
     --ui-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     --ui-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    
+    /* Abgerundetes Format im gesamten Dark Mode */
+    --ui-radius: 20px;
+    --ui-btn-radius: 99px; /* Pillenform für Buttons */
 }
 
 /* Safe Area Support for iPad notches, Dynamic Island, and rounded corners */
@@ -60,6 +65,7 @@ body {
     background-color: var(--ui-bg) !important;
     color: var(--ui-text) !important;
     border: 1px solid var(--ui-border) !important;
+    border-radius: 12px !important;
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.3) !important;
 }
 :root[data-theme="dark"] input:focus, 
