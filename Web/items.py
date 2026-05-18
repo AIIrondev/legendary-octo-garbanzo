@@ -794,6 +794,52 @@ def remove_predefined_filter_value(filter_num, value):
     return result.modified_count > 0
 
 
+def edit_predefined_filter_value(filter_num, old_value, new_value):
+    """
+    Edit a predefined value from a filter and update all matching items.
+    
+    Args:
+        filter_num (int): Filter number (1 for Unterrichtsfach, 2 for Jahrgangsstufe)
+        old_value (str): Value to replace
+        new_value (str): New value
+        
+    Returns:
+        bool: True if value was updated, False otherwise
+    """
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    filter_presets = db['filter_presets']
+    
+    # Check if the new value already exists
+    existing = filter_presets.find_one({
+        'filter_num': filter_num,
+        'values': new_value
+    })
+    
+    if existing and old_value != new_value:
+        client.close()
+        return False
+        
+    # Update the value in the filter
+    result = filter_presets.update_one(
+        {'filter_num': filter_num, 'values': old_value},
+        {'$set': {'values.$': new_value}}
+    )
+    
+    if result.modified_count > 0:
+        items = db['items']
+        filter_field = 'Filter' if filter_num == 1 else f'Filter{filter_num}'
+        
+        # Also update all items that use this filter
+        items.update_many(
+            {filter_field: old_value},
+            {'$set': {filter_field: new_value}}
+        )
+        
+    client.close()
+    return result.modified_count > 0
+
+
 # === LOCATION MANAGEMENT ===
 
 def get_predefined_locations():

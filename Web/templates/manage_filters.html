@@ -33,13 +33,25 @@
                     {% if filter1_values %}
                     <div class="list-group">
                         {% for value in filter1_values %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ value }}
-                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=1, value=value) }}" class="d-inline">
-                                <button type="submit" class="btn btn-sm btn-danger" 
-                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
-                                    Entfernen
-                                </button>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>{{ value }}</span>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-secondary me-1" onclick="toggleEdit('edit-1-{{ loop.index }}')">Bearbeiten</button>
+                                    <form method="POST" action="{{ url_for('remove_filter_value', filter_num=1, value=value) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger" 
+                                                onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                            Entfernen
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            <form id="edit-1-{{ loop.index }}" method="POST" action="{{ url_for('edit_filter_value', filter_num=1, old_value=value) }}" style="display: none;" class="mt-2">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="new_value" class="form-control" value="{{ value }}" required>
+                                    <button type="submit" class="btn btn-primary" onclick="return confirm('Tipp: Das Ändern des Namens aktualisiert auch alle Einträge in der Datenbank, die diesen Filter verwenden. Fortfahren?');">Speichern</button>
+                                    <button type="button" class="btn btn-secondary" onclick="toggleEdit('edit-1-{{ loop.index }}')">Abbrechen</button>
+                                </div>
                             </form>
                         </div>
                         {% endfor %}
@@ -69,13 +81,25 @@
                     {% if filter2_values %}
                     <div class="list-group">
                         {% for value in filter2_values %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ value }}
-                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=2, value=value) }}" class="d-inline">
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
-                                    Entfernen
-                                </button>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>{{ value }}</span>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-secondary me-1" onclick="toggleEdit('edit-2-{{ loop.index }}')">Bearbeiten</button>
+                                    <form method="POST" action="{{ url_for('remove_filter_value', filter_num=2, value=value) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                            Entfernen
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            <form id="edit-2-{{ loop.index }}" method="POST" action="{{ url_for('edit_filter_value', filter_num=2, old_value=value) }}" style="display: none;" class="mt-2">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="new_value" class="form-control" value="{{ value }}" required>
+                                    <button type="submit" class="btn btn-primary" onclick="return confirm('Tipp: Das Ändern des Namens aktualisiert auch alle Einträge in der Datenbank, die diesen Filter verwenden. Fortfahren?');">Speichern</button>
+                                    <button type="button" class="btn btn-secondary" onclick="toggleEdit('edit-2-{{ loop.index }}')">Abbrechen</button>
+                                </div>
                             </form>
                         </div>
                         {% endfor %}
@@ -105,13 +129,25 @@
                     {% if filter3_values %}
                     <div class="list-group">
                         {% for value in filter3_values %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ value }}
-                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=3, value=value) }}" class="d-inline">
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
-                                    Entfernen
-                                </button>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>{{ value }}</span>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-secondary me-1" onclick="toggleEdit('edit-3-{{ loop.index }}')">Bearbeiten</button>
+                                    <form method="POST" action="{{ url_for('remove_filter_value', filter_num=3, value=value) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                            Entfernen
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            <form id="edit-3-{{ loop.index }}" method="POST" action="{{ url_for('edit_filter_value', filter_num=3, old_value=value) }}" style="display: none;" class="mt-2">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="new_value" class="form-control" value="{{ value }}" required>
+                                    <button type="submit" class="btn btn-primary" onclick="return confirm('Tipp: Das Ändern des Namens aktualisiert auch alle Einträge in der Datenbank, die diesen Filter verwenden. Fortfahren?');">Speichern</button>
+                                    <button type="button" class="btn btn-secondary" onclick="toggleEdit('edit-3-{{ loop.index }}')">Abbrechen</button>
+                                </div>
                             </form>
                         </div>
                         {% endfor %}
@@ -133,4 +169,15 @@
         <a href="{{ url_for('home_admin') }}" class="btn btn-secondary">Zurück zur Admin-Übersicht</a>
     </div>
 </div>
+
+<script>
+function toggleEdit(id) {
+    const el = document.getElementById(id);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+</script>
 {% endblock %}

@@ -8657,6 +8657,41 @@ def remove_filter_value(filter_num, value):
     
     return redirect(url_for('manage_filters'))
 
+@app.route('/edit_filter_value/<int:filter_num>/<string:old_value>', methods=['POST'])
+def edit_filter_value(filter_num, old_value):
+    """
+    Edit a predefined value from the specified filter.
+    
+    Args:
+        filter_num (int): Filter number (1, 2 or 3)
+        old_value (str): Value to edit
+        
+    Returns:
+        flask.Response: Redirect to filter management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    new_value = sanitize_form_value(request.form.get('new_value'))
+    
+    if not new_value:
+        flash('Bitte geben Sie einen neuen Wert ein', 'error')
+        return redirect(url_for('manage_filters'))
+
+    if new_value == FILTER_SELECT_ALL_TOKEN:
+        flash('Dieser Wert ist reserviert und kann nicht als Filterwert gespeichert werden.', 'error')
+        return redirect(url_for('manage_filters'))
+        
+    # Update the value from the filter
+    success = it.edit_predefined_filter_value(filter_num, old_value, new_value)
+    
+    if success:
+        flash(f'Wert "{old_value}" wurde in "{new_value}" bei Filter {filter_num} geändert', 'success')
+    else:
+        flash(f'Fehler beim Ändern des Wertes oder Wert existiert bereits in Filter {filter_num}', 'error')
+    
+    return redirect(url_for('manage_filters'))
+
 @app.route('/get_predefined_filter_values/<int:filter_num>')
 def get_predefined_filter_values(filter_num):
     """
