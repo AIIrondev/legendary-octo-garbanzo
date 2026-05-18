@@ -15,16 +15,16 @@
     <h1 class="mb-4">Filterwerte verwalten</h1>
     
     <div class="row">
-        <!-- Filter 1: Unterrichtsfach -->
-        <div class="col-md-6">
+        <!-- Filter 1 -->
+        <div class="col-md-4">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h2 class="card-title h5 mb-0">Unterrichtsfach (Filter 1)</h2>
+                    <h2 class="card-title h5 mb-0">Fach/Kategorie (Filter 1)</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_filter_value', filter_num=1) }}" class="mb-4">
                         <div class="input-group">
-                            <input type="text" name="value" class="form-control" placeholder="Neues Unterrichtsfach..." required>
+                            <input type="text" name="value" class="form-control" placeholder="Neuer Wert..." required>
                             <button type="submit" class="btn btn-primary">Hinzufügen</button>
                         </div>
                     </form>
@@ -51,16 +51,16 @@
             </div>
         </div>
         
-        <!-- Filter 2: Jahrgangsstufe -->
-        <div class="col-md-6">
+        <!-- Filter 2 -->
+        <div class="col-md-4">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h2 class="card-title h5 mb-0">Jahrgangsstufe (Filter 2)</h2>
+                    <h2 class="card-title h5 mb-0">System/Bereich (Filter 2)</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_filter_value', filter_num=2) }}" class="mb-4">
                         <div class="input-group">
-                            <input type="text" name="value" class="form-control" placeholder="Neue Jahrgangsstufe..." required>
+                            <input type="text" name="value" class="form-control" placeholder="Neuer Wert..." required>
                             <button type="submit" class="btn btn-primary">Hinzufügen</button>
                         </div>
                     </form>
@@ -72,6 +72,42 @@
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             {{ value }}
                             <form method="POST" action="{{ url_for('remove_filter_value', filter_num=2, value=value) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
+                                    Entfernen
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">Keine Werte definiert.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter 3 -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title h5 mb-0">Typ/Art (Filter 3)</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('add_filter_value', filter_num=3) }}" class="mb-4">
+                        <div class="input-group">
+                            <input type="text" name="value" class="form-control" placeholder="Neuer Wert..." required>
+                            <button type="submit" class="btn btn-primary">Hinzufügen</button>
+                        </div>
+                    </form>
+                    
+                    <h5 class="mb-3">Vorhandene Werte</h5>
+                    {% if filter3_values %}
+                    <div class="list-group">
+                        {% for value in filter3_values %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ value }}
+                            <form method="POST" action="{{ url_for('remove_filter_value', filter_num=3, value=value) }}" class="d-inline">
                                 <button type="submit" class="btn btn-sm btn-danger"
                                         onclick="return confirm('Sind Sie sicher, dass Sie den Wert \"' + '{{ value }}'.replace(/'/g, '\\\'') + '\" löschen möchten?');">
                                     Entfernen

@@ -570,7 +570,10 @@ def get_primary_filters():
         items = db['items']
         filters = [f for f in items.distinct('Filter', _active_record_query(_non_library_query())) if f]
         client.close()
-        return filters
+        
+        # Add predefined values
+        predefined = get_predefined_filter_values(1)
+        return sorted(list(set(filters + predefined)))
     except Exception as e:
         print(f"Error retrieving primary filters: {e}")
         return []
@@ -589,7 +592,10 @@ def get_secondary_filters():
         items = db['items']
         filters = [f for f in items.distinct('Filter2', _active_record_query(_non_library_query())) if f]
         client.close()
-        return filters
+        
+        # Add predefined values
+        predefined = get_predefined_filter_values(2)
+        return sorted(list(set(filters + predefined)))
     except Exception as e:
         print(f"Error retrieving secondary filters: {e}")
         return []
@@ -608,7 +614,10 @@ def get_tertiary_filters():
         items = db['items']
         filters = [f for f in items.distinct('Filter3', _active_record_query(_non_library_query())) if f]
         client.close()
-        return filters
+        
+        # Add predefined values
+        predefined = get_predefined_filter_values(3)
+        return sorted(list(set(filters + predefined)))
     except Exception as e:
         print(f"Error retrieving tertiary filters: {e}")
         return []

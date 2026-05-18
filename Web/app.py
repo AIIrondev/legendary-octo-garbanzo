@@ -8587,11 +8587,13 @@ def manage_filters():
     # Get predefined filter values
     filter1_values = it.get_predefined_filter_values(1)
     filter2_values = it.get_predefined_filter_values(2)
+    filter3_values = it.get_predefined_filter_values(3)
     
     return render_template(
         'manage_filters.html',
         filter1_values=filter1_values,
         filter2_values=filter2_values,
+        filter3_values=filter3_values,
         library_module_enabled=cfg.MODULES.is_enabled('library'),
         student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
