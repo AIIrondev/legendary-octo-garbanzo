@@ -981,3 +981,20 @@ html, body {
     color: var(--ui-text) !important;
     border: 1px solid var(--ui-border);
 }
+
+/* Fix Bookmark/Favorite Button in Dark Mode */
+:root[data-theme="dark"] .bookmark-btn {
+    background: var(--ui-surface-soft) !important;
+    border-color: #f59e0b !important;
+    color: #f59e0b !important;
+}
+
+:root[data-theme="dark"] .bookmark-btn:hover,
+:root[data-theme="dark"] .bookmark-btn.active {
+    background: #f59e0b !important;
+    color: var(--ui-bg) !important;
+}
+
+:root[data-theme="dark"] .favorite-item {
+    outline: 2px solid #f59e0b !important;
+}
