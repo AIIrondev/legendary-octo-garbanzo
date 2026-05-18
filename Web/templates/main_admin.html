@@ -3357,6 +3357,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let mainAdminItemsLoadingIndicator = null;
     let mainAdminItemsScrollPrefetchBound = false;
     let totalItemsInSystem = 0;
+    let cardVirtualizationObserver = null;
 
     function ensureMainAdminItemsLoadingIndicator() {
         const itemsContainer = document.querySelector('#items-container');
@@ -3783,6 +3784,56 @@ document.addEventListener('DOMContentLoaded', ()=>{
             window.addEventListener('scroll', maybePrefetchMainAdminItems, { passive: true });
             mainAdminItemsScrollPrefetchBound = true;
         }
+
+        // Setup DOM virtualization for items
+        if (!cardVirtualizationObserver) {
+            cardVirtualizationObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const card = entry.target;
+                    if (entry.isIntersecting) {
+                        if (card.dataset.deloaded === 'true') {
+                            card.innerHTML = card.dataset.savedHtml;
+                            card.dataset.deloaded = 'false';
+                            card.classList.remove('is-deloaded');
+                            const favBtn = card.querySelector('.bookmark-btn');
+                            if (favBtn) {
+                                favBtn.addEventListener('click', (ev) => {
+                                    ev.stopPropagation();
+                                    toggleFavorite(card.dataset.itemId, favBtn, card);
+                                });
+                            }
+                            const cardContent = card.querySelector('.card-content');
+                            if (cardContent) {
+                                cardContent.addEventListener('click', function(e) {
+                                    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.tagName === 'INPUT' ||
+                                        e.target.closest('button') || e.target.closest('a') || e.target.closest('.image-container') ||
+                                        e.target.closest('.bulk-delete-toggle') || e.target.closest('label')) return;
+                                    e.stopPropagation();
+                                    openItemQuick(card.dataset.itemId);
+                                });
+                            }
+                        }
+                    } else {
+                        if (card.dataset.deloaded !== 'true') {
+                            const rect = card.getBoundingClientRect();
+                            if (rect.height > 50) {
+                                card.style.minHeight = rect.height + 'px';
+                                card.dataset.itemId = card.querySelector('.card-content')?.dataset.itemId || '';
+                                card.dataset.savedHtml = card.innerHTML;
+                                card.innerHTML = '';
+                                card.dataset.deloaded = 'true';
+                                card.classList.add('is-deloaded');
+                            }
+                        }
+                    }
+                });
+            }, {
+                rootMargin: isMobileLayout ? '1500px 0px 1500px 0px' : '0px 2500px 0px 2500px'
+            });
+        }
+        
+        // Observe all valid cards
+        document.querySelectorAll('.item-card').forEach(card => cardVirtualizationObserver.observe(card));
 
         if (!mainAdminItemsHasMore) return;
 
