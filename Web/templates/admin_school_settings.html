@@ -71,6 +71,25 @@
                         <small>Upload ersetzt das bisherige Logo. Wenn kein neues Logo gewählt wird, bleibt das aktuelle erhalten.</small>
                     </div>
 
+                    <hr style="margin: 24px 0; border: 0; border-top: 1px solid #e5e7eb;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: #111827;">Globales Filter-Wording</h3>
+                    <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 16px;">Hier kannst du die globalen Bezeichnungen für die drei Haupt-Kategorien (Filter) der Anwendung ändern.</p>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="filter_name_1">Name Filter 1</label>
+                            <input type="text" id="filter_name_1" name="filter_name_1" value="{{ filter_names.get('1', 'Fach/Kategorie') }}" placeholder="z. B. Fach/Kategorie">
+                        </div>
+                        <div class="form-group">
+                            <label for="filter_name_2">Name Filter 2</label>
+                            <input type="text" id="filter_name_2" name="filter_name_2" value="{{ filter_names.get('2', 'System/Bereich') }}" placeholder="z. B. System/Bereich">
+                        </div>
+                        <div class="form-group">
+                            <label for="filter_name_3">Name Filter 3</label>
+                            <input type="text" id="filter_name_3" name="filter_name_3" value="{{ filter_names.get('3', 'Typ/Art') }}" placeholder="z. B. Typ/Art">
+                        </div>
+                    </div>
+
                     <div class="actions-row">
                         <button type="submit" class="btn btn-primary">Schulstammdaten speichern</button>
                         <a href="{{ url_for('home_admin') }}" class="btn btn-secondary">Zurück zur Admin-Übersicht</a>

@@ -3383,11 +3383,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (!mainAdminItemsLoadingIndicator) {
             mainAdminItemsLoadingIndicator = document.createElement('div');
             mainAdminItemsLoadingIndicator.id = 'main-admin-items-loading-indicator';
-            mainAdminItemsLoadingIndicator.className = 'items-loading-indicator';
+            mainAdminItemsLoadingIndicator.className = 'items-loading-indicator empty-frames-placeholder';
             mainAdminItemsLoadingIndicator.innerHTML = `
-                <div class="loading-track"><div class="loading-fill"></div></div>
-                <div class="loading-label">Weitere Objekte werden vorbereitet...</div>
+                <div class="empty-frame p-3 mx-2" style="flex: 1; height: 100px; border-radius: 12px; background: rgba(255,255,255,0.02); min-width: 250px;"></div>
+                <div class="empty-frame p-3 mx-2" style="flex: 1; height: 100px; border-radius: 12px; background: rgba(255,255,255,0.02); min-width: 250px; display: none;" class="d-none d-md-block"></div>
+                <div class="empty-frame p-3 mx-2" style="flex: 1; height: 100px; border-radius: 12px; background: rgba(255,255,255,0.02); min-width: 250px; display: none;" class="d-none d-lg-block"></div>
             `;
+            mainAdminItemsLoadingIndicator.style.display = 'flex';
+            mainAdminItemsLoadingIndicator.style.width = '100%';
         }
 
         itemsContainer.appendChild(mainAdminItemsLoadingIndicator);
@@ -3812,6 +3815,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             card.innerHTML = card.dataset.savedHtml;
                             card.dataset.deloaded = 'false';
                             card.classList.remove('is-deloaded');
+                            card.classList.remove('empty-frame');
                             const favBtn = card.querySelector('.bookmark-btn');
                             if (favBtn) {
                                 favBtn.addEventListener('click', (ev) => {
@@ -3840,12 +3844,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 card.innerHTML = '';
                                 card.dataset.deloaded = 'true';
                                 card.classList.add('is-deloaded');
+                                card.classList.add('empty-frame');
                             }
                         }
                     }
                 });
             }, {
-                rootMargin: isMobileLayout ? '1500px 0px 1500px 0px' : '0px 2500px 0px 2500px'
+                rootMargin: '30000px 30000px 30000px 30000px'
             });
         }
         

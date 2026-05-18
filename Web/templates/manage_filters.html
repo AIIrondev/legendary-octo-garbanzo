@@ -19,7 +19,7 @@
         <div class="col-md-4">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h2 class="card-title h5 mb-0">Fach/Kategorie (Filter 1)</h2>
+                    <h2 class="card-title h5 mb-0">{{ filter_names.get('1', 'Fach/Kategorie') }} (Filter 1)</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_filter_value', filter_num=1) }}" class="mb-4">
@@ -67,7 +67,7 @@
         <div class="col-md-4">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h2 class="card-title h5 mb-0">System/Bereich (Filter 2)</h2>
+                    <h2 class="card-title h5 mb-0">{{ filter_names.get('2', 'System/Bereich') }} (Filter 2)</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_filter_value', filter_num=2) }}" class="mb-4">
@@ -115,7 +115,7 @@
         <div class="col-md-4">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h2 class="card-title h5 mb-0">Typ/Art (Filter 3)</h2>
+                    <h2 class="card-title h5 mb-0">{{ filter_names.get('3', 'Typ/Art') }} (Filter 3)</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_filter_value', filter_num=3) }}" class="mb-4">

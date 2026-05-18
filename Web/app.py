@@ -8589,11 +8589,15 @@ def manage_filters():
     filter2_values = it.get_predefined_filter_values(2)
     filter3_values = it.get_predefined_filter_values(3)
     
+    # Get custom filter names
+    filter_names = it.get_filter_names()
+    
     return render_template(
         'manage_filters.html',
         filter1_values=filter1_values,
         filter2_values=filter2_values,
         filter3_values=filter3_values,
+        filter_names=filter_names,
         library_module_enabled=cfg.MODULES.is_enabled('library'),
         student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
     )
@@ -9658,14 +9662,27 @@ def admin_school_settings():
             try:
                 updated_school = cfg.update_school_info(school_info)
                 current_school = updated_school
+                
+                # Also process filter names
+                filter_name_1 = request.form.get('filter_name_1')
+                if filter_name_1: it.set_filter_name(1, filter_name_1.strip())
+                filter_name_2 = request.form.get('filter_name_2')
+                if filter_name_2: it.set_filter_name(2, filter_name_2.strip())
+                filter_name_3 = request.form.get('filter_name_3')
+                if filter_name_3: it.set_filter_name(3, filter_name_3.strip())
+
                 flash('Schulstammdaten wurden erfolgreich gespeichert.', 'success')
             except Exception as exc:
                 app.logger.error(f'Could not update school settings: {exc}\n{traceback.format_exc()}')
                 flash('Die Schulstammdaten konnten nicht gespeichert werden.', 'error')
 
+    # Get current filter names to display in form
+    filter_names = it.get_filter_names()
+
     return render_template(
         'admin_school_settings.html',
         school_info=current_school,
+        filter_names=filter_names,
         tenant_id=tenant_id,
         tenant_db=tenant_db,
         library_module_enabled=cfg.MODULES.is_enabled('library'),
