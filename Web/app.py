@@ -2716,8 +2716,6 @@ def tutorial_page():
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
 
-@app.route('/library')
-
 @app.route('/library/export/<scope>')
 def library_export_excel(scope):
     if 'username' not in session:
@@ -2760,6 +2758,7 @@ def library_export_excel(scope):
         download_name=filename
     )
 
+@app.route('/library')
 def library_view():
     """
     Dedicated page for viewing library items (books, CDs, etc.).
