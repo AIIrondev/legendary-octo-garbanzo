@@ -11,6 +11,44 @@ fi
 
 CONFIG_FILE="$PWD/config.json"
 
+ensure_runtime_config_json() {
+    local config_path backup_path
+    config_path="$CONFIG_FILE"
+
+    if [ -d "$config_path" ]; then
+        backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
+        mv "$config_path" "$backup_path"
+        echo "Warning: moved unexpected directory $config_path to $backup_path"
+    fi
+
+    if [ ! -f "$config_path" ]; then
+        cat > "$config_path" <<'EOF'
+{
+    "ver": "2.6.5",
+    "dbg": false,
+    "host": "0.0.0.0",
+    "port": 8000,
+    "mongodb": {
+        "host": "mongodb",
+        "port": 27017,
+        "db": "Inventarsystem"
+    },
+    "modules": {
+        "library": {
+            "enabled": false
+        },
+        "student_cards": {
+            "enabled": false,
+            "default_borrow_days": 14,
+            "max_borrow_days": 365
+        }
+    }
+}
+EOF
+        echo "Created default runtime config at $config_path"
+    fi
+}
+
 show_help() {
     echo "Usage: ./manage-tenant.sh [COMMAND] [OPTIONS]"
     echo ""
@@ -176,6 +214,8 @@ EOF
 restart_app_container() {
     local env_file="$PWD/.docker-build.env"
     local compose_args=()
+
+    ensure_runtime_config_json
     
     # If HOST_WORKDIR is set (called from container), use absolute paths so docker daemon resolves them correctly
     if [ -n "$HOST_WORKDIR" ]; then
