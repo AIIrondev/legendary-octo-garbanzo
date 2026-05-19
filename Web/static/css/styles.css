@@ -402,6 +402,10 @@ body.table-view .item-card {
     background: var(--ui-surface);
     box-shadow: none;
     scroll-snap-align: none;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 body.table-view .item-card .card-content {
