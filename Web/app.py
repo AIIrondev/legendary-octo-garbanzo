@@ -166,7 +166,7 @@ SCHEDULER_INTERVAL = cfg.SCHEDULER_INTERVAL_MIN
 SSL_CERT = cfg.SSL_CERT
 SSL_KEY = cfg.SSL_KEY
 
-LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media']
+LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media', 'schulbuch']
 INVOICE_CURRENCY = 'EUR'
 
 NOTIFICATION_STATUS_CACHE_TTL = max(3, int(os.getenv('INVENTAR_NOTIFICATION_STATUS_CACHE_TTL', '8')))
@@ -2717,6 +2717,49 @@ def tutorial_page():
     )
 
 @app.route('/library')
+
+@app.route('/library/export/<scope>')
+def library_export_excel(scope):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
+    username = session['username']
+    is_admin_user = us.check_admin(username)
+    
+    import excel_export
+    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    items_collection = db['items']
+    
+    query = {'ItemType': {'$in': LIBRARY_ITEM_TYPES}, 'Deleted': {'$ne': True}}
+    
+    if scope == 'borrowed_by_me':
+        query['User'] = username
+        query['Verfuegbar'] = False
+        filename = f"Bibliothek_Ausgeliehen_{username}.xlsx"
+    elif scope == 'all_borrowed':
+        if not is_admin_user:
+            return redirect(url_for('library_view'))
+        query['Verfuegbar'] = False
+        filename = "Bibliothek_Alle_Ausleihen.xlsx"
+    elif scope == 'schulbuecher':
+        query['ItemType'] = 'schulbuch'
+        filename = "Schulbuecher_Bestand.xlsx"
+    else:
+        # 'all'
+        filename = "Bibliothek_Gesamtbestand.xlsx"
+        
+    items = list(items_collection.find(query))
+    client.close()
+    
+    excel_file = excel_export.generate_library_excel(items)
+    return flask.send_file(
+        excel_file,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
 def library_view():
     """
     Dedicated page for viewing library items (books, CDs, etc.).

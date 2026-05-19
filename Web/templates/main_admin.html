@@ -395,7 +395,7 @@
         border: 1px solid var(--ui-border);
         border-radius: var(--ui-radius);
         box-shadow: var(--ui-shadow-sm);
-        padding: 20px;
+        padding: 15px;
         width: 100%;
         max-width: 340px;
         flex: 1 1 300px;
@@ -404,7 +404,7 @@
         transition: transform 0.2s, box-shadow 0.2s;
         position: relative;
         content-visibility: auto;
-        contain-intrinsic-size: 300px 450px;
+        contain-intrinsic-size: 300px 380px;
     }
 
     .item-card.bulk-selected {
@@ -420,17 +420,21 @@
 
     .item-card h3 {
         margin-top: 0;
+        font-size: 1.15rem;
+        margin-bottom: 8px;
     }
 
     .item-card .description {
-        max-height: 100px;
+        max-height: 60px;
         overflow-y: auto;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
     }
 
     .item-card .image-container {
         position: relative;
         max-width: 300px;
-        margin: 10px 0;
+        margin: 8px 0;
     }
 
     .bulk-delete-row {
@@ -479,7 +483,7 @@
     .item-card .item-image {
         width: 100%;
         height: auto;
-        max-height: 300px;
+        max-height: 180px;
         display: none;
         object-fit: cover;
     }
