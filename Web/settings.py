@@ -134,8 +134,12 @@ def _get_int_env(name, default):
     except ValueError:
         return int(default)
 
+def get_version():
+    with open(os.path.join(BASE_DIR, '..', '.release-version'), 'r') as f:
+        return f.read().strip()
+
 # Expose settings
-APP_VERSION = _get(_conf, ['ver'], DEFAULTS['version'])
+APP_VERSION = get_version()
 DEBUG = _get_bool_env('INVENTAR_DEBUG', _get(_conf, ['dbg'], DEFAULTS['debug']))
 SECRET_KEY = str(os.getenv('INVENTAR_SECRET_KEY', _get(_conf, ['key'], DEFAULTS['secret_key'])))
 HOST = _get(_conf, ['host'], DEFAULTS['host'])
