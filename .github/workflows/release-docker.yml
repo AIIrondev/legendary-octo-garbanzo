@@ -14,6 +14,7 @@ on:
         options:
           - patch
           - minor
+          - major
           - development
       push_dev:
         description: "If true, push the :dev image to GHCR for development releases"
