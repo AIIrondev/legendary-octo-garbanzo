@@ -215,26 +215,7 @@ jobs:
           docker build -t "$IMG" .
           docker save "$IMG" | gzip > "inventarsystem-image-${TAG}.tar.gz"
 
-      - name: Build local development image tar for offline deploy
-        run: |
-          set -euo pipefail
-          DEV_IMG=ghcr.io/aiirondev/legendary-octo-garbanzo:dev
-
-          if docker image inspect "$DEV_IMG" >/dev/null 2>&1; then
-            echo "Using local development image $DEV_IMG"
-            docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
-            exit 0
-          fi
-
-          echo "Local development image not found, trying to pull $DEV_IMG"
-          if docker pull "$DEV_IMG" >/dev/null 2>&1; then
-            docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
-            exit 0
-          fi
-
-          echo "Pull failed, attempting local docker build for development image"
-          docker build -t "$DEV_IMG" .
-          docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
+      # development tar omitted: dev releases will be versioned (vX.Y.Z-dev) and handled by update.sh using the tag
 
       - name: Create release-only docker bundle
         run: |
@@ -319,18 +300,15 @@ jobs:
             fi
           done
 
-          # Include optional development image tar and helper note
-          if [ -f "inventarsystem-image-dev.tar.gz" ]; then
-            cp inventarsystem-image-dev.tar.gz release-bundle/ || true
-          fi
+          cat > release-bundle/DEVELOPMENT.md <<EOF
+          This is a development prerelease bundle for tag: ${{ steps.meta.outputs.tag }}
 
-          cat > release-bundle/DEVELOPMENT.md <<'EOF'
-          This bundle contains an optional development image tar: inventarsystem-image-dev.tar.gz
-                      
-          To install the development build on a target host, extract the bundle and run:
-          
-            ./update.sh dev
-          
+          This prerelease is intentionally separate from normal releases and will not be used by default.
+
+          To install this prerelease on a target host run:
+
+            ./update.sh ${{ steps.meta.outputs.tag }}
+
           EOF
 
           # Make any shipped scripts executable
