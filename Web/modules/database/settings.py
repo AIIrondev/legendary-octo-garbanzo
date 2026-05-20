@@ -100,9 +100,29 @@ DEFAULTS = {
 }
 
 # Load configuration file
-CONFIG_PATH = os.path.join(BASE_DIR, '..', 'config.json')
+def _resolve_config_path():
+    """Resolve runtime config path with robust fallbacks for Docker deployments."""
+    env_path = os.getenv('INVENTAR_CONFIG_PATH', '').strip()
+    if env_path:
+        return env_path
+
+    candidates = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(BASE_DIR))), 'config.json'),
+        os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), 'config.json'),
+        os.path.join(os.path.dirname(BASE_DIR), 'config.json'),
+        os.path.join(BASE_DIR, '..', 'config.json'),
+    ]
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return os.path.abspath(candidate)
+
+    return os.path.abspath(candidates[0])
+
+
+CONFIG_PATH = _resolve_config_path()
 try:
-    with open(CONFIG_PATH, 'r') as f:
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         _conf = json.load(f)
 except Exception:
     _conf = {}
