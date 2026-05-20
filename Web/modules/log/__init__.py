@@ -1,1 +1,1 @@
-# Web.modules.logs package initialization
+# Web.modules.log package initialization

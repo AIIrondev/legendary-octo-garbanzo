@@ -120,7 +120,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 """--------------------------------------------------------------Path Init-------------------------------------------------------"""
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # QR Code directory creation deactivated
 # if not os.path.exists(app.config['QR_CODE_FOLDER']):
 #     os.makedirs(app.config['QR_CODE_FOLDER'])
@@ -2415,11 +2415,7 @@ def preview_file(filename):
         if denied:
             return denied
 
-        # Check production path first
-        prod_path = "/var/Inventarsystem/Web/previews"
         dev_path = app.config['PREVIEW_FOLDER']
-        if os.path.exists(os.path.join(prod_path, filename)):
-            return send_from_directory(prod_path, filename)
         if os.path.exists(os.path.join(dev_path, filename)):
             return send_from_directory(dev_path, filename)
             
@@ -2798,7 +2794,7 @@ def library_export_excel(scope='all'):
     client.close()
     
     excel_file = excel_export.generate_library_excel(items)
-    return flask.send_file(
+    return send_file(
         excel_file,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
