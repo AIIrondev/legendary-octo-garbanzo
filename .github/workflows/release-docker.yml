@@ -283,19 +283,19 @@ jobs:
             redis_data:
           EOF
 
-          cp start.sh release-bundle/start.sh
-          cp stop.sh release-bundle/stop.sh
-          cp restart.sh release-bundle/restart.sh
-          cp backup.sh release-bundle/backup.sh
-          cp config.json release-bundle/config.json
-          cp update.sh release-bundle/update.sh
+          # Copy runtime scripts and config if present
+          for f in start.sh stop.sh restart.sh backup.sh config.json update.sh; do
+            if [ -f "$f" ]; then
+              cp "$f" "release-bundle/$(basename "$f")"
+            fi
+          done
 
-          # Multitenant scripts & docs
-          cp docker-compose-multitenant.yml release-bundle/docker-compose-multitenant.yml
-          cp manage-tenant.sh release-bundle/manage-tenant.sh
-          cp run-tenant-cmd.sh release-bundle/run-tenant-cmd.sh
-          cp MULTITENANT_DEPLOYMENT.md release-bundle/MULTITENANT_DEPLOYMENT.md
-          cp MULTITENANT_PYTHON_API.md release-bundle/MULTITENANT_PYTHON_API.md
+          # Multitenant scripts & docs (optional)
+          for f in docker-compose-multitenant.yml manage-tenant.sh run-tenant-cmd.sh MULTITENANT_DEPLOYMENT.md MULTITENANT_PYTHON_API.md; do
+            if [ -f "$f" ]; then
+              cp "$f" "release-bundle/$(basename "$f")"
+            fi
+          done
 
           # Include optional development image tar and helper note
           if [ -f "inventarsystem-image-development.tar.gz" ]; then
@@ -311,7 +311,8 @@ jobs:
           
           EOF
 
-          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup.sh release-bundle/update.sh release-bundle/manage-tenant.sh release-bundle/run-tenant-cmd.sh
+          # Make any shipped scripts executable
+          find release-bundle -maxdepth 1 -type f -name '*.sh' -exec chmod +x {} \; || true
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
       - name: Create or update GitHub Release
