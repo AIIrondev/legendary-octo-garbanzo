@@ -76,8 +76,12 @@ jobs:
           else:
             major, minor, patch = map(int, m.groups())
 
-          # Keep major fixed from latest release; only bump minor/patch.
-          if bump == "minor":
+          # Bump strategy: major / minor / patch
+          if bump == "major":
+            major += 1
+            minor = 0
+            patch = 0
+          elif bump == "minor":
             minor += 1
             patch = 0
           else:
@@ -106,7 +110,8 @@ jobs:
             LATEST_MAJOR="3"
           fi
 
-          if [ "$TAG_MAJOR" != "$LATEST_MAJOR" ]; then
+          # If not explicitly bumping major, disallow changing major version
+          if [ "${BUMP_TYPE:-}" != "major" ] && [ "$TAG_MAJOR" != "$LATEST_MAJOR" ]; then
             echo "Error: major version must stay v$LATEST_MAJOR.x.x (got $TAG)"
             exit 1
           fi
@@ -168,13 +173,46 @@ jobs:
 
       - name: Build local image tar for offline deploy
         run: |
-          docker pull "${{ steps.meta.outputs.image }}"
-          docker save "${{ steps.meta.outputs.image }}" | gzip > "inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz"
+          set -euo pipefail
+          IMG="${{ steps.meta.outputs.image }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          if docker image inspect "$IMG" >/dev/null 2>&1; then
+            echo "Using local image $IMG"
+            docker save "$IMG" | gzip > "inventarsystem-image-${TAG}.tar.gz"
+            exit 0
+          fi
+
+          echo "Local image $IMG not found, trying to pull"
+          if docker pull "$IMG" >/dev/null 2>&1; then
+            docker save "$IMG" | gzip > "inventarsystem-image-${TAG}.tar.gz"
+            exit 0
+          fi
+
+          echo "Pull failed, attempting local docker build as fallback"
+          docker build -t "$IMG" .
+          docker save "$IMG" | gzip > "inventarsystem-image-${TAG}.tar.gz"
 
       - name: Build local development image tar for offline deploy
         run: |
-          docker pull ghcr.io/aiirondev/legendary-octo-garbanzo:development || true
-          docker save ghcr.io/aiirondev/legendary-octo-garbanzo:development | gzip > "inventarsystem-image-development.tar.gz" || true
+          set -euo pipefail
+          DEV_IMG=ghcr.io/aiirondev/legendary-octo-garbanzo:development
+
+          if docker image inspect "$DEV_IMG" >/dev/null 2>&1; then
+            echo "Using local development image $DEV_IMG"
+            docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
+            exit 0
+          fi
+
+          echo "Local development image not found, trying to pull $DEV_IMG"
+          if docker pull "$DEV_IMG" >/dev/null 2>&1; then
+            docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
+            exit 0
+          fi
+
+          echo "Pull failed, attempting local docker build for development image"
+          docker build -t "$DEV_IMG" .
+          docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
 
       - name: Create release-only docker bundle
         run: |
