@@ -1,11 +1,3 @@
-'''
-   Copyright 2025-2026 AIIrondev
-
-   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
-   See Legal/LICENSE for the full license text.
-   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
-   For commercial licensing inquiries: https://github.com/AIIrondev
-'''
 """
 Inventarsystem - Flask Web Application
 
@@ -380,7 +372,7 @@ def _enforce_module_access():
                 return jsonify({'ok': False, 'message': msg}), 403
             
             flash(msg, 'info')
-            
+
             if name != 'inventory' and cfg.MODULES.is_enabled('inventory'):
                 return redirect(url_for('home'))
             elif name != 'library' and cfg.MODULES.is_enabled('library'):
