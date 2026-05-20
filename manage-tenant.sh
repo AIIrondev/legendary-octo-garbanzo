@@ -214,13 +214,15 @@ EOF
 }
 
 restart_app_container() {
-    local env_file="$PWD/.docker-build.env"
+    local workdir="$SCRIPT_DIR"
+    local env_file="$SCRIPT_DIR/.docker-build.env"
     local compose_args=()
 
     ensure_runtime_config_json
     
     # If HOST_WORKDIR is set (called from container), use absolute paths so docker daemon resolves them correctly
-    if [ -n "$HOST_WORKDIR" ]; then
+    if [ -n "${HOST_WORKDIR:-}" ]; then
+        workdir="$HOST_WORKDIR"
         compose_args+=( -f "$(readlink -f "$HOST_WORKDIR/docker-compose-multitenant.yml")" )
         if [ -f "$HOST_WORKDIR/.docker-compose.runtime.override.yml" ]; then
             compose_args+=( -f "$(readlink -f "$HOST_WORKDIR/.docker-compose.runtime.override.yml")" )
@@ -230,9 +232,9 @@ restart_app_container() {
         fi
     else
         # Normal case: called directly from host
-        compose_args+=( -f "$PWD/docker-compose-multitenant.yml" )
-        if [ -f "$PWD/.docker-compose.runtime.override.yml" ]; then
-            compose_args+=( -f "$PWD/.docker-compose.runtime.override.yml" )
+        compose_args+=( -f "$workdir/docker-compose-multitenant.yml" )
+        if [ -f "$workdir/.docker-compose.runtime.override.yml" ]; then
+            compose_args+=( -f "$workdir/.docker-compose.runtime.override.yml" )
         fi
         if [ -f "$env_file" ]; then
             compose_args+=( --env-file "$env_file" )
@@ -240,7 +242,7 @@ restart_app_container() {
     fi
     
     # Pass along COMPOSE_PROJECT_NAME if set so the internal docker-compose sees it
-    if [ -n "$COMPOSE_PROJECT_NAME" ]; then
+    if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
         compose_args=( -p "$COMPOSE_PROJECT_NAME" "${compose_args[@]}" )
     fi
 
