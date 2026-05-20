@@ -1,0 +1,6 @@
+"""
+Inventar System Funktionen
+
+
+
+"""

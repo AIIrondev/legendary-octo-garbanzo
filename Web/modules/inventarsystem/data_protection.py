@@ -10,7 +10,7 @@ from datetime import datetime
 
 from cryptography.fernet import Fernet, InvalidToken
 
-import settings as cfg
+import Web.modules.database.settings as cfg
 
 _ENC_PREFIX = "enc::"
 

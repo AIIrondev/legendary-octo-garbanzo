@@ -211,7 +211,7 @@ class _TenantAwareBool:
         return f"_TenantAwareBool(module_name={self.module_name!r}, value={self.resolve()!r})"
 
 
-from module_registry import registry as MODULES
+from Web.modules.module_registry import registry as MODULES
 
 INVENTORY_MODULE_ENABLED = _TenantAwareBool('inventory', _get(_conf, ['modules', 'inventory', 'enabled'], DEFAULTS['modules']['inventory']['enabled']))
 LIBRARY_MODULE_ENABLED = _TenantAwareBool('library', _get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))

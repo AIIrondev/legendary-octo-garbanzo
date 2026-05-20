@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-import Web.settings as cfg
+import Web.modules.database.settings as cfg
 
 def get_filter_names():
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)

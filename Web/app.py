@@ -29,12 +29,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 from jinja2 import TemplateNotFound
-import user as us
-import items as it
-import ausleihung as au
-import audit_log as al
+import Web.modules.database.user as us
+import Web.modules.database.items as it
+import Web.modules.database.ausleihung as au
+import Web.modules.logs.audit_log as al
 import push_notifications as pn
-import pdf_export 
+import Web.modules.inventarsystem.pdf_export as pdf_export 
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
@@ -69,7 +69,7 @@ import uuid
 from PIL import Image, ImageOps
 import mimetypes
 import subprocess
-from data_protection import (
+from Web.modules.inventarsystem.data_protection import (
     decrypt_document_fields,
     encrypt_document_fields,
     encrypt_soft_deleted_media_pack,
@@ -77,8 +77,8 @@ from data_protection import (
 
 # Set base directory and centralized settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-import settings as cfg
-from settings import MongoClient
+import Web.modules.database.settings as cfg
+from Web.modules.database.settings import MongoClient
 from tenant import get_tenant_context
 
 
@@ -2724,7 +2724,7 @@ def library_export_excel(scope):
     username = session['username']
     is_admin_user = us.check_admin(username)
     
-    import excel_export
+    import Web.modules.inventarsystem.excel_export as excel_export
     client = MongoClient(MONGODB_HOST, MONGODB_PORT)
     db = client[cfg.MONGODB_DB]
     items_collection = db['items']
@@ -10104,7 +10104,7 @@ def reset_item(id):
     
     try:
         # Import the ausleihung module
-        import ausleihung as au
+        import Web.modules.database.ausleihung as au
         
         result = au.reset_item_completely(id)
         

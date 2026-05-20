@@ -18,6 +18,7 @@ DIST_DIR="$PROJECT_DIR/dist"
 COMPOSE_FILE="docker-compose-multitenant.yml"
 MIN_ROOT_FREE_MB="${INVENTAR_MIN_ROOT_FREE_MB:-2048}"
 DIST_KEEP_COUNT="${INVENTAR_DIST_KEEP_COUNT:-2}"
+MODE="release"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
@@ -152,6 +153,7 @@ Usage: $0 [options]
 
 Options:
   --multitenant      Use docker-compose-multitenant.yml (default)
+    development        Install development build from GHCR or local dist
   -h, --help         Show this help message
 EOF
 }
@@ -161,6 +163,10 @@ parse_args() {
         case "$1" in
             --multitenant)
                 COMPOSE_FILE="docker-compose-multitenant.yml"
+                shift
+                ;;
+            development|dev)
+                MODE="development"
                 shift
                 ;;
             -h|--help)
@@ -479,6 +485,55 @@ main() {
     ensure_min_root_disk_space
     archive_logs
     create_backup
+
+    # If user requested a development install, perform a simple dev deploy flow
+    if [ "$MODE" = "development" ]; then
+        log_message "Requested development install"
+        local tag="development"
+        local app_image="$APP_IMAGE_REPO:$tag"
+        local compose_path="$PROJECT_DIR/$COMPOSE_FILE"
+
+        if [ ! -f "$compose_path" ]; then
+            log_message "ERROR: compose file not found: $compose_path"
+            exit 1
+        fi
+
+        # Ensure ENV_FILE contains the development image
+        if [ ! -f "$ENV_FILE" ]; then
+            cat > "$ENV_FILE" <<EOF
+NUITKA_BUILD=0
+INVENTAR_HTTP_PORT=10000
+INVENTAR_APP_IMAGE=$app_image
+EOF
+        elif grep -q '^INVENTAR_APP_IMAGE=' "$ENV_FILE"; then
+            sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=$app_image|" "$ENV_FILE"
+        else
+            printf '\nINVENTAR_APP_IMAGE=%s\n' "$app_image" >> "$ENV_FILE"
+        fi
+
+        # Try local dist first, then pull from GHCR
+        if ! load_local_dist_image "$tag"; then
+            log_message "Attempting to pull development image $app_image"
+            if ! docker pull "$app_image" >> "$LOG_FILE" 2>&1; then
+                log_message "ERROR: Could not obtain development image $app_image"
+                exit 1
+            fi
+        fi
+
+        # Bring up stack
+        docker compose -f "$compose_path" --env-file "$ENV_FILE" pull app mongodb >> "$LOG_FILE" 2>&1 || true
+        docker compose -f "$compose_path" --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
+        docker tag "$app_image" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
+
+        if ! verify_stack_health; then
+            log_message "ERROR: Development deployment failed health check"
+            exit 1
+        fi
+
+        echo "$tag" > "$STATE_FILE"
+        log_message "Development update completed successfully"
+        exit 0
+    fi
 
     local tmp_dir meta_file latest_tag current_tag bundle_url
     tmp_dir="$(mktemp -d)"

@@ -6,7 +6,7 @@
    Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
    For commercial licensing inquiries: https://github.com/AIIrondev
 '''
-import user
+import Web.modules.database.user as user
 import sys
 import getpass
 import re

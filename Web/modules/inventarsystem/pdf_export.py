@@ -18,7 +18,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER, TA_JUSTIFY
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import settings as cfg
+import Web.modules.database.settings as cfg
 
 
 __version__ = cfg.APP_VERSION

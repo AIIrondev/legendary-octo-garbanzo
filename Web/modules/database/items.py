@@ -28,8 +28,8 @@ Collection Structure:
 '''
 from bson.objectid import ObjectId
 import datetime
-import settings as cfg
-from settings import MongoClient
+import Web.modules.database.settings as cfg
+from Web.modules.database.settings import MongoClient
 
 
 LIBRARY_ITEM_TYPES = ('book', 'cd', 'dvd', 'media')

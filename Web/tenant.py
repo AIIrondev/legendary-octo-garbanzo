@@ -12,8 +12,8 @@ from functools import wraps
 import logging
 import os
 import re
-import settings as cfg
-from settings import MongoClient
+import Web.modules.database.settings as cfg
+from Web.modules.database.settings import MongoClient
 
 logger = logging.getLogger(__name__)
 

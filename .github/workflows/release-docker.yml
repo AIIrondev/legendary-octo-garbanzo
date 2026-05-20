@@ -150,10 +150,24 @@ jobs:
             ${{ steps.meta.outputs.image }}
             ghcr.io/aiirondev/legendary-octo-garbanzo:latest
 
+      - name: Build and push development image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/aiirondev/legendary-octo-garbanzo:development
+
       - name: Build local image tar for offline deploy
         run: |
           docker pull "${{ steps.meta.outputs.image }}"
           docker save "${{ steps.meta.outputs.image }}" | gzip > "inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz"
+
+      - name: Build local development image tar for offline deploy
+        run: |
+          docker pull ghcr.io/aiirondev/legendary-octo-garbanzo:development || true
+          docker save ghcr.io/aiirondev/legendary-octo-garbanzo:development | gzip > "inventarsystem-image-development.tar.gz" || true
 
       - name: Create release-only docker bundle
         run: |
@@ -238,6 +252,20 @@ jobs:
           cp MULTITENANT_DEPLOYMENT.md release-bundle/MULTITENANT_DEPLOYMENT.md
           cp MULTITENANT_PYTHON_API.md release-bundle/MULTITENANT_PYTHON_API.md
 
+          # Include optional development image tar and helper note
+          if [ -f "inventarsystem-image-development.tar.gz" ]; then
+            cp inventarsystem-image-development.tar.gz release-bundle/ || true
+          fi
+
+          cat > release-bundle/DEVELOPMENT.md <<'EOF'
+          This bundle contains an optional development image tar: inventarsystem-image-development.tar.gz
+                      
+          To install the development build on a target host, extract the bundle and run:
+          
+            ./update.sh development
+          
+          EOF
+
           chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup.sh release-bundle/update.sh release-bundle/manage-tenant.sh release-bundle/run-tenant-cmd.sh
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
@@ -248,5 +276,6 @@ jobs:
           files: |
             inventarsystem-docker-bundle.tar.gz
             inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz
-          fail_on_unmatched_files: true
+            inventarsystem-image-development.tar.gz
+          fail_on_unmatched_files: false
           generate_release_notes: true
