@@ -72,6 +72,24 @@ show_help() {
     exit 1
 }
 
+tenant_aliases() {
+    local tenant_id="$1"
+    local normalized alias
+    normalized="$(printf '%s' "$tenant_id" | tr '[:upper:]' '[:lower:]')"
+    printf '%s\n' "$tenant_id"
+    if [[ "$normalized" == schule* ]]; then
+        alias="school${normalized#schule}"
+        if [[ "$alias" != "$tenant_id" ]]; then
+            printf '%s\n' "$alias"
+        fi
+    elif [[ "$normalized" == school* ]]; then
+        alias="schule${normalized#school}"
+        if [[ "$alias" != "$tenant_id" ]]; then
+            printf '%s\n' "$alias"
+        fi
+    fi
+}
+
 register_tenant_port() {
     local tenant_id="$1"
     local port="$2"
@@ -87,15 +105,25 @@ with open(path, 'r', encoding='utf-8') as f:
 tenants = cfg.get('tenants')
 if tenants is None or not isinstance(tenants, dict):
     tenants = {}
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
 for tid, conf in tenants.items():
-    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid != tenant_id:
+    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
         print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
         sys.exit(2)
-existing = tenants.get(tenant_id)
-if existing is None or not isinstance(existing, dict):
-    existing = {}
+existing = {}
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        existing = alias_cfg
+        break
 existing['port'] = int(port_str)
-tenants[tenant_id] = existing
+for alias in aliases:
+    tenants[alias] = dict(existing)
 cfg['tenants'] = tenants
 with open(path, 'w', encoding='utf-8') as f:
     json.dump(cfg, f, indent=4, ensure_ascii=False)
@@ -263,9 +291,20 @@ if not os.path.isfile(path):
 with open(path, 'r', encoding='utf-8') as f:
     cfg = json.load(f)
 tenants = cfg.get('tenants', {})
-if not isinstance(tenants, dict) or tenant_id not in tenants or not isinstance(tenants[tenant_id], dict):
+if not isinstance(tenants, dict):
     sys.exit(2)
-removed = tenants.pop(tenant_id, None)
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
+removed = None
+for alias in list(aliases):
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        removed = alias_cfg if removed is None else removed
+        tenants.pop(alias, None)
 cfg['tenants'] = tenants
 with open(path, 'w', encoding='utf-8') as f:
     json.dump(cfg, f, indent=4, ensure_ascii=False)
@@ -580,11 +619,26 @@ with open(path, 'r', encoding='utf-8') as f:
     cfg = json.load(f)
 
 tenants = cfg.setdefault('tenants', {})
-tenant_cfg = tenants.setdefault(tenant_id, {})
-if 'port' not in tenant_cfg:
-    print(f"Warning: Tenant {tenant_id} doesn't have a port mapping in config.json.", file=sys.stderr)
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
+
+tenant_cfg = None
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        tenant_cfg = alias_cfg
+        break
+if tenant_cfg is None:
+    tenant_cfg = {}
 
 modules = tenant_cfg.setdefault('modules', {})
+port = tenant_cfg.get('port')
+if port is None:
+    print(f"Warning: Tenant {tenant_id} doesn't have a port mapping in config.json.", file=sys.stderr)
 
 for arg in module_args:
     if '=' not in arg:
@@ -595,6 +649,14 @@ for arg in module_args:
     module_cfg = modules.setdefault(mod_name, {})
     module_cfg['enabled'] = state
     print(f"Module '{mod_name}' set to '{'on' if state else 'off'}' for tenant '{tenant_id}'.")
+
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if not isinstance(alias_cfg, dict):
+        alias_cfg = {}
+    alias_cfg.update(tenant_cfg)
+    alias_cfg['modules'] = modules
+    tenants[alias] = alias_cfg
 
 with open(path, 'w', encoding='utf-8') as f:
     json.dump(cfg, f, indent=4, ensure_ascii=False)
