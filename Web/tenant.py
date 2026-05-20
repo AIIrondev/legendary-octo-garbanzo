@@ -113,6 +113,28 @@ def _normalize_db_name(db_name):
     return db_name
 
 
+def _module_name_candidates(module_name):
+    normalized = str(module_name or '').strip().lower().replace('-', '_')
+    if not normalized:
+        return []
+
+    candidates = [normalized]
+    alias_groups = {
+        'inventory': {'inventory', 'inventar'},
+        'library': {'library', 'bib', 'bibliothek'},
+        'student_cards': {'student_cards', 'studentcards', 'schuelerausweise', 'schueler_ausweise'},
+    }
+
+    for canonical_name, aliases in alias_groups.items():
+        if normalized in aliases:
+            for alias in (canonical_name, *sorted(aliases)):
+                if alias not in candidates:
+                    candidates.append(alias)
+            break
+
+    return candidates
+
+
 def _tenant_db_aliases(tenant_id):
     aliases = []
     env_map = _parse_tenant_db_map()
@@ -153,8 +175,12 @@ def _resolve_db_alias(tenant_id, db_name):
 def is_tenant_module_enabled(module_name, tenant_id=None, default=False):
     """Resolve whether a feature module is enabled for the current tenant."""
     config = get_tenant_config(tenant_id)
-    enabled = _get_nested_value(config, ['modules', module_name, 'enabled'], default)
-    return bool(enabled)
+    for candidate_name in _module_name_candidates(module_name):
+        enabled = _get_nested_value(config, ['modules', candidate_name, 'enabled'], None)
+        if enabled is not None:
+            return bool(enabled)
+
+    return bool(default)
 
 
 class TenantContext:
