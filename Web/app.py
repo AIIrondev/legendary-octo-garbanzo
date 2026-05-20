@@ -28,6 +28,8 @@ Features:
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response, send_file, abort
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.exceptions import HTTPException
+from werkzeug.routing import BuildError
 from jinja2 import TemplateNotFound
 import Web.modules.database.user as us
 import Web.modules.database.items as it
@@ -373,7 +375,7 @@ def _enforce_module_access():
             if name != 'inventory' and cfg.MODULES.is_enabled('inventory'):
                 return redirect(url_for('home'))
             elif name != 'library' and cfg.MODULES.is_enabled('library'):
-                return redirect(url_for('library_view'))
+                return redirect('/library')
             
             return redirect(url_for('my_borrowed_items'))
 
@@ -430,6 +432,41 @@ def handle_not_found(e):
         return jsonify({'error': 'Not found', 'status': 404}), 404
     if 'username' in session:
         return render_template('error.html', error_code=404, error_message='Seite nicht gefunden.'), 404
+    return redirect(url_for('login'))
+
+
+@app.errorhandler(BuildError)
+def handle_build_error(e):
+    """Handle url_for endpoint mismatches without crashing the whole request."""
+    app.logger.error(f"BuildError while resolving endpoint: {e}", exc_info=True)
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({'error': 'Route resolution failed', 'status': 500}), 500
+
+    # Known fallback for legacy library endpoint naming issues.
+    if 'library_view' in str(e):
+        return redirect('/library')
+
+    if 'username' in session:
+        return redirect(url_for('home'))
+    return redirect(url_for('login'))
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_exception(e):
+    """Last-resort handler to avoid raw 500 pages for unhandled exceptions."""
+    if isinstance(e, HTTPException):
+        return e
+
+    app.logger.error('Unhandled exception', exc_info=True)
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({'error': 'Internal server error', 'status': 500}), 500
+
+    if 'username' in session:
+        try:
+            return render_template('error.html', error_code=500, error_message='Interner Serverfehler.'), 500
+        except Exception:
+            return 'Internal Server Error', 500
+
     return redirect(url_for('login'))
 
 
@@ -2640,7 +2677,7 @@ def home():
         
     if not cfg.MODULES.is_enabled('inventory'):
         if cfg.MODULES.is_enabled('library'):
-            return redirect(url_for('library_view'))
+            return redirect('/library')
         else:
             return "Weder Inventar- noch Bibliotheks-Modul sind aktiviert.", 403
 
@@ -2716,8 +2753,9 @@ def tutorial_page():
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
 
+@app.route('/library/export', defaults={'scope': 'all'})
 @app.route('/library/export/<scope>')
-def library_export_excel(scope):
+def library_export_excel(scope='all'):
     if 'username' not in session:
         return redirect(url_for('login'))
         
@@ -2737,7 +2775,7 @@ def library_export_excel(scope):
         filename = f"Bibliothek_Ausgeliehen_{username}.xlsx"
     elif scope == 'all_borrowed':
         if not is_admin_user:
-            return redirect(url_for('library_view'))
+            return redirect('/library')
         query['Verfuegbar'] = False
         filename = "Bibliothek_Alle_Ausleihen.xlsx"
     elif scope == 'schulbuecher':
