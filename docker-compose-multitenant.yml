@@ -95,6 +95,7 @@ services:
       INVENTAR_MONGODB_HOST: mongodb
       INVENTAR_MONGODB_PORT: "27017"
       INVENTAR_MONGODB_DB: inventar_default
+      INVENTAR_CONFIG_PATH: /app/config.json
       
       # Redis Configuration (for sessions and caching)
       INVENTAR_REDIS_HOST: redis
