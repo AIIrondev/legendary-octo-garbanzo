@@ -53,57 +53,38 @@ jobs:
           if [ "$EVENT_NAME" = "push" ] && [ -n "$REF_NAME" ]; then
             TAG="$REF_NAME"
           else
-            TAG="$(python3 - <<'PY'
-            import json
-            import os
-            import re
-            import urllib.request
+            # Fetch latest release tag via GitHub API (fall back to v3.0.0)
+            latest_tag="v3.0.0"
+            if meta_json=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
+              tag_name=$(printf "%s" "$meta_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+              if [ -n "$tag_name" ]; then
+                latest_tag="$tag_name"
+              fi
+            fi
 
-            repo = os.environ["REPO"]
-            token = os.environ.get("GH_TOKEN", "")
-            bump = os.environ.get("BUMP_TYPE", "patch").strip().lower()
-
-            req = urllib.request.Request(
-              f"https://api.github.com/repos/{repo}/releases/latest",
-              headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "legendary-octo-garbanzo-release-workflow",
-              },
-            )
-
-            latest_tag = "v3.0.0"
-            try:
-              with urllib.request.urlopen(req, timeout=20) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                latest_tag = (data.get("tag_name") or latest_tag).strip()
-            except Exception:
-              pass
-
-            m = re.match(r"^v(\d+)\.(\d+)\.(\d+)$", latest_tag)
-            if not m:
-              major, minor, patch = 3, 0, 0
-            else:
-              major, minor, patch = map(int, m.groups())
+            if [[ "$latest_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              major=${BASH_REMATCH[1]}
+              minor=${BASH_REMATCH[2]}
+              patch=${BASH_REMATCH[3]}
+            else
+              major=3; minor=0; patch=0
+            fi
 
             # Bump strategy: major / minor / patch
-            if bump == "major":
-              major += 1
-              minor = 0
-              patch = 0
-            elif bump == "minor":
-              minor += 1
-              patch = 0
-            else:
-              patch += 1
+            if [ "${BUMP_TYPE:-}" = "major" ]; then
+              major=$((major + 1)); minor=0; patch=0
+            elif [ "${BUMP_TYPE:-}" = "minor" ]; then
+              minor=$((minor + 1)); patch=0
+            else
+              patch=$((patch + 1))
+            fi
 
-            if bump == "development":
-              # use dev suffix for development releases
-              print(f"v{major}.{minor}.{patch}-dev")
-            else:
-              print(f"v{major}.{minor}.{patch}")
-            PY
-            )"
+            if [ "${BUMP_TYPE:-}" = "development" ]; then
+              TAG="v${major}.${minor}.${patch}-dev"
+            else
+              TAG="v${major}.${minor}.${patch}"
+            fi
+          fi
           fi
 
           if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev(\.[0-9]+)?)?$'; then
