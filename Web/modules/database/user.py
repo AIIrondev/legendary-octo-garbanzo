@@ -12,6 +12,7 @@ Provides methods for creating, validating, and retrieving user information.
 '''
 import hashlib
 import copy
+import importlib
 import logging
 import re
 import secrets
@@ -57,6 +58,35 @@ def _get_tenant_db(client):
         return get_tenant_db(client)
     except Exception:
         return client[cfg.MONGODB_DB]
+
+
+def _has_tenant_configs():
+    for module_name in ('tenant', 'Web.tenant'):
+        try:
+            tenant_module = importlib.import_module(module_name)
+            tenant_registry = getattr(tenant_module, 'TENANT_REGISTRY', None)
+            if isinstance(tenant_registry, dict) and tenant_registry:
+                return True
+        except Exception:
+            continue
+    return isinstance(getattr(cfg, 'TENANT_CONFIGS', None), dict) and bool(cfg.TENANT_CONFIGS)
+
+
+def _resolve_request_tenant_db():
+    for module_name in ('tenant', 'Web.tenant'):
+        try:
+            tenant_module = importlib.import_module(module_name)
+            get_tenant_context = getattr(tenant_module, 'get_tenant_context', None)
+            if not callable(get_tenant_context):
+                continue
+            ctx = get_tenant_context()
+            if ctx and ctx.tenant_id:
+                return ctx.db_name or ctx.resolve_tenant(), ctx.tenant_id
+            if ctx and ctx.db_name and not _has_tenant_configs():
+                return ctx.db_name, None
+        except Exception as exc:
+            logger.debug("Tenant context import %s failed: %s", module_name, exc)
+    return None, None
 
 
 def build_name_synonym(first_name, last_name=''):
@@ -424,22 +454,26 @@ def check_nm_pwd(username, password):
     Returns:
         dict: User document if credentials are valid, None otherwise
     """
-    db_name = cfg.MONGODB_DB
-    tenant_db = None
+    db_name, tenant_id = _resolve_request_tenant_db()
     ctx = None
     try:
         from tenant import get_tenant_context
         ctx = get_tenant_context()
-        if ctx and ctx.tenant_id:
-            tenant_db = ctx.db_name or ctx.resolve_tenant()
-            db_name = tenant_db
-    except Exception as exc:
-        logger.exception(f"Failed to resolve tenant context in check_nm_pwd: {exc}")
+    except Exception:
+        ctx = None
+
+    if not db_name:
+        if _has_tenant_configs():
+            logger.warning(
+                "Refusing default DB fallback for login because tenant configs exist and no tenant was resolved."
+            )
+            return None
+        db_name = cfg.MONGODB_DB
 
     logger.info(
         "check_nm_pwd start: username=%r tenant=%r db=%r host=%r port=%r uri=%r",
         username,
-        ctx.tenant_id if ctx else None,
+        tenant_id,
         db_name,
         cfg.MONGODB_HOST,
         cfg.MONGODB_PORT,
@@ -644,15 +678,17 @@ def get_user(username):
             return users.find_one({'Username': username}) or users.find_one({'username': username})
 
         # Try current tenant first when available
-        try:
-            from tenant import get_tenant_context
-            ctx = get_tenant_context()
-            if ctx and ctx.db_name:
-                user = find_in_db(ctx.db_name)
-                if user:
-                    return user
-        except Exception:
-            pass
+        tenant_db, tenant_id = _resolve_request_tenant_db()
+        if tenant_db:
+            user = find_in_db(tenant_db)
+            if user:
+                return user
+
+        if _has_tenant_configs() and tenant_db is None:
+            logger.warning(
+                "Refusing default DB fallback for user lookup because tenant configs exist and no tenant was resolved."
+            )
+            return None
 
         # Fallback to default configured database
         user = find_in_db(cfg.MONGODB_DB)
