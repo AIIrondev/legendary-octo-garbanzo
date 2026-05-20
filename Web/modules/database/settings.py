@@ -135,7 +135,7 @@ def _get_int_env(name, default):
         return int(default)
 
 def get_version():
-    with open(os.path.join(BASE_DIR, '..', '.docker-build.env'), 'r') as f:
+    with open(os.path.join(BASE_DIR, '..', '..', '..', '.docker-build.env'), 'r') as f:
         for l in f:
             if l.startswith('INVENTAR_APP_IMAGE='):
                 return l.split(':', 1)[1].strip()

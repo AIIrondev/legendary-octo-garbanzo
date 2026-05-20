@@ -31,6 +31,17 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.exceptions import HTTPException
 from werkzeug.routing import BuildError
 from jinja2 import TemplateNotFound
+import os
+import sys
+
+# Ensure imports work regardless of whether gunicorn starts in /app or /app/Web.
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_CURRENT_DIR)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+if _CURRENT_DIR not in sys.path:
+    sys.path.insert(0, _CURRENT_DIR)
+
 import Web.modules.database.user as us
 import Web.modules.database.items as it
 import Web.modules.database.ausleihung as au
@@ -44,7 +55,6 @@ from urllib.parse import urlparse, urlunparse
 import requests
 import csv
 import ipaddress
-import os
 import json
 import datetime
 import time
@@ -65,7 +75,6 @@ except Exception:
 # import qrcode
 # from qrcode.constants import ERROR_CORRECT_L
 import threading
-import sys
 import shutil
 import uuid
 from PIL import Image, ImageOps
