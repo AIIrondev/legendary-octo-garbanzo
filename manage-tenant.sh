@@ -373,7 +373,7 @@ case "$COMMAND" in
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys, re; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient; import hashlib
+import sys, re; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from Web.modules.database import settings; from pymongo import MongoClient; import hashlib
 tenant_id = sys.argv[1].lower()
 sanitized = ''.join(c for c in tenant_id if c.isalnum() or c == '_')
 db_name = f'inventar_{sanitized}'
@@ -441,7 +441,7 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
             APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
             if [ -n "$APP_CONTAINER" ]; then
                 docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); from tenant import TenantContext; import settings; from pymongo import MongoClient
+import sys; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from tenant import TenantContext; from Web.modules.database import settings; from pymongo import MongoClient
 ctx = TenantContext()
 db_name = ctx._get_db_name(sys.argv[1])
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
@@ -488,7 +488,7 @@ print(f'Database for tenant {sys.argv[1]} dropped.')
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app/Web'); import settings; from pymongo import MongoClient
+import sys; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from Web.modules.database import settings; from pymongo import MongoClient
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
 db.sessions.drop() # Force sign-out / session clear
@@ -535,8 +535,9 @@ PY
         if [ -n "$APP_CONTAINER" ]; then
              docker exec -i "$APP_CONTAINER" python3 - <<'PY'
 import sys
+sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/Web')
-import settings
+from Web.modules.database import settings
 from pymongo import MongoClient
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 prefix = 'inventar_'
