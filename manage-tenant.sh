@@ -9,7 +9,9 @@ if [ ! -f "docker-compose-multitenant.yml" ]; then
     exit 1
 fi
 
-CONFIG_FILE="$PWD/config.json"
+# Resolve script directory so config paths are deterministic even when called via sudo
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/config.json"
 
 ensure_runtime_config_json() {
     local config_path backup_path
