@@ -66,6 +66,27 @@ def _parse_port_from_host(host):
     return host, None
 
 
+def _first_host_token(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+    return raw.split(',', 1)[0].strip().lower()
+
+
+def _request_host_candidates():
+    candidates = []
+    for header_name in ('X-Forwarded-Host', 'X-Original-Host', 'Host'):
+        token = _first_host_token(request.headers.get(header_name, ''))
+        if token and token not in candidates:
+            candidates.append(token)
+
+    direct_host = _first_host_token(getattr(request, 'host', ''))
+    if direct_host and direct_host not in candidates:
+        candidates.append(direct_host)
+
+    return candidates
+
+
 def _tenant_id_for_port(port):
     """Map a host port to a registered tenant ID via tenant configs or env overrides."""
     for tenant_id, config in TENANT_REGISTRY.items():
@@ -241,54 +262,67 @@ class TenantContext:
             session['tenant_id'] = matched_tenant
             return self._get_db_name(matched_tenant)
 
-        # Priority 2: Port-based tenant mapping
-        host = request.host.lower()
-        hostname, port = _parse_port_from_host(host)
-        self.port = port
-        logger.info(f"Tenant resolution start: request.host={host} request.headers={dict(request.headers)}")
-        if port:
-            tenant_from_port = _tenant_id_for_port(port)
-            if tenant_from_port:
-                self.tenant_id = tenant_from_port
-                self.config = get_tenant_config(tenant_from_port)
-                session['tenant_id'] = tenant_from_port
-                logger.info(
-                    f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port} config={self.config}"
-                )
-                return self._get_db_name(tenant_from_port)
-            logger.info(f"Tenant port not mapped: host={host} port={port}")
+        # Priority 2: Port/host based tenant mapping
+        host_candidates = _request_host_candidates()
+        primary_host = host_candidates[0] if host_candidates else _first_host_token(getattr(request, 'host', ''))
+        logger.info(
+            "Tenant resolution start: request.host=%s host_candidates=%s request.headers=%s",
+            getattr(request, 'host', ''),
+            host_candidates,
+            dict(request.headers),
+        )
+
+        for host in host_candidates:
+            hostname, port = _parse_port_from_host(host)
+            if port:
+                self.port = port
+                tenant_from_port = _tenant_id_for_port(port)
+                if tenant_from_port:
+                    self.tenant_id = tenant_from_port
+                    self.config = get_tenant_config(tenant_from_port)
+                    session['tenant_id'] = tenant_from_port
+                    logger.info(
+                        f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port} config={self.config}"
+                    )
+                    return self._get_db_name(tenant_from_port)
+                logger.info(f"Tenant port not mapped: host={host} port={port}")
 
         # Priority 3: Subdomain extraction
-        host_without_port = (hostname or '').strip().lower()
-        direct_host_match = _find_registered_tenant_id(host_without_port)
-        if direct_host_match:
-            self.subdomain = host_without_port
-            self.tenant_id = direct_host_match
-            self.config = get_tenant_config(direct_host_match)
-            session['tenant_id'] = direct_host_match
-            logger.info(
-                f"Tenant resolution by direct host match: host={host} tenant={direct_host_match} config={self.config}"
-            )
-            return self._get_db_name(direct_host_match)
+        for host in host_candidates:
+            host_without_port, _ = _parse_port_from_host(host)
+            host_without_port = (host_without_port or '').strip().lower()
+            if not host_without_port:
+                continue
 
-        if host_without_port and not _is_ip_host(host_without_port):
-            parts = host_without_port.split('.')
-            if len(parts) >= 2:
-                potential_subdomain = parts[0]
-                if potential_subdomain not in ('www', 'api', 'admin', 'app', 'mail'):
-                    matched_tenant = _find_registered_tenant_id(potential_subdomain)
-                    if matched_tenant:
-                        self.subdomain = potential_subdomain
-                        self.tenant_id = matched_tenant
-                        self.config = get_tenant_config(matched_tenant)
-                        session['tenant_id'] = matched_tenant
-                        logger.info(
-                            f"Tenant resolution by subdomain: host={host} tenant={matched_tenant} config={self.config}"
-                        )
-                        return self._get_db_name(matched_tenant)
-                    logger.info(f"Tenant subdomain not registered: {potential_subdomain}")
-                else:
-                    logger.info(f"Tenant subdomain ignored: {potential_subdomain}")
+            direct_host_match = _find_registered_tenant_id(host_without_port)
+            if direct_host_match:
+                self.subdomain = host_without_port
+                self.tenant_id = direct_host_match
+                self.config = get_tenant_config(direct_host_match)
+                session['tenant_id'] = direct_host_match
+                logger.info(
+                    f"Tenant resolution by direct host match: host={host} tenant={direct_host_match} config={self.config}"
+                )
+                return self._get_db_name(direct_host_match)
+
+            if host_without_port and not _is_ip_host(host_without_port):
+                parts = host_without_port.split('.')
+                if len(parts) >= 2:
+                    potential_subdomain = parts[0]
+                    if potential_subdomain not in ('www', 'api', 'admin', 'app', 'mail'):
+                        matched_tenant = _find_registered_tenant_id(potential_subdomain)
+                        if matched_tenant:
+                            self.subdomain = potential_subdomain
+                            self.tenant_id = matched_tenant
+                            self.config = get_tenant_config(matched_tenant)
+                            session['tenant_id'] = matched_tenant
+                            logger.info(
+                                f"Tenant resolution by subdomain: host={host} tenant={matched_tenant} config={self.config}"
+                            )
+                            return self._get_db_name(matched_tenant)
+                        logger.info(f"Tenant subdomain not registered: {potential_subdomain}")
+                    else:
+                        logger.info(f"Tenant subdomain ignored: {potential_subdomain}")
 
         # Priority 4: sticky tenant from the authenticated session
         session_tenant = session.get('tenant_id', '').strip() if session.get('tenant_id') else ''
@@ -296,7 +330,7 @@ class TenantContext:
             self.tenant_id = session_tenant
             self.config = get_tenant_config(session_tenant)
             logger.info(
-                f"Tenant resolution by session: host={host} tenant={session_tenant} config={self.config}"
+                f"Tenant resolution by session: host={primary_host} tenant={session_tenant} config={self.config}"
             )
             return self._get_db_name(session_tenant)
 
