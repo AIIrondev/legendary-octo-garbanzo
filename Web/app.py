@@ -4177,6 +4177,7 @@ def logout():
     session.pop('is_admin', None)
     session.pop('favorites', None)
     session.pop('favorites_owner', None)
+    session.pop('tenant_id', None)
     return redirect(url_for('login'))
 
 

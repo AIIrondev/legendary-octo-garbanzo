@@ -7,7 +7,7 @@ Supports subdomain-based tenant identification and per-tenant database namespaci
 Each tenant can support up to 20+ users with isolated data and resource pools.
 """
 
-from flask import request, g, has_request_context
+from flask import request, g, session, has_request_context
 from functools import wraps
 import logging
 import os
@@ -209,6 +209,7 @@ class TenantContext:
         if tenant_from_header:
             self.tenant_id = tenant_from_header
             self.config = get_tenant_config(tenant_from_header)
+            session['tenant_id'] = tenant_from_header
             return self._get_db_name(tenant_from_header)
 
         # Priority 2: Port-based tenant mapping
@@ -221,6 +222,7 @@ class TenantContext:
             if tenant_from_port:
                 self.tenant_id = tenant_from_port
                 self.config = get_tenant_config(tenant_from_port)
+                session['tenant_id'] = tenant_from_port
                 logger.info(
                     f"Tenant resolution by port: host={host} port={port} tenant={tenant_from_port} config={self.config}"
                 )
@@ -241,11 +243,22 @@ class TenantContext:
                 self.subdomain = potential_subdomain
                 self.tenant_id = potential_subdomain
                 self.config = get_tenant_config(potential_subdomain)
+                session['tenant_id'] = potential_subdomain
                 logger.info(
                     f"Tenant resolution by subdomain: host={host} tenant={potential_subdomain} config={self.config}"
                 )
                 return self._get_db_name(potential_subdomain)
             logger.info(f"Tenant subdomain ignored: {potential_subdomain}")
+
+        # Priority 4: sticky tenant from the authenticated session
+        session_tenant = session.get('tenant_id', '').strip() if session.get('tenant_id') else ''
+        if session_tenant:
+            self.tenant_id = session_tenant
+            self.config = get_tenant_config(session_tenant)
+            logger.info(
+                f"Tenant resolution by session: host={host} tenant={session_tenant} config={self.config}"
+            )
+            return self._get_db_name(session_tenant)
 
         # Fallback to default tenant if no tenant identifier found.
         # If no explicit 'default' tenant config exists, use configured MongoDB DB.
