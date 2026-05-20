@@ -85,7 +85,6 @@ jobs:
               TAG="v${major}.${minor}.${patch}"
             fi
           fi
-          fi
 
           if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev(\.[0-9]+)?)?$'; then
             echo "Error: tag '$TAG' is not valid semver (vX.Y.Z or vX.Y.Z-dev)"
