@@ -15,6 +15,14 @@ on:
           - patch
           - minor
           - development
+      push_dev:
+        description: "If true, push the :dev image to GHCR for development releases"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: write
@@ -39,61 +47,66 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           BUMP_TYPE: ${{ github.event.inputs.bump || 'patch' }}
+          PUSH_DEV: ${{ github.event.inputs.push_dev || 'false' }}
         run: |
           if [ "$EVENT_NAME" = "push" ] && [ -n "$REF_NAME" ]; then
             TAG="$REF_NAME"
           else
             TAG="$(python3 - <<'PY'
-          import json
-          import os
-          import re
-          import urllib.request
+            import json
+            import os
+            import re
+            import urllib.request
 
-          repo = os.environ["REPO"]
-          token = os.environ.get("GH_TOKEN", "")
-          bump = os.environ.get("BUMP_TYPE", "patch").strip().lower()
+            repo = os.environ["REPO"]
+            token = os.environ.get("GH_TOKEN", "")
+            bump = os.environ.get("BUMP_TYPE", "patch").strip().lower()
 
-          req = urllib.request.Request(
-            f"https://api.github.com/repos/{repo}/releases/latest",
-            headers={
-              "Authorization": f"Bearer {token}",
-              "Accept": "application/vnd.github+json",
-              "User-Agent": "legendary-octo-garbanzo-release-workflow",
-            },
-          )
+            req = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/releases/latest",
+              headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "legendary-octo-garbanzo-release-workflow",
+              },
+            )
 
-          latest_tag = "v3.0.0"
-          try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-              data = json.loads(resp.read().decode("utf-8"))
-              latest_tag = (data.get("tag_name") or latest_tag).strip()
-          except Exception:
-            pass
+            latest_tag = "v3.0.0"
+            try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                latest_tag = (data.get("tag_name") or latest_tag).strip()
+            except Exception:
+              pass
 
-          m = re.match(r"^v(\d+)\.(\d+)\.(\d+)$", latest_tag)
-          if not m:
-            major, minor, patch = 3, 0, 0
-          else:
-            major, minor, patch = map(int, m.groups())
+            m = re.match(r"^v(\d+)\.(\d+)\.(\d+)$", latest_tag)
+            if not m:
+              major, minor, patch = 3, 0, 0
+            else:
+              major, minor, patch = map(int, m.groups())
 
-          # Bump strategy: major / minor / patch
-          if bump == "major":
-            major += 1
-            minor = 0
-            patch = 0
-          elif bump == "minor":
-            minor += 1
-            patch = 0
-          else:
-            patch += 1
+            # Bump strategy: major / minor / patch
+            if bump == "major":
+              major += 1
+              minor = 0
+              patch = 0
+            elif bump == "minor":
+              minor += 1
+              patch = 0
+            else:
+              patch += 1
 
-          print(f"v{major}.{minor}.{patch}")
-          PY
-          )"
+            if bump == "development":
+              # use dev suffix for development releases
+              print(f"v{major}.{minor}.{patch}-dev")
+            else:
+              print(f"v{major}.{minor}.{patch}")
+            PY
+            )"
           fi
 
-          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Error: tag '$TAG' is not valid semver (vX.Y.Z)"
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev(\.[0-9]+)?)?$'; then
+            echo "Error: tag '$TAG' is not valid semver (vX.Y.Z or vX.Y.Z-dev)"
             exit 1
           fi
 
@@ -116,12 +129,15 @@ jobs:
             exit 1
           fi
 
-          while git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; do
-            BASE="${TAG%.*}"
-            PATCH="${TAG##*.}"
-            PATCH="$((PATCH + 1))"
-            TAG="$BASE.$PATCH"
-          done
+          # Ensure tag uniqueness: if tag exists append numeric suffix
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            i=1
+            base="$TAG"
+            while git rev-parse -q --verify "refs/tags/${base}.${i}" >/dev/null; do
+              i="$((i + 1))"
+            done
+            TAG="${base}.${i}"
+          fi
 
           IMAGE="ghcr.io/aiirondev/legendary-octo-garbanzo:${TAG}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -131,9 +147,14 @@ jobs:
           else
             echo "is_development=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ "${BUMP_TYPE:-}" = "development" ] && [ "${PUSH_DEV:-}" = "true" ]; then
+            echo "push_dev=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push_dev=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create and push tag for manual releases
-        if: github.event_name == 'workflow_dispatch' && steps.meta.outputs.is_development != 'true'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
           git config user.name "github-actions[bot]"
@@ -162,14 +183,15 @@ jobs:
             ${{ steps.meta.outputs.image }}
             ghcr.io/aiirondev/legendary-octo-garbanzo:latest
 
-      - name: Build and push development image
+      - name: Build and push development image (:dev)
+        if: steps.meta.outputs.is_development == 'true' && steps.meta.outputs.push_dev == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ghcr.io/aiirondev/legendary-octo-garbanzo:development
+            ghcr.io/aiirondev/legendary-octo-garbanzo:dev
 
       - name: Build local image tar for offline deploy
         run: |
@@ -196,23 +218,23 @@ jobs:
       - name: Build local development image tar for offline deploy
         run: |
           set -euo pipefail
-          DEV_IMG=ghcr.io/aiirondev/legendary-octo-garbanzo:development
+          DEV_IMG=ghcr.io/aiirondev/legendary-octo-garbanzo:dev
 
           if docker image inspect "$DEV_IMG" >/dev/null 2>&1; then
             echo "Using local development image $DEV_IMG"
-            docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
+            docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
             exit 0
           fi
 
           echo "Local development image not found, trying to pull $DEV_IMG"
           if docker pull "$DEV_IMG" >/dev/null 2>&1; then
-            docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
+            docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
             exit 0
           fi
 
           echo "Pull failed, attempting local docker build for development image"
           docker build -t "$DEV_IMG" .
-          docker save "$DEV_IMG" | gzip > "inventarsystem-image-development.tar.gz"
+          docker save "$DEV_IMG" | gzip > "inventarsystem-image-dev.tar.gz"
 
       - name: Create release-only docker bundle
         run: |
@@ -298,16 +320,16 @@ jobs:
           done
 
           # Include optional development image tar and helper note
-          if [ -f "inventarsystem-image-development.tar.gz" ]; then
-            cp inventarsystem-image-development.tar.gz release-bundle/ || true
+          if [ -f "inventarsystem-image-dev.tar.gz" ]; then
+            cp inventarsystem-image-dev.tar.gz release-bundle/ || true
           fi
 
           cat > release-bundle/DEVELOPMENT.md <<'EOF'
-          This bundle contains an optional development image tar: inventarsystem-image-development.tar.gz
+          This bundle contains an optional development image tar: inventarsystem-image-dev.tar.gz
                       
           To install the development build on a target host, extract the bundle and run:
           
-            ./update.sh development
+            ./update.sh dev
           
           EOF
 
@@ -316,13 +338,13 @@ jobs:
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
       - name: Create or update GitHub Release
-        if: steps.meta.outputs.is_development != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
+          prerelease: ${{ steps.meta.outputs.is_development }}
           files: |
             inventarsystem-docker-bundle.tar.gz
             inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz
-            inventarsystem-image-development.tar.gz
+            inventarsystem-image-dev.tar.gz
           fail_on_unmatched_files: false
           generate_release_notes: true

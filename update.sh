@@ -489,7 +489,7 @@ main() {
     # If user requested a development install, perform a simple dev deploy flow
     if [ "$MODE" = "development" ]; then
         log_message "Requested development install"
-        local tag="development"
+        local tag="dev"
         local app_image="$APP_IMAGE_REPO:$tag"
         local compose_path="$PROJECT_DIR/$COMPOSE_FILE"
 
@@ -523,7 +523,6 @@ EOF
         # Bring up stack
         docker compose -f "$compose_path" --env-file "$ENV_FILE" pull app mongodb >> "$LOG_FILE" 2>&1 || true
         docker compose -f "$compose_path" --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
-        docker tag "$app_image" "$APP_IMAGE_REPO:latest" >> "$LOG_FILE" 2>&1 || true
 
         if ! verify_stack_health; then
             log_message "ERROR: Development deployment failed health check"
