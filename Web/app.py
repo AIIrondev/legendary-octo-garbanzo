@@ -45,7 +45,7 @@ if _CURRENT_DIR not in sys.path:
 import Web.modules.database.user as us
 import Web.modules.database.items as it
 import Web.modules.database.ausleihung as au
-import Web.modules.logs.audit_log as al
+import Web.modules.log.audit_log as al
 import push_notifications as pn
 import Web.modules.inventarsystem.pdf_export as pdf_export 
 import datetime

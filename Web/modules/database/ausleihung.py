@@ -103,7 +103,7 @@ def get_current_status(ausleihung, log_changes=False, user=None):
     if log_changes and new_status != original_status and '_id' in ausleihung:
         try:
             # Importieren Sie das Modul nur bei Bedarf, um zirkuläre Importe zu vermeiden
-            import Web.modules.logs.ausleihung_log as ausleihung_log
+            import Web.modules.log.ausleihung_log as ausleihung_log
             ausleihung_log.log_status_change(
                 str(ausleihung['_id']), 
                 original_status, 
