@@ -82,7 +82,7 @@ from Web.modules.inventarsystem.data_protection import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 import Web.modules.database.settings as cfg
 from Web.modules.database.settings import MongoClient
-from tenant import get_tenant_context
+from tenant import get_tenant_context, get_tenant_trial_status, purge_expired_trial_tenants
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
@@ -353,6 +353,54 @@ def _enforce_active_session_user():
 
     flash('Ihre Sitzung ist nicht mehr gültig. Bitte erneut anmelden.', 'error')
     return redirect(url_for('login'))
+
+
+@app.before_request
+def _enforce_trial_tenant_expiry():
+    endpoint = request.endpoint or ''
+    if endpoint == 'static' or endpoint.startswith('static'):
+        return None
+
+    if endpoint in {'login', 'logout', 'impressum', 'license'}:
+        return None
+
+    try:
+        ctx = get_tenant_context()
+        tenant_id = ctx.tenant_id if ctx else session.get('tenant_id')
+        if not tenant_id:
+            return None
+
+        trial_status = get_tenant_trial_status(tenant_id)
+        if not trial_status.get('enabled'):
+            return None
+
+        session['trial_status'] = {
+            'enabled': True,
+            'expired': bool(trial_status.get('expired')),
+            'days_left': trial_status.get('days_left'),
+            'expires_at': trial_status.get('expires_at').isoformat() if trial_status.get('expires_at') else None,
+        }
+
+        if not trial_status.get('expired'):
+            return None
+
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify({
+                'ok': False,
+                'message': 'Diese Testinstanz ist abgelaufen und wurde deaktiviert.',
+                'expired': True,
+            }), 410
+
+        session.pop('username', None)
+        session.pop('admin', None)
+        session.pop('is_admin', None)
+        session.pop('favorites', None)
+        session.pop('favorites_owner', None)
+        flash('Diese Testinstanz ist abgelaufen und wurde deaktiviert.', 'error')
+        return redirect(url_for('login'))
+    except Exception as exc:
+        app.logger.warning(f'Trial expiry check failed: {exc}')
+        return None
 
 @app.before_request
 def _enforce_module_access():
@@ -1108,6 +1156,7 @@ def inject_version():
         'permission_action_options': PERMISSION_ACTION_OPTIONS,
         'permission_page_options': PERMISSION_PAGE_OPTIONS,
         'permission_presets': us.get_permission_preset_definitions(),
+        'trial_status': session.get('trial_status', {}),
     }
 
 
@@ -1123,6 +1172,16 @@ def create_daily_backup():
             app.logger.warning("Daily backup creation returned false")
     except Exception as e:
         app.logger.error(f"Daily backup creation failed: {e}")
+
+
+def cleanup_expired_trial_tenants():
+    """Remove expired trial tenants from config and MongoDB."""
+    try:
+        purged_tenants = purge_expired_trial_tenants()
+        if purged_tenants:
+            app.logger.warning(f"Purged expired trial tenants: {', '.join(purged_tenants)}")
+    except Exception as exc:
+        app.logger.error(f"Trial tenant cleanup failed: {exc}")
 
 def update_appointment_statuses():
     """
@@ -1319,6 +1378,7 @@ def _initialize_scheduler():
             scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
             scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
             scheduler.add_job(func=create_return_reminders, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
+            scheduler.add_job(func=cleanup_expired_trial_tenants, trigger="interval", hours=1)
             scheduler.start()
             _scheduler_initialized = True
             app.logger.info(f"Scheduler started successfully (interval={cfg.SCHEDULER_INTERVAL_MIN} min)")

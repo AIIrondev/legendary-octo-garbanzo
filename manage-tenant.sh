@@ -56,6 +56,7 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  add <tenant_id> [port]       Add a new tenant (initializes database)"
+    echo "  trial <tenant_id> [port] [days] Create a 7-day demo tenant that auto-deletes after expiry"
     echo "  remove <tenant_id>           Remove a tenant completely (deletes data!)"
     echo "  restart-tenant <id>          'Restart' a single tenant (clears cache/sessions)"
     echo "  restart-all                  Restart all application containers (zero-downtime reload)"
@@ -65,6 +66,7 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  ./manage-tenant.sh add school_a 10001"
+    echo "  ./manage-tenant.sh trial school_demo 10002 7"
     echo "  ./manage-tenant.sh remove test_tenant"
     echo "  ./manage-tenant.sh module school_a inventory=off library=on"
     echo "  ./manage-tenant.sh restart-all"
@@ -135,6 +137,176 @@ PY
         echo "Failed to register tenant port $port for $tenant_id"
         exit 1
     fi
+}
+
+write_trial_tenant_config() {
+    local tenant_id="$1"
+    local port="$2"
+    local trial_days="$3"
+
+    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port" "$trial_days"
+import json, sys, os, datetime
+
+path, tenant_id, port_str, trial_days_str = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+
+tenants = cfg.get('tenants')
+if tenants is None or not isinstance(tenants, dict):
+    tenants = {}
+
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
+
+for tid, conf in tenants.items():
+    if port_str and isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
+        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
+        sys.exit(2)
+
+try:
+    trial_days = max(1, int(trial_days_str))
+except ValueError:
+    print(f"Error: trial days must be numeric, got {trial_days_str!r}", file=sys.stderr)
+    sys.exit(3)
+
+now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+trial_config = {
+    'enabled': True,
+    'auto_delete': True,
+    'days': trial_days,
+    'ttl_days': trial_days,
+    'expires_after_days': trial_days,
+    'started_at': now,
+    'created_at': now,
+}
+
+existing = {}
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        existing = alias_cfg
+        break
+
+if port_str:
+    existing['port'] = int(port_str)
+existing['modules'] = {
+    'inventory': {'enabled': True},
+    'library': {'enabled': True},
+    'student_cards': {'enabled': True, 'default_borrow_days': 14, 'max_borrow_days': 365},
+}
+existing['trial'] = trial_config
+
+for alias in aliases:
+    tenants[alias] = dict(existing)
+
+cfg['tenants'] = tenants
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+
+print(f"Configured trial tenant {tenant_id} with {trial_days} day(s) and auto-delete enabled")
+PY
+    then
+        echo "Trial tenant $tenant_id configured in config.json"
+    else
+        echo "Failed to configure trial tenant $tenant_id"
+        exit 1
+    fi
+}
+
+initialize_tenant_database() {
+    local tenant_id="$1"
+    local mode="$2"
+
+    APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
+    if [ -z "$APP_CONTAINER" ]; then
+        echo "Warning: Application container is not running. Please start the multi-tenant system first."
+        echo "Data will be initialized upon first access by the tenant."
+        return 0
+    fi
+
+    docker exec "$APP_CONTAINER" python3 -c '
+import sys, re, datetime, hashlib
+sys.path.insert(0, "/app")
+sys.path.insert(0, "/app/Web")
+from Web.modules.database import settings
+from pymongo import MongoClient
+
+tenant_id = sys.argv[1].lower()
+mode = sys.argv[2]
+sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
+db_name = f"inventar_{sanitized}"
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
+db = client[db_name]
+hashed_pw = hashlib.sha512("admin123".encode()).hexdigest()
+
+action_permissions = {
+    "can_borrow": True,
+    "can_insert": True,
+    "can_edit": True,
+    "can_delete": True,
+    "can_manage_users": True,
+    "can_manage_settings": True,
+    "can_view_logs": True,
+}
+
+page_permissions = {
+    "home": True,
+    "tutorial_page": True,
+    "my_borrowed_items": True,
+    "notifications_view": True,
+    "impressum": True,
+    "license": True,
+    "library_view": True,
+    "terminplan": True,
+    "home_admin": True,
+    "upload_admin": True,
+    "library_admin": True,
+    "admin_borrowings": True,
+    "library_loans_admin": True,
+    "admin_damaged_items": True,
+    "admin_audit_dashboard": True,
+    "logs": True,
+    "manage_filters": True,
+    "manage_locations": True,
+}
+
+if db.users.count_documents({"Username": "admin"}) == 0:
+    db.users.insert_one({
+        "Username": "admin",
+        "Password": hashed_pw,
+        "Admin": True,
+        "active_ausleihung": None,
+        "name": "Admin",
+        "last_name": "User",
+        "IsStudent": False,
+        "PermissionPreset": "full_access",
+        "ActionPermissions": action_permissions,
+        "PagePermissions": page_permissions,
+    })
+
+if mode == "trial":
+    db.settings.update_one(
+        {"setting_type": "tenant_trial"},
+        {"$set": {
+            "setting_type": "tenant_trial",
+            "enabled": True,
+            "auto_delete": True,
+            "days": 7,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+print(f"Tenant {sys.argv[1]} database initialized. Default admin: admin / admin123")
+' "$tenant_id" "$mode"
 }
 
 update_runtime_ports() {
@@ -470,6 +642,36 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
             echo "Warning: Application container is not running. Please start the multi-tenant system first."
             echo "Data will be initialized upon first access by the tenant."
         fi
+        ;;
+
+    trial)
+        if [ -z "$TENANT_ID" ]; then
+            echo "Error: Please provide a tenant_id."
+            exit 1
+        fi
+
+        PORT_ARG="${3:-}"
+        DAYS_ARG="${4:-7}"
+
+        if [ -n "$PORT_ARG" ]; then
+            if ! printf '%s\n' "$PORT_ARG" | grep -qE '^[0-9]+$'; then
+                echo "Error: Port must be a numeric value."
+                exit 1
+            fi
+            register_tenant_port "$TENANT_ID" "$PORT_ARG"
+            update_runtime_ports "$PORT_ARG"
+            sync_tenant_port_map
+        fi
+
+        write_trial_tenant_config "$TENANT_ID" "$PORT_ARG" "$DAYS_ARG"
+
+        if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+            restart_app_container
+        fi
+
+        echo "Initializing trial database for $TENANT_ID..."
+        initialize_tenant_database "$TENANT_ID" "trial"
+        echo "Trial tenant '$TENANT_ID' successfully configured. It will expire after $DAYS_ARG day(s) and self-delete."
         ;;
     
     remove)

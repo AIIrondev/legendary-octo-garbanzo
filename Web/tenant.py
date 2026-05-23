@@ -9,6 +9,8 @@ Each tenant can support up to 20+ users with isolated data and resource pools.
 
 from flask import request, g, session, has_request_context
 from functools import wraps
+import datetime
+import json
 import logging
 import os
 import re
@@ -18,10 +20,48 @@ from Web.modules.database.settings import MongoClient
 
 logger = logging.getLogger(__name__)
 
+_TENANT_REGISTRY_MTIME = None
+
+
+def _load_tenant_registry_from_config():
+    registry = {}
+    config_path = getattr(cfg, 'CONFIG_PATH', None)
+    if config_path and os.path.isfile(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as handle:
+                config = json.load(handle)
+            tenants = config.get('tenants', {})
+            if isinstance(tenants, dict):
+                registry.update(tenants)
+        except Exception as exc:
+            logger.warning("Failed to load tenant registry from config: %s", exc)
+    elif isinstance(getattr(cfg, 'TENANT_CONFIGS', None), dict):
+        registry.update(cfg.TENANT_CONFIGS)
+    return registry
+
+
+def _refresh_tenant_registry():
+    global TENANT_REGISTRY, _TENANT_REGISTRY_MTIME
+    config_path = getattr(cfg, 'CONFIG_PATH', None)
+
+    current_mtime = None
+    if config_path and os.path.isfile(config_path):
+        try:
+            current_mtime = os.path.getmtime(config_path)
+        except OSError:
+            current_mtime = None
+
+    if current_mtime == _TENANT_REGISTRY_MTIME:
+        return TENANT_REGISTRY
+
+    TENANT_REGISTRY.clear()
+    TENANT_REGISTRY.update(_load_tenant_registry_from_config())
+    _TENANT_REGISTRY_MTIME = current_mtime
+    return TENANT_REGISTRY
+
+
 # Tenant registry: maps subdomain/tenant_id to database name
-TENANT_REGISTRY = {}
-if isinstance(getattr(cfg, 'TENANT_CONFIGS', None), dict):
-    TENANT_REGISTRY.update(cfg.TENANT_CONFIGS)
+TENANT_REGISTRY = _load_tenant_registry_from_config()
 
 
 def _get_nested_value(source, path, default=None):
@@ -139,6 +179,8 @@ def _is_ip_host(hostname):
 
 def get_tenant_config(tenant_id=None):
     """Return the registered config for a tenant, falling back to default."""
+    _refresh_tenant_registry()
+
     if tenant_id is None:
         ctx = get_tenant_context()
         tenant_id = ctx.tenant_id if ctx and ctx.tenant_id else 'default'
@@ -230,6 +272,183 @@ def is_tenant_module_enabled(module_name, tenant_id=None, default=False):
             return bool(enabled)
 
     return bool(default)
+
+
+def _parse_datetime_value(value):
+    if value is None or value == '':
+        return None
+    if isinstance(value, datetime.datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.datetime.fromisoformat(text.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def get_tenant_trial_config(tenant_id=None):
+    """Return the optional trial/demo lifecycle settings for a tenant."""
+    config = get_tenant_config(tenant_id)
+    trial_config = _get_nested_value(config, ['trial'], {})
+    if not isinstance(trial_config, dict):
+        trial_config = {}
+
+    demo_config = _get_nested_value(config, ['demo'], {})
+    if isinstance(demo_config, dict):
+        merged = dict(demo_config)
+        merged.update(trial_config)
+        trial_config = merged
+
+    return trial_config
+
+
+def get_tenant_trial_status(tenant_id=None, now=None):
+    """Compute the current trial status for a tenant.
+
+    The config may define either an absolute "expires_at" timestamp or a
+    relative lifetime via "started_at"/"created_at" plus one of
+    "expires_after_days", "ttl_days", or "days".
+    """
+    trial_config = get_tenant_trial_config(tenant_id)
+    now = now or datetime.datetime.now()
+
+    enabled = bool(trial_config.get('enabled') or trial_config.get('active'))
+    if not enabled:
+        return {
+            'enabled': False,
+            'expired': False,
+            'auto_delete': bool(trial_config.get('auto_delete', False)),
+            'started_at': None,
+            'expires_at': None,
+            'days_left': None,
+        }
+
+    started_at = _parse_datetime_value(
+        trial_config.get('started_at')
+        or trial_config.get('created_at')
+        or trial_config.get('activated_at')
+    )
+    expires_at = _parse_datetime_value(trial_config.get('expires_at'))
+
+    if expires_at is None:
+        duration_days = trial_config.get('expires_after_days')
+        if duration_days is None:
+            duration_days = trial_config.get('ttl_days')
+        if duration_days is None:
+            duration_days = trial_config.get('days')
+        try:
+            duration_days = int(duration_days) if duration_days is not None else None
+        except (TypeError, ValueError):
+            duration_days = None
+
+        if duration_days is not None:
+            base_time = started_at or now
+            expires_at = base_time + datetime.timedelta(days=max(0, duration_days))
+
+    expired = bool(expires_at and now >= expires_at)
+    days_left = None
+    if expires_at:
+        remaining = expires_at - now
+        days_left = max(0, int(remaining.total_seconds() // 86400))
+
+    return {
+        'enabled': True,
+        'expired': expired,
+        'auto_delete': bool(trial_config.get('auto_delete', False)),
+        'started_at': started_at,
+        'expires_at': expires_at,
+        'days_left': days_left,
+    }
+
+
+def _get_tenant_db_name_from_config(tenant_id):
+    config = get_tenant_config(tenant_id)
+    explicit_db = None
+    if isinstance(config, dict):
+        explicit_db = config.get('db') or config.get('db_name')
+
+    if explicit_db:
+        return _normalize_db_name(explicit_db)
+
+    sanitized = ''.join(c if c.isalnum() or c == '_' else '' for c in str(tenant_id).lower())
+    return f'inventar_{sanitized}' if sanitized else cfg.MONGODB_DB
+
+
+def delete_tenant(tenant_id, *, drop_database=True, remove_from_config=True):
+    """Delete a tenant's runtime data and optionally remove its config entry."""
+    tenant_id = str(tenant_id or '').strip()
+    if not tenant_id:
+        return False
+
+    db_name = _get_tenant_db_name_from_config(tenant_id)
+
+    if drop_database:
+        try:
+            client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+            try:
+                client.drop_database(db_name)
+            finally:
+                client.close()
+        except Exception as exc:
+            logger.warning("Failed to drop tenant database %s for %s: %s", db_name, tenant_id, exc)
+
+    if remove_from_config:
+        try:
+            config_path = getattr(cfg, 'CONFIG_PATH', None)
+            if config_path and os.path.isfile(config_path):
+                with open(config_path, 'r', encoding='utf-8') as handle:
+                    config = json.load(handle)
+
+                tenants = config.get('tenants', {})
+                if not isinstance(tenants, dict):
+                    tenants = {}
+
+                aliases = set(_tenant_db_aliases(tenant_id))
+                aliases.add(tenant_id)
+                lowered = tenant_id.lower()
+                if lowered.startswith('schule'):
+                    aliases.add('school' + lowered[len('schule'):])
+                elif lowered.startswith('school'):
+                    aliases.add('schule' + lowered[len('school'):])
+
+                removed_any = False
+                for alias in aliases:
+                    if alias in tenants:
+                        tenants.pop(alias, None)
+                        removed_any = True
+
+                if removed_any:
+                    config['tenants'] = tenants
+                    with open(config_path, 'w', encoding='utf-8') as handle:
+                        json.dump(config, handle, indent=4, ensure_ascii=False)
+
+            for alias in [tenant_id, *_tenant_db_aliases(tenant_id)]:
+                TENANT_REGISTRY.pop(alias, None)
+        except Exception as exc:
+            logger.warning("Failed to remove tenant config for %s: %s", tenant_id, exc)
+
+    return True
+
+
+def purge_expired_trial_tenants(now=None):
+    """Delete expired trial tenants that opted into auto-delete."""
+    now = now or datetime.datetime.now()
+    purged_tenants = []
+
+    for tenant_id in list(TENANT_REGISTRY.keys()):
+        status = get_tenant_trial_status(tenant_id, now=now)
+        if status.get('enabled') and status.get('expired') and status.get('auto_delete'):
+            if delete_tenant(tenant_id):
+                purged_tenants.append(tenant_id)
+
+    return purged_tenants
 
 
 class TenantContext:
