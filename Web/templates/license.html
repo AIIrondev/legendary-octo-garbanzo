@@ -1,11 +1,3 @@
-<!--
-   Copyright 2025-2026 AIIrondev
-
-   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
-   See Legal/LICENSE for the full license text.
-   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
-   For commercial licensing inquiries: https://github.com/AIIrondev
--->
 {% extends "base.html" %}
 
 {% block title %}License - Inventarsystem{% endblock %}
@@ -17,10 +9,6 @@
 
         <!-- Tab navigation -->
         <ul class="nav nav-tabs mt-3" id="legalTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab-eula" data-bs-toggle="tab" data-bs-target="#pane-eula"
-                    type="button" role="tab">EULA</button>
-            </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab-notice" data-bs-toggle="tab" data-bs-target="#pane-notice"
                     type="button" role="tab">NOTICE</button>
@@ -43,139 +31,12 @@
             </li>
         </ul>
 
-        <div class="tab-content" id="legalTabContent">
-
-        <!-- ── EULA ─────────────────────────────────────────────────────── -->
-        <div class="tab-pane fade show active" id="pane-eula" role="tabpanel">
-        <div class="license-content">
-
-            <!-- EULA -->
-            <h2>Endbenutzer-Lizenzvertrag (EULA) und Nutzungsbedingungen</h2>
-            <p><strong>Softwareprojekt:</strong> Inventarsystem<br>
-               <strong>Urheberrechtshalter (Lizenzgeber):</strong> AIIrondev<br>
-               <strong>Gültigkeit:</strong> Stand 2026</p>
-
-            <hr>
-
-            <h3>Präambel</h3>
-            <p>Dieser Endbenutzer-Lizenzvertrag (im Folgenden „Vertrag") stellt eine rechtsgültige Vereinbarung zwischen Ihnen
-            (im Folgenden „Lizenznehmer") und dem Urheber <strong>AIIrondev</strong> (im Folgenden „Lizenzgeber") dar.
-            Durch den Zugriff auf den Quellcode, die Installation, das Kopieren oder die sonstige Nutzung der Software
-            „Inventarsystem" (im Folgenden „Produkt") erklärt sich der Lizenznehmer mit den nachfolgenden Bedingungen
-            vollumfänglich einverstanden.</p>
-            <p>Sollte der Lizenznehmer den Bedingungen dieses Vertrags nicht zustimmen, ist jegliche Nutzung,
-            Vervielfältigung oder Distribution des Produkts mit sofortiger Wirkung untersagt.</p>
-
-            <hr>
-
-            <h3>§ 1 Gegenstand der Lizenz und Eigentumsrechte</h3>
-            <ol>
-                <li>Das Produkt wird dem Lizenznehmer unter Vorbehalt lizenziert, nicht verkauft. Sämtliche
-                    Eigentumsrechte, Urheberrechte und sonstigen geistigen Eigentumsrechte am Produkt sowie an allen
-                    Kopien davon verbleiben ausschließlich beim Lizenzgeber.</li>
-                <li>Diese Lizenz gewährt lediglich ein eingeschränktes Nutzungsrecht unter den in diesem Vertrag
-                    explizit genannten Bedingungen.</li>
-            </ol>
-
-            <h3>§ 2 Zulässiger Nutzungskreis (Privatnutzung)</h3>
-            <ol>
-                <li>Die unentgeltliche Nutzung des Produkts ist ausschließlich <strong>natürlichen Personen für den
-                    rein privaten, häuslichen Gebrauch</strong> gestattet.</li>
-                <li>Die Nutzung umfasst die Verwaltung privater Bestände ohne jegliche Gewinnerzielungsabsicht.</li>
-                <li>Jegliche Nutzung durch <strong>Institutionelle Nutzer</strong> (einschließlich, aber nicht
-                    beschränkt auf: Unternehmen, Einzelunternehmer, Freiberufler, Vereine, Bildungseinrichtungen,
-                    Behörden oder NGOs) ist ausdrücklich <strong>untersagt</strong> und bedarf einer gesonderten,
-                    schriftlichen Lizenzvereinbarung mit dem Lizenzgeber.</li>
-            </ol>
-
-            <h3>§ 3 Funktionale Einschränkungen und Support</h3>
-            <ol>
-                <li>Dem Lizenznehmer wird das Produkt in der jeweils vorliegenden Fassung bereitgestellt („As-Is").</li>
-                <li>Für die kostenlose Privatnutzung besteht <strong>kein Anspruch</strong> auf:
-                    <ul>
-                        <li>Technischen Support oder Beratung.</li>
-                        <li>Bereitstellung von Sicherheits-Updates oder Patches.</li>
-                        <li>Gewährleistung der Kompatibilität mit spezifischen Hardware- oder Softwareumgebungen.</li>
-                    </ul>
-                </li>
-                <li>Der Lizenzgeber behält sich das Recht vor, Funktionen in zukünftigen Versionen zu ändern,
-                    einzuschränken oder kostenpflichtig zu gestalten.</li>
-            </ol>
-
-            <h3>§ 4 Wahrung der Urheberbezeichnung (Branding-Klausel)</h3>
-            <ol>
-                <li>Das Produkt verfügt über fest integrierte Urheberrechtshinweise, insbesondere die Kennzeichnung
-                    <strong>„Powered by AIIrondev"</strong> in der Benutzeroberfläche (Footer/Menü).</li>
-                <li>Es ist dem Lizenznehmer untersagt, diese Hinweise zu entfernen, zu modifizieren, zu verdecken oder
-                    deren Sichtbarkeit durch technische Maßnahmen (z. B. Manipulation von CSS, JavaScript oder
-                    Metadaten) zu beeinträchtigen.</li>
-                <li>Das Entfernen dieser Hinweise führt zum sofortigen und automatischen Erlöschen der
-                    Nutzungslizenz.</li>
-            </ol>
-
-            <h3>§ 5 Verbot der kommerziellen Verwertung &amp; SaaS</h3>
-            <ol>
-                <li>Die Bereitstellung des Produkts als Dienstleistung für Dritte (Software-as-a-Service, SaaS),
-                    insbesondere gegen Entgelt oder zur Generierung von Werbeeinnahmen, ist strikt untersagt.</li>
-                <li>Das Hosting auf öffentlichen Servern mit dem Ziel, Dritten ohne eigene Installation Zugriff auf
-                    die Funktionalität zu gewähren, ist nur mit ausdrücklicher schriftlicher Genehmigung des
-                    Lizenzgebers zulässig.</li>
-            </ol>
-
-            <h3>§ 6 Modifikationen und Contributions</h3>
-            <ol>
-                <li>Der Lizenznehmer darf den Quellcode für den privaten Eigenbedarf modifizieren.</li>
-                <li>Im Falle einer Veröffentlichung von Modifikationen oder der Einreichung von
-                    Verbesserungsvorschlägen (z. B. Pull Requests auf GitHub) räumt der Lizenznehmer dem Lizenzgeber
-                    ein unwiderrufliches, weltweites, zeitlich unbeschränktes und kostenfreies Nutzungs- und
-                    Verwertungsrecht an diesen Änderungen ein. Der Lizenzgeber ist berechtigt, diese Änderungen in
-                    das Hauptprodukt zu übernehmen und unter dieser oder einer anderen Lizenz zu vertreiben.</li>
-            </ol>
-
-            <h3>§ 7 Haftungsbeschränkung</h3>
-            <ol>
-                <li>Die Haftung des Lizenzgebers für Schäden, die aus der Nutzung oder Unmöglichkeit der Nutzung des
-                    Produkts entstehen (einschließlich Datenverlust, Betriebsunterbrechung oder entgangener Gewinn),
-                    ist auf Vorsatz und grobe Fahrlässigkeit beschränkt.</li>
-                <li>Der Lizenzgeber übernimmt keine Haftung für die Richtigkeit der mit dem Produkt verwalteten
-                    Daten.</li>
-            </ol>
-
-            <h3>§ 8 Rechtswahl und Gerichtsstand</h3>
-            <ol>
-                <li>Es gilt ausschließlich das Recht der <strong>Bundesrepublik Deutschland</strong> unter Ausschluss
-                    des UN-Kaufrechts (CISG).</li>
-                <li>Soweit gesetzlich zulässig, wird als Gerichtsstand für alle Streitigkeiten aus diesem Vertrag der
-                    Sitz des Lizenzgebers vereinbart.</li>
-                <li>Sollten einzelne Bestimmungen dieses Vertrags unwirksam sein, bleibt die Wirksamkeit der übrigen
-                    Bestimmungen unberührt (Salvatorische Klausel).</li>
-            </ol>
-
-            <hr>
-
-            <div class="license-exception-notice">
-                <h3>⚠️ Anfragen für Ausnahmegenehmigungen (Kommerzielle Lizenzen)</h3>
-                <p>
-                    Bitte kontaktieren Sie den Urheber direkt über das GitHub-Profil:
-                    <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">AIIrondev auf GitHub</a>
-                </p>
-            </div>
-
-        </div><!-- /.license-content -->
-        </div><!-- /#pane-eula -->
-
         <!-- ── NOTICE ────────────────────────────────────────────────────── -->
         <div class="tab-pane fade" id="pane-notice" role="tabpanel">
         <div class="license-content">
             <h2>NOTICE – Urheberrechtliche Hinweise</h2>
-            <p><strong>Inventarsystem</strong><br>Copyright © 2025-2026 AIIrondev</p>
-            <p>Dieses Projekt steht unter dem Inventarsystem EULA (Endbenutzer-Lizenzvertrag). Der vollständige Lizenztext
-            befindet sich in <code>Legal/LICENSE</code>. Die Software wird ausschließlich für den privaten,
-            nicht-kommerziellen Gebrauch bereitgestellt. Unerlaubte kommerzielle Nutzung, SaaS-Hosting oder das Entfernen
-            von Branding ist untersagt. Anfragen für kommerzielle Lizenzen:
-            <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">https://github.com/AIIrondev</a></p>
+            <p><strong>Invario Modul Suite</strong><br>Copyright © 2026 Invario UG</p>
 
-            <hr>
             <h3>Drittanbieter-Hinweise</h3>
             <p>Dieses Projekt nutzt oder referenziert die folgende Drittanbieter-Software. Deren jeweilige Lizenzen gelten
             wie angegeben. Dieser NOTICE-Abschnitt dient ausschließlich der Attribution und ändert keine Lizenzbedingungen.</p>
@@ -200,13 +61,6 @@
             <ul>
                 <li>html5-qrcode (MIT) © 2020-2025 Manoj Brahmbhatt (mebjas)</li>
             </ul>
-
-            <h4>Systemkomponenten (nicht im Repository enthalten, ggf. im Deployment genutzt)</h4>
-            <ul>
-                <li>NGINX (2-clause BSD) © Nginx, Inc. and/or its licensors</li>
-                <li>FFmpeg (LGPL/GPL, je nach Konfiguration) © 2000-2025 FFmpeg developers</li>
-            </ul>
-
             <hr>
         </div>
         </div><!-- /#pane-notice -->
@@ -258,9 +112,6 @@
         <div class="license-content">
             <h2>Sicherheitsrichtlinie (Security Policy)</h2>
 
-            <h3>Unterstützte Versionen</h3>
-            <p>Bitte nutzen Sie immer die neueste Version aus dem <code>main</code>-Branch, um Sicherheitsupdates zu erhalten.</p>
-
             <h3>Datenschutzrechtliche Mechanismen</h3>
             <ul>
                 <li><strong>Passwort-Hashing:</strong> Passwörter werden niemals im Klartext gespeichert.</li>
@@ -272,10 +123,7 @@
             <h3>Meldung von Sicherheitslücken</h3>
             <div class="license-exception-notice">
                 <h3>⚠️ Responsible Disclosure</h3>
-                <p>Falls Sie eine Sicherheitslücke entdecken, öffnen Sie bitte <strong>kein öffentliches Issue</strong>.
-                Kontaktieren Sie den Maintainer direkt über die
-                <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">GitHub Security Advisory-Funktion</a>
-                oder per E-Mail.</p>
+                <p>Falls Sie eine Sicherheitslücke entdecken, wenden sie sich umgehend an die Email: info@invario.eu .
             </div>
         </div>
         </div><!-- /#pane-security -->
