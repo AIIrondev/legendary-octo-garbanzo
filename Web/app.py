@@ -3053,6 +3053,7 @@ def api_library_items():
 
         query = {
             'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']},
+            'IsGroupedSubItem': {'$ne': True},
             'Deleted': {'$ne': True}
         }
 
@@ -3078,7 +3079,39 @@ def api_library_items():
         raw_items = list(items_db.find(query, projection).sort([('Name', 1), ('_id', 1)]).skip(offset).limit(limit))
 
         # Build maps for grouping by parent-child relationship (grouped sub-items)
-        all_ids = [str(itm.get('_id')) for itm in raw_items if itm.get('_id')]
+        parent_ids_list = [str(itm.get('_id')) for itm in raw_items if itm.get('_id')]
+        children_by_parent = {}
+        child_items = []
+        if parent_ids_list:
+            child_projection = {
+                'Name': 1,
+                'Autor': 1,
+                'Author': 1,
+                'ISBN': 1,
+                'Code_4': 1,
+                'Code4': 1,
+                'ItemType': 1,
+                'Verfuegbar': 1,
+                'Condition': 1,
+                'HasDamage': 1,
+                'User': 1,
+                'Ort': 1,
+                'Beschreibung': 1,
+                'Image': 1,
+                'ParentItemId': 1,
+            }
+            child_items = list(items_db.find({
+                'ParentItemId': {'$in': parent_ids_list},
+                'IsGroupedSubItem': True,
+                'Deleted': {'$ne': True}
+            }, child_projection))
+            for child in child_items:
+                parent_id = str(child.get('ParentItemId') or '')
+                if not parent_id:
+                    continue
+                children_by_parent.setdefault(parent_id, []).append(child)
+
+        all_ids = parent_ids_list + [str(child.get('_id')) for child in child_items if child.get('_id')]
         active_records = []
         if all_ids:
             active_records = list(ausleihungen_db.find({'Item': {'$in': all_ids}, 'Status': 'active'}, {'Item': 1, 'User': 1}))
@@ -3093,26 +3126,10 @@ def api_library_items():
             if item_id not in active_user_by_item:
                 active_user_by_item[item_id] = rec.get('User', '')
 
-        # Organize children under their parent (ParentItemId) and prepare parent list
-        items_by_id = {}
-        children_by_parent = {}
-        parent_ids = set()
-        for itm in raw_items:
-            iid = str(itm.get('_id'))
-            items_by_id[iid] = itm
-            parent = str(itm.get('ParentItemId') or '')
-            if parent:
-                children_by_parent.setdefault(parent, []).append(itm)
-            else:
-                parent_ids.add(iid)
-
-        # Build aggregated list: for each parent id, include parent + children as one entry
+        # Build aggregated list: iterate ordered parent list and include children like inventory module
         aggregated = []
-        processed = set()
-        for pid in list(parent_ids):
-            parent = items_by_id.get(pid)
-            if not parent:
-                continue
+        for parent in raw_items:
+            pid = str(parent.get('_id'))
             children = children_by_parent.get(pid, [])
 
             # Compute grouped counts and availability
@@ -3159,40 +3176,6 @@ def api_library_items():
             doc['AvailableGroupedCount'] = len(available_units)
             doc['GroupedAvailableUnits'] = available_units
             doc['GroupedAllCodes'] = grouped_all_codes
-
-            aggregated.append(doc)
-            processed.add(pid)
-            for c in children:
-                processed.add(str(c.get('_id')))
-
-        # Include any remaining items (orphans or standalones not parented)
-        for itm in raw_items:
-            iid = str(itm.get('_id'))
-            if iid in processed:
-                continue
-            doc = dict(itm)
-            doc['_id'] = iid
-            if doc.get('Code4') in (None, '') and doc.get('Code_4') not in (None, ''):
-                doc['Code4'] = doc.get('Code_4')
-
-            condition_value = str(doc.get('Condition', '')).strip().lower()
-            has_damage = bool(doc.get('HasDamage')) or condition_value == 'destroyed'
-            has_active_borrow = iid in active_item_ids
-
-            if has_damage and not has_active_borrow:
-                doc['LibraryDisplayStatus'] = 'damaged'
-            elif has_active_borrow or doc.get('Verfuegbar') is False:
-                doc['LibraryDisplayStatus'] = 'borrowed'
-            else:
-                doc['LibraryDisplayStatus'] = 'available'
-
-            doc['BorrowedBy'] = active_user_by_item.get(iid) or doc.get('User', '')
-            # Single item: grouped count = 1
-            doc['GroupedDisplayCount'] = 1
-            doc['Quantity'] = 1
-            doc['AvailableGroupedCount'] = 1 if doc.get('Verfuegbar', True) else 0
-            doc['GroupedAvailableUnits'] = [{'id': iid, 'code': doc.get('Code_4') or doc.get('Code4') or '', 'label': f"{doc.get('Code_4') or doc.get('Code4') or '-'} ({doc.get('Name','')})"}] if doc.get('Verfuegbar', True) else []
-            doc['GroupedAllCodes'] = [doc.get('Code_4') or doc.get('Code4') or '']
 
             aggregated.append(doc)
 
