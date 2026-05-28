@@ -72,6 +72,7 @@
     </div>
 
     <!-- Table Header (only in table mode) -->
+    <div class="library-table-wrapper">
     <div class="table-header" id="tableHeader" style="display: none;">
         <div class="table-row">
             <div class="table-cell title-cell">Titel</div>
@@ -165,6 +166,7 @@
                 <p>Keine Bibliotheks-Medien gefunden</p>
             </div>
         {% endif %}
+    </div>
     </div>
 </div>
 
@@ -719,6 +721,21 @@ function onScanError(error) {
 .library-item .item-status.borrowed {
     background: #fce8e6;
     color: #b3261e;
+}
+
+/* Mobile: allow horizontal scrolling for table-mode views */
+@media (max-width: 900px) {
+    .library-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
+    .library-table-wrapper .table-row {
+        min-width: 720px; /* allow table to have intrinsic width and be scrolled */
+    }
+    .table-header, .item-content.table-mode {
+        display: block; /* keep rows stacked but allow horizontal scroll */
+    }
 }
 </style>
 {% endblock %}

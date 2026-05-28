@@ -513,12 +513,13 @@
         <table class="library-items-table">
             <thead>
                 <tr>
-                    <th style="width: 25%;">Titel</th>
-                    <th style="width: 15%;">Autor/Künstler</th>
+                    <th style="width: 24%;">Titel</th>
+                    <th style="width: 14%;">Autor/Künstler</th>
                     <th style="width: 12%;">ISBN/Code</th>
-                    <th style="width: 10%;">Typ</th>
+                    <th style="width: 8%;">Typ</th>
+                    <th style="width: 8%;">Anzahl</th>
                     <th style="width: 12%;">Status</th>
-                    <th style="width: 26%;">Aktionen</th>
+                    <th style="width: 22%;">Aktionen</th>
                 </tr>
             </thead>
             <tbody id="itemsTableBody">
@@ -603,7 +604,7 @@
             }
         } catch (error) {
             console.error('Error loading library items:', error);
-            document.getElementById('itemsTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Fehler beim Laden der Bibliothekselemente.</td></tr>';
+            document.getElementById('itemsTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:#999;">Fehler beim Laden der Bibliothekselemente.</td></tr>';
         } finally {
             pagingState.loading = false;
         }
@@ -707,6 +708,7 @@
                 <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
                 <td>${escapeHtml(item.ISBN || item.Code_4 || item.Code4 || '-')}</td>
                 <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
+                <td style="font-weight:600; text-align:center;">${item.Quantity || item.GroupedDisplayCount || 1}</td>
                 <td>
                     <span class="table-status ${statusClass}">
                         ${statusText}

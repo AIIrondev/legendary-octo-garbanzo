@@ -716,6 +716,8 @@
         <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>- oder <strong>.csv</strong>-Datei hoch. Spalten werden automatisch erkannt (z.B. Name, Ort, Beschreibung, ISBN, Code, Anzahl). Für den Bibliotheksimport ist eine gültige ISBN je Zeile erforderlich.</p>
         <form method="POST" action="{{ url_for('upload_library_excel') }}" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <input type="file" name="library_excel" accept=".xlsx,.csv" required>
+            <button type="button" class="btn btn-link" onclick="downloadSampleCsv('library')">Beispiel-CSV herunterladen</button>
+            <button type="button" class="btn btn-outline-secondary" title="Format-Hilfe" onclick="showCsvHelp('library')">?</button>
             <button type="submit" class="btn btn-secondary" name="excel_action" value="validate">Nur validieren</button>
             <button type="submit" class="btn btn-primary" name="excel_action" value="import">Bibliothek importieren</button>
         </form>
@@ -726,6 +728,8 @@
         <p style="margin:0 0 10px 0; color:#555;">Laden Sie eine <strong>.xlsx</strong>- oder <strong>.csv</strong>-Datei hoch. Spalten werden automatisch erkannt (z.B. Name, Ort, Beschreibung, Filter1/2/3, Kosten, Jahr, Code, Anzahl).</p>
         <form method="POST" action="{{ url_for('upload_inventory_excel') }}" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <input type="file" name="inventory_excel" accept=".xlsx,.csv" required>
+            <button type="button" class="btn btn-link" onclick="downloadSampleCsv('inventory')">Beispiel-CSV herunterladen</button>
+            <button type="button" class="btn btn-outline-secondary" title="Format-Hilfe" onclick="showCsvHelp('inventory')">?</button>
             <button type="submit" class="btn btn-secondary" name="excel_action" value="validate">Nur validieren</button>
             <button type="submit" class="btn btn-primary" name="excel_action" value="import">Inventar importieren</button>
         </form>
@@ -919,6 +923,53 @@
         </form>
     </div>
 </div>
+
+<!-- CSV Help Modal -->
+<div id="csv-help-modal" class="popup-overlay" style="display:none;">
+    <div class="duplicate-code-popup" style="max-width:760px;">
+        <button class="popup-close-x" onclick="hideCsvHelp()">×</button>
+        <div class="popup-content">
+            <h3>CSV Import Format</h3>
+            <p id="csv-help-text" style="text-align:left; color:var(--ui-text);"></p>
+            <div style="margin-top:12px; text-align:center;">
+                <button class="popup-close-button" onclick="hideCsvHelp()">Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function downloadSampleCsv(scope) {
+        let headers = ['name','ort','beschreibung','filter1','filter2','filter3','anschaffungsjahr','anschaffungskosten','code_4','anzahl','isbn','item_type'];
+        let exampleInventory = ['Projektor','Aula','HD-Projektor für Präsentationen','Medien','Technik','','2019','450.00','PRJ-001','1','','general'];
+        let exampleLibrary = ['Harry Potter und der Stein der Weisen','Bibliothek','Kinderbuch von J.K. Rowling','Belletristik','','','1997','12.99','HP-001','1','9783551354013','book'];
+        let row = exampleInventory;
+        if (scope === 'library') row = exampleLibrary;
+
+        const csvContent = [headers.join(','), row.map(v=> '"'+String(v).replace(/"/g,'""')+'"').join(',')].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = scope === 'library' ? 'sample_library_import.csv' : 'sample_inventory_import.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function showCsvHelp(scope) {
+        const invText = `Erlaubte Spalten (Reihenfolge beliebig): name, ort, beschreibung, filter1, filter2, filter3, anschaffungsjahr, anschaffungskosten, code_4, anzahl, isbn, item_type.\n\n` +
+            `Hinweise:\n- Trenne Felder per Komma. Textfelder sollten in Anführungszeichen stehen, wenn sie Kommas enthalten.\n- Für Bibliotheks-Import ist eine gültige ISBN pro Zeile erforderlich (ISBN-10 oder ISBN-13).\n- 'code_4' kann leer bleiben; das System erzeugt in diesem Fall Codes.\n- 'anzahl' legt die Anzahl physischer Exemplare für diese Zeile fest.`;
+        const libText = invText;
+        document.getElementById('csv-help-text').textContent = scope === 'library' ? libText : invText;
+        document.getElementById('csv-help-modal').style.display = 'flex';
+    }
+
+    function hideCsvHelp() {
+        document.getElementById('csv-help-modal').style.display = 'none';
+    }
+</script>
 
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>

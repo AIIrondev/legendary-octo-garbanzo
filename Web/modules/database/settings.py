@@ -155,10 +155,33 @@ def _get_int_env(name, default):
         return int(default)
 
 def get_version():
-    with open(os.path.join(BASE_DIR, '..', '..', '..', '.docker-build.env'), 'r') as f:
-        for l in f:
-            if l.startswith('INVENTAR_APP_IMAGE='):
-                return l.split(':', 1)[1].strip()
+    # Prefer an explicit release marker if present (created by release process).
+    project_root = os.path.abspath(os.path.join(BASE_DIR, '..', '..', '..'))
+    release_file = os.path.join(project_root, '.release-version')
+    try:
+        if os.path.isfile(release_file):
+            with open(release_file, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val
+    except Exception:
+        pass
+
+    # Fallback to .docker-build.env (legacy behaviour)
+    env_path = os.path.join(project_root, '.docker-build.env')
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for l in f:
+                if l.startswith('INVENTAR_APP_IMAGE='):
+                    return l.split(':', 1)[1].strip()
+    except Exception:
+        pass
+
+    # Final fallback: use config.json value or packaged default
+    try:
+        return _get(_conf, ['ver'], DEFAULTS.get('version', '0.0.0'))
+    except Exception:
+        return DEFAULTS.get('version', '0.0.0')
 
 # Expose settings
 APP_VERSION = get_version()

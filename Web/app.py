@@ -2028,11 +2028,6 @@ def _upload_excel_items(scope='inventory'):
         flash('Nicht angemeldet.', 'error')
         return redirect(url_for('login'))
 
-    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
-    if not _action_access_allowed(permissions, 'can_insert'):
-        flash('Einfüge-Rechte erforderlich.', 'error')
-        return redirect(url_for('home'))
-
     is_library_scope = scope == 'library'
     file_field = 'library_excel' if is_library_scope else 'inventory_excel'
     fallback_route = 'library_admin' if is_library_scope else 'upload_admin'
@@ -2044,8 +2039,19 @@ def _upload_excel_items(scope='inventory'):
 
     excel_file = request.files.get(file_field)
     if not excel_file or not excel_file.filename:
-        flash('Bitte eine Excel-Datei auswählen.', 'error')
+        flash('Bitte eine Excel- oder CSV-Datei auswählen.', 'error')
         return redirect(url_for(fallback_route))
+
+    # Permission handling: allow authenticated normal users to import CSV for inventory scope
+    permissions = _get_current_user_permissions() or us.build_default_permission_payload('standard_user')
+    has_insert = _action_access_allowed(permissions, 'can_insert')
+    filename_lower = (excel_file.filename or '').lower()
+    is_csv = filename_lower.endswith('.csv')
+    if not has_insert:
+        # Allow CSV imports for authenticated non-admin users only for inventory (non-library)
+        if not (is_csv and not is_library_scope and 'username' in session):
+            flash('Einfüge-Rechte erforderlich.', 'error')
+            return redirect(url_for('home'))
 
     filename_lower = excel_file.filename.lower()
     if not filename_lower.endswith(('.xlsx', '.csv')):
@@ -2349,6 +2355,19 @@ def _upload_excel_items(scope='inventory'):
         flash(f'Excel-Import abgeschlossen: {created_total} Artikel importiert, {len(import_errors)} Zeilen fehlgeschlagen.', 'warning')
     else:
         flash(f'Excel-Import erfolgreich: {created_total} Artikel importiert.', 'success')
+    if is_library_scope:
+        try:
+            _append_audit_event_standalone(
+                event_type='library_bulk_import',
+                payload={
+                    'channel': 'upload_library_excel',
+                    'created_total': created_total,
+                    'processed_rows': len(planned_rows),
+                }
+            )
+        except Exception:
+            app.logger.warning('Audit write failed for library_bulk_import')
+
     return redirect(url_for('home_admin'))
 
 
@@ -3056,20 +3075,13 @@ def api_library_items():
 
         total_count = items_db.count_documents(query)
         
-        library_items = list(
-            items_db.find(query, projection)
-            .sort([('Name', 1), ('_id', 1)])
-            .skip(offset)
-            .limit(limit)
-        )
+        raw_items = list(items_db.find(query, projection).sort([('Name', 1), ('_id', 1)]).skip(offset).limit(limit))
 
-        item_ids = [str(item.get('_id')) for item in library_items if item.get('_id')]
+        # Build maps for grouping by parent-child relationship (grouped sub-items)
+        all_ids = [str(itm.get('_id')) for itm in raw_items if itm.get('_id')]
         active_records = []
-        if item_ids:
-            active_records = list(ausleihungen_db.find(
-                {'Item': {'$in': item_ids}, 'Status': 'active'},
-                {'Item': 1, 'User': 1}
-            ))
+        if all_ids:
+            active_records = list(ausleihungen_db.find({'Item': {'$in': all_ids}, 'Status': 'active'}, {'Item': 1, 'User': 1}))
 
         active_item_ids = set()
         active_user_by_item = {}
@@ -3080,32 +3092,115 @@ def api_library_items():
             active_item_ids.add(item_id)
             if item_id not in active_user_by_item:
                 active_user_by_item[item_id] = rec.get('User', '')
-        
-        client.close()
-        
-        # Convert ObjectId to string for JSON serialization
-        for item in library_items:
-            item_id = str(item['_id'])
-            item['_id'] = item_id
-            if item.get('Code4') in (None, '') and item.get('Code_4') not in (None, ''):
-                item['Code4'] = item.get('Code_4')
 
-            condition_value = str(item.get('Condition', '')).strip().lower()
-            has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
-            has_active_borrow = item_id in active_item_ids
+        # Organize children under their parent (ParentItemId) and prepare parent list
+        items_by_id = {}
+        children_by_parent = {}
+        parent_ids = set()
+        for itm in raw_items:
+            iid = str(itm.get('_id'))
+            items_by_id[iid] = itm
+            parent = str(itm.get('ParentItemId') or '')
+            if parent:
+                children_by_parent.setdefault(parent, []).append(itm)
+            else:
+                parent_ids.add(iid)
+
+        # Build aggregated list: for each parent id, include parent + children as one entry
+        aggregated = []
+        processed = set()
+        for pid in list(parent_ids):
+            parent = items_by_id.get(pid)
+            if not parent:
+                continue
+            children = children_by_parent.get(pid, [])
+
+            # Compute grouped counts and availability
+            grouped_units = [parent] + children
+            grouped_all_codes = []
+            available_units = []
+            for unit in grouped_units:
+                unit_id = str(unit.get('_id'))
+                code = unit.get('Code_4') or unit.get('Code4') or ''
+                if code:
+                    grouped_all_codes.append(code)
+                if unit.get('Verfuegbar', True):
+                    available_units.append({'id': unit_id, 'code': code, 'label': f"{code} ({unit.get('Name','')})"})
+
+            # Convert ObjectId to string for JSON serialization on parent doc copy
+            doc = dict(parent)
+            doc['_id'] = str(parent.get('_id'))
+            if doc.get('Code4') in (None, '') and doc.get('Code_4') not in (None, ''):
+                doc['Code4'] = doc.get('Code_4')
+
+            condition_value = str(doc.get('Condition', '')).strip().lower()
+            has_damage = bool(doc.get('HasDamage')) or condition_value == 'destroyed'
+            has_active_borrow = any(str(unit.get('_id')) in active_item_ids for unit in grouped_units)
 
             if has_damage and not has_active_borrow:
-                item['LibraryDisplayStatus'] = 'damaged'
-            elif has_active_borrow or item.get('Verfuegbar') is False:
-                item['LibraryDisplayStatus'] = 'borrowed'
+                doc['LibraryDisplayStatus'] = 'damaged'
+            elif has_active_borrow or doc.get('Verfuegbar') is False:
+                doc['LibraryDisplayStatus'] = 'borrowed'
             else:
-                item['LibraryDisplayStatus'] = 'available'
+                doc['LibraryDisplayStatus'] = 'available'
 
-            item['BorrowedBy'] = active_user_by_item.get(item_id) or item.get('User', '')
+            # Determine borrower: prefer any active borrow on group units, fallback to parent.User
+            borrower = active_user_by_item.get(str(parent.get('_id'))) or ''
+            if not borrower:
+                for unit in grouped_units:
+                    u_id = str(unit.get('_id'))
+                    if active_user_by_item.get(u_id):
+                        borrower = active_user_by_item.get(u_id)
+                        break
+            doc['BorrowedBy'] = borrower or doc.get('User', '')
 
-        count = len(library_items)
+            doc['GroupedDisplayCount'] = 1 + len(children)
+            doc['Quantity'] = doc['GroupedDisplayCount']
+            doc['AvailableGroupedCount'] = len(available_units)
+            doc['GroupedAvailableUnits'] = available_units
+            doc['GroupedAllCodes'] = grouped_all_codes
+
+            aggregated.append(doc)
+            processed.add(pid)
+            for c in children:
+                processed.add(str(c.get('_id')))
+
+        # Include any remaining items (orphans or standalones not parented)
+        for itm in raw_items:
+            iid = str(itm.get('_id'))
+            if iid in processed:
+                continue
+            doc = dict(itm)
+            doc['_id'] = iid
+            if doc.get('Code4') in (None, '') and doc.get('Code_4') not in (None, ''):
+                doc['Code4'] = doc.get('Code_4')
+
+            condition_value = str(doc.get('Condition', '')).strip().lower()
+            has_damage = bool(doc.get('HasDamage')) or condition_value == 'destroyed'
+            has_active_borrow = iid in active_item_ids
+
+            if has_damage and not has_active_borrow:
+                doc['LibraryDisplayStatus'] = 'damaged'
+            elif has_active_borrow or doc.get('Verfuegbar') is False:
+                doc['LibraryDisplayStatus'] = 'borrowed'
+            else:
+                doc['LibraryDisplayStatus'] = 'available'
+
+            doc['BorrowedBy'] = active_user_by_item.get(iid) or doc.get('User', '')
+            # Single item: grouped count = 1
+            doc['GroupedDisplayCount'] = 1
+            doc['Quantity'] = 1
+            doc['AvailableGroupedCount'] = 1 if doc.get('Verfuegbar', True) else 0
+            doc['GroupedAvailableUnits'] = [{'id': iid, 'code': doc.get('Code_4') or doc.get('Code4') or '', 'label': f"{doc.get('Code_4') or doc.get('Code4') or '-'} ({doc.get('Name','')})"}] if doc.get('Verfuegbar', True) else []
+            doc['GroupedAllCodes'] = [doc.get('Code_4') or doc.get('Code4') or '']
+
+            aggregated.append(doc)
+
+        client.close()
+
+        count = len(aggregated)
         return jsonify({
-            'items': library_items,
+            'items': aggregated,
             'offset': offset,
             'limit': limit,
             'count': count,
@@ -3390,6 +3485,19 @@ def api_library_item_update(item_id):
             update_doc['ISBN'] = ''
 
         items_col.update_one({'_id': ObjectId(item_id)}, {'$set': update_doc})
+        try:
+            _append_audit_event_standalone(
+                event_type='library_item_updated',
+                payload={
+                    'channel': 'library_table',
+                    'item_id': item_id,
+                    'updated_fields': list(update_doc.keys()),
+                    'isbn': update_doc.get('ISBN', ''),
+                }
+            )
+        except Exception:
+            app.logger.warning('Audit write failed for library_item_updated')
+
         client.close()
 
         return jsonify({'ok': True, 'message': 'Bibliotheksmedium aktualisiert.'}), 200
@@ -5609,7 +5717,21 @@ def upload_item():
     # Create QR code for the item (deactivated)
     # create_qr_code(str(item_id))
         success_msg = f'Element wurde erfolgreich hinzugefügt ({len(created_item_ids)} erstellt)'
-        
+        if upload_mode == 'library':
+            try:
+                _append_audit_event_standalone(
+                    event_type='library_item_created',
+                    payload={
+                        'channel': 'upload_admin',
+                        'created_item_ids': created_item_ids,
+                        'created_count': len(created_item_ids),
+                        'isbn': item_isbn,
+                        'codes': created_item_ids and [it.get_item(cid).get('Code_4') for cid in created_item_ids] or []
+                    }
+                )
+            except Exception:
+                app.logger.warning('Audit write failed for library_item_created')
+
         if is_mobile:
             return jsonify({
                 'success': True, 
@@ -6160,6 +6282,20 @@ def report_damage(id):
         except Exception as log_err:
             app.logger.warning(f"Damage report log write failed for item {id}: {log_err}")
 
+        try:
+            _append_audit_event_standalone(
+                event_type='item_damage_reported',
+                payload={
+                    'item_id': id,
+                    'item_name': item_doc.get('Name', ''),
+                    'reported_by': session.get('username'),
+                    'description': description,
+                    'damage_count': damage_count,
+                }
+            )
+        except Exception:
+            app.logger.warning('Audit write failed for item_damage_reported')
+
         return jsonify({
             'success': True,
             'message': 'Schaden erfolgreich erfasst.',
@@ -6241,6 +6377,18 @@ def mark_damage_repaired(id):
             })
         except Exception as log_err:
             app.logger.warning(f"Damage repair log write failed for item {id}: {log_err}")
+
+        try:
+            _append_audit_event_standalone(
+                event_type='item_damage_repaired',
+                payload={
+                    'item_id': id,
+                    'resolved_by': session.get('username'),
+                    'resolved_count': len(open_reports),
+                }
+            )
+        except Exception:
+            app.logger.warning('Audit write failed for item_damage_repaired')
 
         return jsonify({
             'success': True,
