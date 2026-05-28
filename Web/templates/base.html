@@ -930,6 +930,29 @@
                 box-shadow: none;
             }
 
+            .navbar-nav .nav-item.dropdown > .nav-link.dropdown-toggle,
+            .user-menu-wrap > .user-menu-btn {
+                display: none !important;
+            }
+
+            .navbar-nav .nav-item.dropdown > .dropdown-menu,
+            .user-menu-wrap > .dropdown-menu {
+                display: block !important;
+                position: static !important;
+                float: none !important;
+                transform: none !important;
+                inset: auto !important;
+                width: 100%;
+            }
+
+            .navbar-nav .nav-item.dropdown > .dropdown-menu {
+                margin-top: 0;
+            }
+
+            .user-menu-wrap > .dropdown-menu {
+                margin-top: 8px;
+            }
+
             .navbar-nav .dropdown-item {
                 color: rgba(255, 255, 255, 0.9);
                 padding: 12px 16px;
@@ -974,6 +997,7 @@
                 order: 3;
                 width: 100%;
                 margin: 0;
+                display: none !important;
             }
 
             .function-search-form {
@@ -2055,42 +2079,9 @@
                         return;
                     }
 
-                    // Mobile menu is collapsed: avoid hiding links preemptively.
-                    if (navCollapse && !navCollapse.classList.contains('show')) {
-                        restoreAllNavItems();
-                        return;
-                    }
-
+                    // Mobile burger menu should show the full list without overflow pruning.
                     restoreAllNavItems();
-
-                    const hiddenSources = [];
-                    let candidates = collectTopLevelNavSources();
-                    const overflowBuffer = 12;
-
-                    while (isNavOverflowing(overflowBuffer) && candidates.length > 0) {
-                        const toHide = pickNextNavItemToHide(candidates);
-                        if (!toHide) {
-                            break;
-                        }
-                        toHide.style.display = 'none';
-                        hiddenSources.unshift(toHide);
-                        candidates = collectTopLevelNavSources();
-                    }
-
-                    rebuildOverflowControl(hiddenSources);
-
-                    // One final pass in case the overflow menu label/count itself changed row width.
-                    candidates = collectTopLevelNavSources();
-                    while (isNavOverflowing(overflowBuffer) && candidates.length > 0) {
-                        const toHide = pickNextNavItemToHide(candidates);
-                        if (!toHide) {
-                            break;
-                        }
-                        toHide.style.display = 'none';
-                        hiddenSources.unshift(toHide);
-                        rebuildOverflowControl(hiddenSources);
-                        candidates = collectTopLevelNavSources();
-                    }
+                    return;
                 }
 
                 let resizeTimer = null;

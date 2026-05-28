@@ -4801,16 +4801,15 @@ def upload_item():
 
     item_isbn = ''
     item_type = 'general'
-    if cfg.MODULES.is_enabled('library'):
-        item_isbn = normalize_and_validate_isbn(isbn_raw)
-        if isbn_raw and not item_isbn:
-            error_msg = 'Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden.'
-            if is_mobile:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'error')
-            return redirect(url_for(success_redirect_endpoint))
-        if item_isbn:
+    if cfg.MODULES.is_enabled('library') and isbn_raw:
+        normalized_isbn = normalize_and_validate_isbn(isbn_raw)
+        if normalized_isbn:
+            item_isbn = normalized_isbn
             item_type = 'book'
+        else:
+            item_isbn = isbn_raw
+            if upload_mode == 'library':
+                item_type = 'book'
 
     if upload_mode == 'library':
         if not cfg.MODULES.is_enabled('library'):
@@ -4819,8 +4818,8 @@ def upload_item():
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
             return redirect(url_for(success_redirect_endpoint))
-        if not item_isbn:
-            error_msg = 'Für Bücher ist eine gültige ISBN erforderlich.'
+        if not isbn_raw:
+            error_msg = 'Für Bücher ist eine ISBN oder ein Barcode erforderlich.'
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')

@@ -883,7 +883,7 @@
             <div class="form-group">
                 <label for="individual_codes">Einzelcodes (optional, je Zeile ein Code)</label>
                 <textarea id="individual_codes" name="individual_codes" rows="4" placeholder="z.B.\nABC-001\nABC-002"></textarea>
-                <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Scanner-Eingaben werden bei Mehrfachanzahl automatisch hier angefügt.</small>
+                <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Der Scanner setzt immer zuerst den Basis-Code im Feld oben; weitere Einzelcodes können hier bei Bedarf manuell ergänzt werden.</small>
             </div>
             <!-- Image upload (hidden for library mode) -->
             <div class="form-group" {% if show_library_features %}style="display:none;"{% endif %}>
@@ -904,7 +904,7 @@
                     <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Bild abrufen</button>
                 </div>
                 <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
-                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;">Scannen oder manuell eingeben. Das Buchcover wird automatisch heruntergeladen.</small>
+                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;">Scannen oder manuell eingeben. Gültige ISBNs helfen beim Abruf von Buchdaten, andere Codes werden trotzdem akzeptiert.</small>
                 <div id="book-info-container" class="book-info-container"></div>
             </div>
             
@@ -965,33 +965,30 @@
         return '';
     }
 
-    function appendIndividualCode(scannedCode) {
-        const textarea = document.getElementById('individual_codes');
-        const itemCountInput = document.getElementById('item_count');
-        if (!textarea || !itemCountInput) return false;
+    function updateIsbnLiveValidation() {
+        const isbnField = document.getElementById('isbn');
+        const statusEl = document.getElementById('isbn-scan-status');
+        if (!isbnField || !statusEl) return;
 
-        const itemCount = Math.max(1, parseInt(itemCountInput.value || '1', 10));
-        if (itemCount <= 1) return false;
+        const rawValue = isbnField.value.trim();
+        isbnField.classList.remove('code-valid', 'code-invalid');
 
-        const existing = textarea.value
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(Boolean);
-
-        if (existing.includes(scannedCode)) {
-            setCode4ScanStatus(`Code ${scannedCode} ist bereits eingetragen.`, true);
-            return true;
+        if (!rawValue) {
+            statusEl.textContent = 'Scannen oder manuell eingeben. Gültige ISBNs helfen beim Abruf von Buchdaten, andere Codes werden trotzdem akzeptiert.';
+            statusEl.style.color = '#666';
+            return;
         }
 
-        if (existing.length >= itemCount) {
-            setCode4ScanStatus('Es sind bereits genug Einzelcodes für die gewählte Anzahl eingetragen.', true);
-            return true;
+        if (normalizeIsbnClient(rawValue)) {
+            isbnField.classList.add('code-valid');
+            statusEl.textContent = 'Gültiges ISBN-Format erkannt. Der Wert kann gespeichert werden.';
+            statusEl.style.color = '#666';
+            return;
         }
 
-        existing.push(scannedCode);
-        textarea.value = existing.join('\n');
-        setCode4ScanStatus(`Code ${scannedCode} hinzugefügt (${existing.length}/${itemCount}).`);
-        return true;
+        isbnField.classList.add('code-invalid');
+        statusEl.textContent = 'Kein gültiges ISBN-10/13-Format erkannt. Der Wert wird trotzdem akzeptiert.';
+        statusEl.style.color = '#b00020';
     }
 
     function startCode4Scanner() {
@@ -1027,7 +1024,7 @@
             rememberLastUsedCamera: true
         });
         code4ScannerRunning = true;
-        setCode4ScanStatus('Scanner läuft. Mehrere Codes nacheinander möglich.');
+        setCode4ScanStatus('Scanner läuft. Der Scan wird im Basis-Codefeld übernommen.');
 
         code4ScannerInstance.render((decodedText) => {
             const scannedCode = String(decodedText || '').trim();
@@ -1040,12 +1037,9 @@
             code4LastScanned = scannedCode;
             code4LastScannedAt = now;
 
-            const usedForIndividual = appendIndividualCode(scannedCode);
-            if (!usedForIndividual) {
-                codeField.value = scannedCode;
-                validateCodeField(codeField);
-                setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
-            }
+            codeField.value = scannedCode;
+            validateCodeField(codeField);
+            setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
         }, () => {});
     }
 
@@ -1094,21 +1088,23 @@
             if (!scannedCode) return;
 
             const normalizedIsbn = normalizeIsbnClient(scannedCode);
-            if (!normalizedIsbn) {
-                setIsbnScanStatus('Kein gültiger ISBN-Barcode erkannt. Bitte erneut scannen.', true);
-                return;
+            isbnField.value = normalizedIsbn || scannedCode;
+            updateIsbnLiveValidation();
+            if (normalizedIsbn) {
+                setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
+            } else {
+                setIsbnScanStatus('Kein gültiges ISBN-Format erkannt, der gescannte Wert bleibt aber im Feld.', true);
             }
-
-            isbnField.value = normalizedIsbn;
-            setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
 
             isbnScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
             scanButton.textContent = 'ISBN scannen';
             isbnScannerRunning = false;
 
-            // Automatically load book metadata after scan.
-            fetchBookInfo('upload');
+            if (normalizedIsbn) {
+                // Automatically load book metadata after a valid ISBN scan.
+                fetchBookInfo('upload');
+            }
         }, () => {});
     }
 
@@ -1231,7 +1227,7 @@
         const isbn = normalizeIsbnClient(isbnField.value);
         
         if (!isbn) {
-            alert('Bitte eine gültige ISBN-10 oder ISBN-13 eingeben.');
+            infoContainer.innerHTML = '<div class="error-message">Bitte geben Sie eine ISBN oder einen Barcode ein.</div>';
             return;
         }
         
@@ -1644,6 +1640,13 @@
         const scanIsbnBtn = document.getElementById('scan-isbn-btn');
         if (scanIsbnBtn) {
             scanIsbnBtn.addEventListener('click', startIsbnScanner);
+        }
+
+        const isbnField = document.getElementById('isbn');
+        if (isbnField) {
+            isbnField.addEventListener('input', updateIsbnLiveValidation);
+            isbnField.addEventListener('blur', updateIsbnLiveValidation);
+            updateIsbnLiveValidation();
         }
         
         // Setup add new location button
