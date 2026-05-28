@@ -74,6 +74,7 @@ import mimetypes
 import subprocess
 from Web.modules.inventarsystem.data_protection import (
     decrypt_document_fields,
+    decrypt_text,
     encrypt_document_fields,
     encrypt_soft_deleted_media_pack,
 )
@@ -153,6 +154,119 @@ def _decrypt_student_card_doc(card_doc):
     if not card_doc:
         return card_doc
     return decrypt_document_fields(card_doc, STUDENT_CARD_ENCRYPTED_FIELDS)
+
+
+def _parse_and_increment_class(klass, max_class=13, graduate_label=''):
+    """Parse a class string like '7A' or '10' and increment the numeric part.
+    If the numeric part would exceed max_class, return graduate_label (or empty).
+    Leaves non-numeric / unparsable values unchanged.
+    """
+    if not klass:
+        return klass
+    s = str(klass).strip()
+    m = re.match(r"^\s*(\d{1,2})(\D.*)?$", s)
+    if not m:
+        return s
+    try:
+        num = int(m.group(1))
+    except Exception:
+        return s
+    suffix = m.group(2) or ''
+    new_num = num + 1
+    if max_class is not None and new_num > int(max_class):
+        return graduate_label or ''
+    return f"{new_num}{suffix}"
+
+
+def rollover_student_card_classes(dry_run=False, *, max_class=None, graduate_label=''):
+    """Increment class years on all student cards.
+
+    Returns a summary dict with counts.
+    """
+    client = None
+    updated = 0
+    examined = 0
+    failures = 0
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        col = db['student_cards']
+        now = datetime.datetime.now()
+
+        cursor = list(col.find({}, {'Klasse': 1}))
+        for doc in cursor:
+            examined += 1
+            try:
+                # Decrypt to work on plain class string
+                plain = dict(doc)
+                plain = _decrypt_student_card_doc(plain)
+                orig = (plain.get('Klasse') or '').strip()
+                new_class = _parse_and_increment_class(orig, max_class=max_class, graduate_label=graduate_label)
+                if new_class != orig:
+                    if dry_run:
+                        updated += 1
+                        continue
+                    payload = {'Klasse': new_class}
+                    encrypted = encrypt_document_fields(payload, STUDENT_CARD_ENCRYPTED_FIELDS)
+                    update_doc = {'Klasse': encrypted.get('Klasse'), 'Aktualisiert': now}
+                    col.update_one({'_id': doc.get('_id')}, {'$set': update_doc})
+                    updated += 1
+            except Exception:
+                failures += 1
+                app.logger.exception('Failed to process student card rollover for %s', doc.get('_id'))
+    finally:
+        if client:
+            client.close()
+
+    summary = {'examined': examined, 'updated': updated, 'failures': failures, 'dry_run': bool(dry_run)}
+    try:
+        _append_audit_event_standalone('student_cards_rollover', summary)
+    except Exception:
+        app.logger.warning('Audit write failed for student_cards_rollover')
+    return summary
+
+
+# Admin route to trigger rollover manually
+@app.route('/admin/trigger_school_year_rollover', methods=['POST'])
+def admin_trigger_school_year_rollover():
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'message': 'Administratorrechte erforderlich.'}), 403
+
+    max_class = int(os.getenv('INVENTAR_SCHOOL_MAX_CLASS', '13'))
+    graduate_label = os.getenv('INVENTAR_SCHOOL_GRADUATE_LABEL', '')
+    dry = request.args.get('dry', '0') in ('1', 'true', 'yes')
+    summary = rollover_student_card_classes(dry_run=dry, max_class=max_class, graduate_label=graduate_label)
+    return jsonify({'ok': True, 'summary': summary}), 200
+
+
+# Schedule annual rollover job using APScheduler (configurable via env)
+try:
+        if cfg.SCHEDULER_ENABLED:
+            _rollover_month = getattr(cfg, 'SCHOOL_ROLLOVER_MONTH', 9)
+            _rollover_day = getattr(cfg, 'SCHOOL_ROLLOVER_DAY', 1)
+            _rollover_hour = getattr(cfg, 'SCHOOL_ROLLOVER_HOUR', 3)
+            _rollover_minute = getattr(cfg, 'SCHOOL_ROLLOVER_MIN', 0)
+            _rollover_max_class = getattr(cfg, 'SCHOOL_ROLLOVER_MAX_CLASS', 13)
+            _rollover_grad_label = getattr(cfg, 'SCHOOL_ROLLOVER_GRADUATE_LABEL', '')
+
+            _scheduler = BackgroundScheduler()
+            # Use a cron-style yearly job on the configured month/day
+            _scheduler.add_job(
+                func=lambda: rollover_student_card_classes(dry_run=False, max_class=_rollover_max_class, graduate_label=_rollover_grad_label),
+                trigger='cron',
+                month=_rollover_month,
+                day=_rollover_day,
+                hour=_rollover_hour,
+                minute=_rollover_minute,
+                id='school_year_rollover',
+                replace_existing=True
+            )
+            _scheduler.start()
+            app.logger.info('Scheduled annual school year rollover: %s-%s %s:%s', _rollover_month, _rollover_day, _rollover_hour, _rollover_minute)
+except Exception as e:
+    app.logger.warning('Failed to schedule school year rollover: %s', e)
 
 # Thumbnail sizes
 THUMBNAIL_SIZE = cfg.THUMBNAIL_SIZE
@@ -3154,22 +3268,33 @@ def api_library_items():
             has_damage = bool(doc.get('HasDamage')) or condition_value == 'destroyed'
             has_active_borrow = any(str(unit.get('_id')) in active_item_ids for unit in grouped_units)
 
-            if has_damage and not has_active_borrow:
+            # Prefer 'available' when any grouped unit is available
+            if has_damage and len(available_units) == 0:
                 doc['LibraryDisplayStatus'] = 'damaged'
+            elif len(available_units) > 0:
+                doc['LibraryDisplayStatus'] = 'available'
             elif has_active_borrow or doc.get('Verfuegbar') is False:
                 doc['LibraryDisplayStatus'] = 'borrowed'
             else:
                 doc['LibraryDisplayStatus'] = 'available'
 
-            # Determine borrower: prefer any active borrow on group units, fallback to parent.User
-            borrower = active_user_by_item.get(str(parent.get('_id'))) or ''
+            # Determine borrower: prefer any active borrow on grouped units, fallback to parent.User
+            borrower = ''
+            for unit in grouped_units:
+                u_id = str(unit.get('_id'))
+                if active_user_by_item.get(u_id):
+                    borrower = active_user_by_item.get(u_id)
+                    break
             if not borrower:
-                for unit in grouped_units:
-                    u_id = str(unit.get('_id'))
-                    if active_user_by_item.get(u_id):
-                        borrower = active_user_by_item.get(u_id)
-                        break
-            doc['BorrowedBy'] = borrower or doc.get('User', '')
+                borrower = doc.get('User', '')
+            # Decrypt if value is encrypted (decrypt_text returns original if not encrypted)
+            try:
+                borrower = decrypt_text(borrower) if borrower else ''
+            except Exception:
+                # Fallback: keep original string if decryption fails
+                borrower = borrower or ''
+
+            doc['BorrowedBy'] = borrower
 
             doc['GroupedDisplayCount'] = 1 + len(children)
             doc['Quantity'] = doc['GroupedDisplayCount']
@@ -3367,28 +3492,82 @@ def api_item_detail(item_id):
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         ausleihungen_col = db['ausleihungen']
+        items_col = db['items']
 
-        active_borrow = ausleihungen_col.find_one(
-            {'Item': str(item.get('_id')), 'Status': 'active'},
-            {'User': 1}
-        )
-        client.close()
+        # Determine parent/group id (if this is a child, use its ParentItemId)
+        parent_id = str(item.get('ParentItemId') or str(item.get('_id')))
 
+        # Load all group units (parent + children)
+        group_units_cursor = items_col.find({
+            '$or': [
+                {'_id': ObjectId(parent_id)},
+                {'ParentItemId': parent_id}
+            ],
+            'Deleted': {'$ne': True}
+        })
+        group_units = list(group_units_cursor)
+        if not group_units:
+            # Fallback: just use the single item
+            group_units = [item]
+
+        group_unit_ids = [str(u.get('_id')) for u in group_units if u.get('_id')]
+
+        # Fetch all borrow records for the whole group (active + history)
+        borrow_records = list(ausleihungen_col.find({'Item': {'$in': group_unit_ids}}).sort('Start', -1))
+
+        # Compute availability and damage state across group
+        available_units = [u for u in group_units if u.get('Verfuegbar', True)]
         condition_value = str(item.get('Condition', '')).strip().lower()
         has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
-        if has_damage and not active_borrow:
+
+        if has_damage and len(available_units) == 0:
             status_label = 'Defekt/Zerstört'
-        elif item.get('Verfuegbar') is False or active_borrow:
+        elif len(available_units) > 0:
+            status_label = 'Verfügbar'
+        elif any(r.get('Status') == 'active' for r in borrow_records):
             status_label = 'Ausgeliehen'
         else:
             status_label = 'Verfügbar'
 
+        # Prefer the most recent active borrower across the group
         borrower_value = ''
-        if active_borrow:
-            borrower_value = active_borrow.get('User', '')
-        elif item.get('User'):
-            borrower_value = item.get('User')
-        
+        for rec in borrow_records:
+            if rec.get('Status') == 'active' and rec.get('User'):
+                try:
+                    borrower_value = decrypt_text(rec.get('User'))
+                except Exception:
+                    borrower_value = rec.get('User')
+                break
+        if not borrower_value and item.get('User'):
+            try:
+                borrower_value = decrypt_text(item.get('User'))
+            except Exception:
+                borrower_value = item.get('User')
+
+        # Helper to format datetimes
+        def fmt_dt(dt):
+            try:
+                return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+            except Exception:
+                return str(dt) if dt else ''
+
+        # Build HTML for borrow records (if any)
+        borrows_html = ''
+        if borrow_records:
+            rows = []
+            for rec in borrow_records:
+                user_raw = rec.get('User') or ''
+                try:
+                    user = decrypt_text(user_raw) if user_raw else ''
+                except Exception:
+                    user = user_raw
+                status = rec.get('Status', '')
+                start = fmt_dt(rec.get('Start'))
+                end = fmt_dt(rec.get('End'))
+                notes = html.escape(str(rec.get('Notes') or ''))
+                rows.append(f"<li><strong>{html.escape(user or '-')}</strong> — {html.escape(status)} — {html.escape(start)} → {html.escape(end)}{(' — ' + notes) if notes else ''}</li>")
+            borrows_html = f"<h3>Ausleihhistorie</h3><ul>{''.join(rows)}</ul>"
+
         # Basic detail HTML
         detail_html = f"""
         <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
@@ -3397,7 +3576,10 @@ def api_item_detail(item_id):
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
         <p><strong>Status:</strong> {html.escape(status_label)}</p>
         {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
+        {borrows_html}
         """
+        client.close()
+        return detail_html, 200
         return detail_html, 200
     except Exception as e:
         app.logger.error(f"Error fetching item detail: {e}")

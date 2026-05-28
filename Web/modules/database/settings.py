@@ -71,6 +71,15 @@ DEFAULTS = {
         'logo_path': '',
         'logo_thumb': '',
         'logo_thumb': '',
+        # School-level rollover configuration for advancing class years
+        'rollover': {
+            'month': 9,
+            'day': 1,
+            'hour': 3,
+            'minute': 0,
+            'max_class': 13,
+            'graduate_label': ''
+        },
     },
     'schoolPeriods': {
         "1": {"start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)"},
@@ -224,6 +233,15 @@ SSL_KEY = _get(_conf, ['ssl', 'key'], DEFAULTS['ssl']['key'])
 # School periods
 SCHOOL_PERIODS = _get(_conf, ['schoolPeriods'], DEFAULTS['schoolPeriods'])
 SCHOOL_INFO_DEFAULT = _get(_conf, ['school'], DEFAULTS['school'])
+
+# School rollover configuration (can be set in config.json under `school.rollover`)
+SCHOOL_ROLLOVER = _get(_conf, ['school', 'rollover'], DEFAULTS['school'].get('rollover', {}))
+SCHOOL_ROLLOVER_MONTH = int(os.getenv('INVENTAR_SCHOOL_ROLLOVER_MONTH', str(SCHOOL_ROLLOVER.get('month', 9))))
+SCHOOL_ROLLOVER_DAY = int(os.getenv('INVENTAR_SCHOOL_ROLLOVER_DAY', str(SCHOOL_ROLLOVER.get('day', 1))))
+SCHOOL_ROLLOVER_HOUR = int(os.getenv('INVENTAR_SCHOOL_ROLLOVER_HOUR', str(SCHOOL_ROLLOVER.get('hour', 3))))
+SCHOOL_ROLLOVER_MIN = int(os.getenv('INVENTAR_SCHOOL_ROLLOVER_MIN', str(SCHOOL_ROLLOVER.get('minute', 0))))
+SCHOOL_ROLLOVER_MAX_CLASS = int(os.getenv('INVENTAR_SCHOOL_MAX_CLASS', str(SCHOOL_ROLLOVER.get('max_class', 13))))
+SCHOOL_ROLLOVER_GRADUATE_LABEL = os.getenv('INVENTAR_SCHOOL_GRADUATE_LABEL', str(SCHOOL_ROLLOVER.get('graduate_label', '')))
 
 # Optional feature modules
 TENANT_CONFIGS = _get(_conf, ['tenants'], {})
