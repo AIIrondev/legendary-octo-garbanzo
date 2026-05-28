@@ -863,6 +863,16 @@
         setActiveStudentCard(cardId);
 
         const durationInput = (window.prompt('Ausleihdauer in Tagen (optional):') || '').trim();
+        const maxAvailable = Math.max(1, parseInt(selectedItem?.AvailableGroupedCount || selectedItem?.Quantity || 1, 10) || 1);
+        const countPrompt = (window.prompt(`Anzahl ausleihen? (Standard: 1, verfügbar: ${maxAvailable})`, '1') || '').trim();
+        let borrowCount = parseInt(countPrompt || '1', 10);
+        if (!Number.isFinite(borrowCount) || borrowCount < 1) {
+            borrowCount = 1;
+        }
+        if (borrowCount > maxAvailable) {
+            alert(`Es sind nur ${maxAvailable} Exemplar(e) verfügbar.`);
+            return;
+        }
 
         const form = document.createElement('form');
         form.method = 'POST';
@@ -887,6 +897,12 @@
             durationField.value = durationInput;
             form.appendChild(durationField);
         }
+
+        const countField = document.createElement('input');
+        countField.type = 'hidden';
+        countField.name = 'exemplare_count';
+        countField.value = String(borrowCount || 1);
+        form.appendChild(countField);
 
         document.body.appendChild(form);
         form.submit();
