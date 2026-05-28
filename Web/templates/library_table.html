@@ -720,6 +720,7 @@
                         ${actionLabel}
                     </button>
                     ${canEditLibraryItems ? `<button class="button" style="background:#0ea5e9;color:#fff;" onclick="openEditLibraryItem('${item._id}')">Bearbeiten</button>` : ''}
+                    ${canEditLibraryItems ? `<button class="button" style="background:#dc2626;color:#fff; margin-left:6px;" onclick="confirmDeleteLibraryItem('${item._id}')">Löschen</button>` : ''}
                 </td>
             </tr>
                 `;
@@ -736,6 +737,46 @@
             loadMoreRow.style.display = 'flex';
             loadMoreBtn.style.display = 'none';
             loadInfo.textContent = backgroundHint;
+        }
+    }
+
+    // Confirm and call library item delete endpoint
+    function confirmDeleteLibraryItem(itemId) {
+        if (!itemId) return;
+        if (!confirm('Dieses Bibliotheksmedium revisionssicher löschen? Diese Aktion deaktiviert alle zugehörigen Exemplare und archiviert Medien.')) return;
+        deleteLibraryItem(itemId);
+    }
+
+    async function deleteLibraryItem(itemId) {
+        if (!itemId) return;
+        document.body.style.cursor = 'wait';
+        try {
+            const resp = await fetch(`/delete_library_item/${itemId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                credentials: 'same-origin'
+            });
+
+            const ct = resp.headers.get('Content-Type') || '';
+            if (ct.includes('application/json')) {
+                const j = await resp.json();
+                if (!resp.ok || j.ok === false) {
+                    alert(j.message || 'Fehler beim Löschen');
+                } else {
+                    alert(j.message || 'Gelöscht');
+                }
+                loadLibraryItems();
+            } else {
+                // Server redirected to HTML (flash messages). Reload to show state.
+                location.reload();
+            }
+        } catch (e) {
+            console.error('Delete failed', e);
+            alert('Fehler beim Löschen des Elements.');
+        } finally {
+            document.body.style.cursor = '';
         }
     }
 

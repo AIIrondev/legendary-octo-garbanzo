@@ -6035,6 +6035,79 @@ def delete_item(id):
     return redirect(url_for('home_admin'))
 
 
+@app.route('/delete_library_item/<id>', methods=['POST'])
+def delete_library_item(id):
+    """
+    Route to soft-delete library items (books/media) revisionssicher.
+    Requires admin and library module enabled.
+    """
+    if 'username' not in session:
+        flash('Nicht angemeldet.', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Administratorrechte erforderlich.', 'error')
+        return redirect(url_for('login'))
+    if not cfg.MODULES.is_enabled('library'):
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    # Verify item exists and is a library item
+    try:
+        item_doc = it.get_item(id)
+    except Exception:
+        item_doc = None
+
+    if not item_doc:
+        flash('Element nicht gefunden.', 'error')
+        return redirect(url_for('library_admin'))
+
+    if item_doc.get('ItemType') not in LIBRARY_ITEM_TYPES:
+        flash('Element ist kein Bibliotheksmedium.', 'error')
+        return redirect(url_for('library_admin'))
+
+    group_item_ids = it.get_group_item_ids(id)
+    if not group_item_ids:
+        flash('Element nicht gefunden.', 'error')
+        return redirect(url_for('library_admin'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        result = _soft_delete_item_groups(db, [id], session.get('username', ''))
+        success = bool(result.get('success'))
+        soft_deleted = int(result.get('soft_deleted_items', 0))
+        archived_files = int((result.get('archive') or {}).get('archived_files', 0))
+
+        try:
+            _append_audit_event_standalone(
+                event_type='library_item_deleted',
+                payload={
+                    'root_item_id': id,
+                    'group_item_ids': result.get('group_item_ids', []),
+                    'soft_deleted_items': soft_deleted,
+                    'archived_files': archived_files,
+                }
+            )
+        except Exception:
+            app.logger.warning('Audit write failed for library_item_deleted')
+
+    except Exception as e:
+        app.logger.error(f"Error deleting library item {id}: {e}")
+        success = False
+        archived_files = 0
+    finally:
+        if client:
+            client.close()
+
+    if success:
+        flash(f'Bibliotheksmedium revisionssicher deaktiviert ({soft_deleted} Versionen, {archived_files} Mediendateien archiviert).', 'success')
+    else:
+        flash('Fehler beim Löschen des Bibliotheksmediums.', 'error')
+
+    return redirect(url_for('library_admin'))
+
+
 @app.route('/bulk_delete_items', methods=['POST'])
 def bulk_delete_items():
     """Soft-delete multiple selected item groups in one request."""
