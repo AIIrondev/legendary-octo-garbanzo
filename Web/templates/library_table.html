@@ -754,7 +754,8 @@
             const resp = await fetch(`/delete_library_item/${itemId}`, {
                 method: 'POST',
                 headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-CSRF-Token': '{{ csrf_token }}'
                 },
                 credentials: 'same-origin'
             });
@@ -877,6 +878,12 @@
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/ausleihen/${itemId}`;
+
+        const csrfField = document.createElement('input');
+        csrfField.type = 'hidden';
+        csrfField.name = 'csrf_token';
+        csrfField.value = '{{ csrf_token }}';
+        form.appendChild(csrfField);
 
         const cardField = document.createElement('input');
         cardField.type = 'hidden';
