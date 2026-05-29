@@ -5,7 +5,7 @@ import datetime
 import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
 import Web.modules.database.settings as cfg
-from tenant import get_tenant_context
+from Web.tenant import get_tenant_context
 
 
 def _normalize_time_span(time_span):
@@ -49,6 +49,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail)
     id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note)
+    id_str = str(id)
 
     tenant_context = get_tenant_context()
     subdomain = ''
@@ -56,7 +57,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
         subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
 
     host = f"https://{subdomain}.invario.eu" if subdomain else "invario.eu"
-    link = host + "/terminplaner/client" + "?" + "client_id=" + id 
+    link = host + "/terminplaner/client" + "?" + "client_id=" + id_str
     subject = f"Terminanfrage von {user}"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
     if normalized_mail:
