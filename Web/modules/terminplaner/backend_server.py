@@ -2,7 +2,7 @@
 Class for all funktions of the executive -> Lehrer
 """
 import datetime
-import emailservice.email as mail_service
+import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
 import Web.modules.database.settings as cfg
 from tenant import get_tenant_context
