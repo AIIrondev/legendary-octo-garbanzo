@@ -19,6 +19,17 @@
         "cert": "Web/certs/cert.pem",
         "key": "Web/certs/key.pem"
     },
+    "email": {
+        "enabled": false,
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "use_tls": true,
+        "username": "",
+        "password": "",
+        "from_address": "",
+        "default_sender_name": "Invario Inventurprogramm",
+        "timeout_seconds": 30
+    },
     "images": {
         "thumbnail_size": [
             150,

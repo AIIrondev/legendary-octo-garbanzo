@@ -1,1 +1,1 @@
-print("hello")
+# Web.modules package initialization

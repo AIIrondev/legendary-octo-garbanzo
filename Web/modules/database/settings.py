@@ -166,31 +166,17 @@ def _get_int_env(name, default):
 def get_version():
     # Prefer an explicit release marker if present (created by release process).
     project_root = os.path.abspath(os.path.join(BASE_DIR, '..', '..', '..'))
-    release_file = os.path.join(project_root, '.release-version')
+    release_file = os.path.join(project_root, '.docker-build.env')
     try:
         if os.path.isfile(release_file):
             with open(release_file, 'r', encoding='utf-8') as f:
-                val = f.read().strip()
-                if val:
-                    return val
+                var = f.readline()
+                for i in var:
+                    i = i.split(":")
+                    i.pop[0]
+                    return str(i)
     except Exception:
         pass
-
-    # Fallback to .docker-build.env (legacy behaviour)
-    env_path = os.path.join(project_root, '.docker-build.env')
-    try:
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for l in f:
-                if l.startswith('INVENTAR_APP_IMAGE='):
-                    return l.split(':', 1)[1].strip()
-    except Exception:
-        pass
-
-    # Final fallback: use config.json value or packaged default
-    try:
-        return _get(_conf, ['ver'], DEFAULTS.get('version', '0.0.0'))
-    except Exception:
-        return DEFAULTS.get('version', '0.0.0')
 
 # Expose settings
 APP_VERSION = get_version()
@@ -229,6 +215,17 @@ SCHEDULER_ENABLED = _get(_conf, ['scheduler', 'enabled'], DEFAULTS['scheduler'][
 SSL_ENABLED = _get(_conf, ['ssl', 'enabled'], DEFAULTS['ssl']['enabled'])
 SSL_CERT = _get(_conf, ['ssl', 'cert'], DEFAULTS['ssl']['cert'])
 SSL_KEY = _get(_conf, ['ssl', 'key'], DEFAULTS['ssl']['key'])
+
+# Email settings
+EMAIL_ENABLED = _get(_conf, ['email', 'enabled'], False)
+EMAIL_SMTP_HOST = _get(_conf, ['email', 'smtp_host'], 'smtp.gmail.com')
+EMAIL_SMTP_PORT = int(_get(_conf, ['email', 'smtp_port'], 587))
+EMAIL_USE_TLS = bool(_get(_conf, ['email', 'use_tls'], True))
+EMAIL_USERNAME = _get(_conf, ['email', 'username'], '')
+EMAIL_PASSWORD = _get(_conf, ['email', 'password'], '')
+EMAIL_FROM_ADDRESS = _get(_conf, ['email', 'from_address'], EMAIL_USERNAME)
+EMAIL_DEFAULT_SENDER_NAME = _get(_conf, ['email', 'default_sender_name'], 'Inventarsystem')
+EMAIL_TIMEOUT_SECONDS = int(_get(_conf, ['email', 'timeout_seconds'], 30))
 
 # School periods
 SCHOOL_PERIODS = _get(_conf, ['schoolPeriods'], DEFAULTS['schoolPeriods'])
