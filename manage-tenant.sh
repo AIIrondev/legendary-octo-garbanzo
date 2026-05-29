@@ -23,62 +23,70 @@ ensure_runtime_config_json() {
         echo "Warning: moved unexpected directory $config_path to $backup_path"
     fi
 
-    if [ ! -f "$config_path" ]; then
+        FORCE_REMOVE=false
+        if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then
+            FORCE_REMOVE=true
+            TENANT_ID="${3:-}"
+        fi
+
+        if [ -z "$TENANT_ID" ]; then
         cat > "$config_path" <<'EOF'
 {
     "ver": "2.6.5",
-    "dbg": false,
-    "host": "0.0.0.0",
-    "port": 8000,
-    "mongodb": {
-        "host": "mongodb",
-        "port": 27017,
-        "db": "Inventarsystem"
-    },
-    "modules": {
-        "library": {
-            "enabled": false
-        },
-            "terminplan": {
-                "enabled": true
-            },
-        "student_cards": {
-            "enabled": false,
-            "default_borrow_days": 14,
-            "max_borrow_days": 365
-        }
-    }
-}
-EOF
-        echo "Created default runtime config at $config_path"
-    fi
-}
 
-show_help() {
-    echo "Usage: ./manage-tenant.sh [COMMAND] [OPTIONS]"
-    echo ""
-    echo "Commands:"
-    echo "  add <tenant_id> [port]       Add a new tenant (initializes database)"
-    echo "  trial <tenant_id> [port] [days] Create a 7-day demo tenant that auto-deletes after expiry"
-    echo "  remove <tenant_id>           Remove a tenant completely (deletes data!)"
-    echo "  restart-tenant <id>          'Restart' a single tenant (clears cache/sessions)"
-    echo "  restart-all                  Restart all application containers (zero-downtime reload)"
-    echo "  list                         List active tenants"
-    echo "  module <tenant_id> <module>=<on|off>... Enable/disable modules for a tenant"
-    echo "  -h, --help                   Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  ./manage-tenant.sh add school_a 10001"
-    echo "  ./manage-tenant.sh trial school_demo 10002 7"
-    echo "  ./manage-tenant.sh remove test_tenant"
-    echo "  ./manage-tenant.sh module school_a inventory=off library=on"
-    echo "  ./manage-tenant.sh restart-all"
-    echo "  ./manage-tenant.sh -h"
-    exit 1
-}
+        if [ "$FORCE_REMOVE" != true ]; then
+            echo -n "WARNING: Are you sure you want to permanently delete all data for tenant '$TENANT_ID'? (y/N) "
+            read confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Removal canceled."
+                exit 0
+            fi
+        fi
 
-tenant_aliases() {
-    local tenant_id="$1"
+        echo "Removing tenant '$TENANT_ID'..."
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
+        port_to_remove=""
+        if [ -n "$APP_CONTAINER" ]; then
+            port_to_remove="$({ docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
+import sys
+sys.path.insert(0, '/app')
+sys.path.insert(0, '/app/Web')
+from tenant import delete_tenant, get_tenant_config
+
+tenant_id = sys.argv[1]
+tenant_cfg = get_tenant_config(tenant_id)
+port = tenant_cfg.get('port')
+
+if not delete_tenant(tenant_id):
+    print(f'Error: failed to delete tenant {tenant_id}', file=sys.stderr)
+    sys.exit(1)
+
+if port is not None:
+    print(port)
+PY
+            } 2>/dev/null)"
+            echo "Tenant '$TENANT_ID' database and config removed."
+        else
+            echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
+            if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
+                :
+            else
+                echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
+            fi
+        fi
+
+        if [ -n "$port_to_remove" ]; then
+            remove_runtime_port "$port_to_remove"
+        fi
+        sync_tenant_port_map
+        if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+            restart_app_container
+        fi
+        if [ -n "$port_to_remove" ]; then
+            echo "Removed tenant '$TENANT_ID' and cleaned runtime port $port_to_remove."
+        else
+            echo "Removed tenant '$TENANT_ID'. No port mapping was present."
+        fi
     local normalized alias
     normalized="$(printf '%s' "$tenant_id" | tr '[:upper:]' '[:lower:]')"
     printf '%s\n' "$tenant_id"
@@ -316,58 +324,60 @@ print(f"Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
 update_runtime_ports() {
     local new_port="$1"
     local env_file="$PWD/.docker-build.env"
-    local current_ports=""
-    local port_list=()
-    local unique_ports=()
-    local first_port=""
-    if [ -n "$new_port" ]; then
-        if [ -f "$env_file" ]; then
-            current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
-            if [ -z "$current_ports" ]; then
-                current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
-            fi
+    local current_ports port_list unique_ports first_port ports_csv
+
+    if [ -z "$new_port" ]; then
+        return 0
+    fi
+
+    current_ports=""
+    if [ -f "$env_file" ]; then
+        current_ports="$(awk -F= '/^INVENTAR_HTTP_PORTS=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
+        if [ -z "$current_ports" ]; then
+            current_ports="$(awk -F= '/^INVENTAR_HTTP_PORT=/{print $2; exit}' "$env_file" | tr -d ' ' || true)"
         fi
+    fi
 
-        if [ -n "$current_ports" ]; then
-            IFS=',' read -r -a port_list <<<"${current_ports// /,}"
+    port_list=()
+    unique_ports=()
+    if [ -n "$current_ports" ]; then
+        IFS=',' read -r -a port_list <<<"${current_ports// /,}"
+    fi
+    port_list+=("$new_port")
+
+    for port in "${port_list[@]}"; do
+        if [ -n "$port" ] && ! printf '%s\n' "${unique_ports[@]}" | grep -qx "$port"; then
+            unique_ports+=("$port")
         fi
-        port_list+=("$new_port")
+    done
 
-        for port in "${port_list[@]}"; do
-            if [ -n "$port" ] && ! printf '%s\n' "${unique_ports[@]}" | grep -qx "$port"; then
-                unique_ports+=("$port")
-            fi
-        done
+    if [ ${#unique_ports[@]} -eq 0 ]; then
+        unique_ports=("$new_port")
+    fi
 
-        if [ ${#unique_ports[@]} -eq 0 ]; then
-            unique_ports=("$new_port")
-        fi
+    first_port="${unique_ports[0]}"
+    ports_csv="$(IFS=,; echo "${unique_ports[*]}")"
 
-        first_port="${unique_ports[0]}"
-        local ports_csv
-        ports_csv="$(IFS=,; echo "${unique_ports[*]}")"
-
-        if [ ! -f "$env_file" ]; then
-            cat > "$env_file" <<EOF
+    if [ ! -f "$env_file" ]; then
+        cat > "$env_file" <<EOF
 NUITKA_BUILD=0
 INVENTAR_HTTP_PORT=$first_port
 INVENTAR_HTTP_PORTS=$ports_csv
 EOF
+    else
+        if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
+            sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
         else
-            if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
-                sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
-            else
-                printf '\nINVENTAR_HTTP_PORTS=%s\n' "$ports_csv" >> "$env_file"
-            fi
-            if grep -q '^INVENTAR_HTTP_PORT=' "$env_file" 2>/dev/null; then
-                sed -i "s|^INVENTAR_HTTP_PORT=.*|INVENTAR_HTTP_PORT=$first_port|" "$env_file"
-            else
-                printf '\nINVENTAR_HTTP_PORT=%s\n' "$first_port" >> "$env_file"
-            fi
+            printf '\nINVENTAR_HTTP_PORTS=%s\n' "$ports_csv" >> "$env_file"
         fi
-
-        echo "Updated runtime env ports: $ports_csv"
+        if grep -q '^INVENTAR_HTTP_PORT=' "$env_file" 2>/dev/null; then
+            sed -i "s|^INVENTAR_HTTP_PORT=.*|INVENTAR_HTTP_PORT=$first_port|" "$env_file"
+        else
+            printf '\nINVENTAR_HTTP_PORT=%s\n' "$first_port" >> "$env_file"
+        fi
     fi
+
+    echo "Updated runtime env ports: $ports_csv"
 }
 
 sync_tenant_port_map() {
@@ -679,50 +689,69 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         ;;
     
     remove)
+        FORCE_REMOVE=false
+        if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then
+            FORCE_REMOVE=true
+            TENANT_ID="${3:-}"
+        fi
+
         if [ -z "$TENANT_ID" ]; then
             echo "Error: Please provide a tenant_id to remove."
             exit 1
         fi
-        echo -n "WARNING: Are you sure you want to permanently delete all data for tenant '$TENANT_ID'? (y/N) "
-        read confirm
-        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-            echo "Removing tenant '$TENANT_ID'..."
-            APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
-            if [ -n "$APP_CONTAINER" ]; then
-                docker exec $APP_CONTAINER python3 -c "
-import sys; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from tenant import TenantContext; from Web.modules.database import settings; from pymongo import MongoClient
-ctx = TenantContext()
-db_name = ctx._get_db_name(sys.argv[1])
-client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
-client.drop_database(db_name)
-print(f'Database for tenant {sys.argv[1]} dropped.')
-" "$TENANT_ID"
-                echo "Tenant '$TENANT_ID' database removed."
-            else
-                echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
-            fi
 
-            port_to_remove=""
+        if [ "$FORCE_REMOVE" != true ]; then
+            echo -n "WARNING: Are you sure you want to permanently delete all data for tenant '$TENANT_ID'? (y/N) "
+            read confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Removal canceled."
+                exit 0
+            fi
+        fi
+
+        echo "Removing tenant '$TENANT_ID'..."
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
+        port_to_remove=""
+        if [ -n "$APP_CONTAINER" ]; then
+            port_to_remove="$(docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
+import sys
+sys.path.insert(0, '/app')
+sys.path.insert(0, '/app/Web')
+from tenant import delete_tenant, get_tenant_config
+
+tenant_id = sys.argv[1]
+tenant_cfg = get_tenant_config(tenant_id)
+port = tenant_cfg.get('port')
+
+if not delete_tenant(tenant_id):
+    print(f'Error: failed to delete tenant {tenant_id}', file=sys.stderr)
+    sys.exit(1)
+
+if port is not None:
+    print(port)
+PY
+            )"
+            echo "Tenant '$TENANT_ID' database and config removed."
+        else
+            echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
             if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
-                if [ -n "$port_to_remove" ]; then
-                    remove_runtime_port "$port_to_remove"
-                    sync_tenant_port_map
-                    if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
-                        restart_app_container
-                    fi
-                    echo "Removed tenant '$TENANT_ID' from config.json and cleaned runtime port $port_to_remove."
-                else
-                    sync_tenant_port_map
-                    if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
-                        restart_app_container
-                    fi
-                    echo "Removed tenant '$TENANT_ID' from config.json. No port mapping was present."
-                fi
+                :
             else
                 echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
             fi
+        fi
+
+        if [ -n "$port_to_remove" ]; then
+            remove_runtime_port "$port_to_remove"
+        fi
+        sync_tenant_port_map
+        if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
+            restart_app_container
+        fi
+        if [ -n "$port_to_remove" ]; then
+            echo "Removed tenant '$TENANT_ID' and cleaned runtime port $port_to_remove."
         else
-            echo "Removal canceled."
+            echo "Removed tenant '$TENANT_ID'. No port mapping was present."
         fi
         ;;
 
