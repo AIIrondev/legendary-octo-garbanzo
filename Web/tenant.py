@@ -212,6 +212,7 @@ def _module_name_candidates(module_name):
     candidates = [normalized]
     alias_groups = {
         'inventory': {'inventory', 'inventar'},
+        'terminplan': {'terminplan', 'terminplaner', 'termin', 'appointments'},
         'library': {'library', 'bib', 'bibliothek'},
         'student_cards': {'student_cards', 'studentcards', 'schuelerausweise', 'schueler_ausweise'},
     }

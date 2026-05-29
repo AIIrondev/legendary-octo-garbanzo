@@ -129,6 +129,14 @@
             --module-brand-icon: "📚";
         }
 
+        html[data-module="terminplan"] {
+            --module-primary-color: #0f4c5c;
+            --module-primary-light: #16697a;
+            --module-accent-color: #2ec4b6;
+            --module-accent-light: rgba(46, 196, 182, 0.1);
+            --module-brand-icon: "📅";
+        }
+
         :root[data-theme="dark"] {
             --module-primary-color: #1a252f;
             --module-primary-light: #2c3e50;
@@ -143,6 +151,12 @@
             --module-primary-color: #4a354d;
             --module-primary-light: #614666;
             --module-accent-color: #8e44ad;
+        }
+
+        html[data-theme="dark"][data-module="terminplan"] {
+            --module-primary-color: #082f35;
+            --module-primary-light: #0f4c5c;
+            --module-accent-color: #21b6a8;
         }
 
         /* Global styles */
@@ -1078,29 +1092,73 @@
         <span class="module-label">Module:</span>
         <div class="module-tabs">
             {% if inventory_module_enabled %}
-            <a href="{{ url_for('home') }}" 
-               class="module-tab {% if CURRENT_MODULE == 'inventory' %}active{% endif %}" 
-               id="inventoryModule" 
-               data-module="inventory">
+            <a href="{{ url_for('home') }}" class="module-tab {% if CURRENT_MODULE == 'inventory' %}active{% endif %}" id="inventoryModule" data-module="inventory">
                📦 Inventarsystem
             </a>
             {% endif %}
-            {% if inventory_module_enabled and library_module_enabled %}
+            {% if inventory_module_enabled and terminplan_module_enabled %}
+            <div class="module-separator"></div>
+            {% endif %}
+            {% if terminplan_module_enabled %}
+            <a href="{{ url_for('terminplaner.main') }}" class="module-tab {% if CURRENT_MODULE == 'terminplan' %}active{% endif %}" id="terminplanModule" data-module="terminplan">
+               📅 Terminplaner
+            </a>
+            {% endif %}
+            {% if (inventory_module_enabled or terminplan_module_enabled) and library_module_enabled %}
             <div class="module-separator"></div>
             {% endif %}
             {% if library_module_enabled %}
-            <a href="{{ url_for('library_view') }}" 
-               class="module-tab {% if CURRENT_MODULE == 'library' %}active{% endif %}" 
-               id="libraryModule" 
-               data-module="library">
+            <a href="{{ url_for('library_view') }}" class="module-tab {% if CURRENT_MODULE == 'library' %}active{% endif %}" id="libraryModule" data-module="library">
                📚 Bibliothek
             </a>
             {% endif %}
         </div>
     </div>
-    {% endif %}
-        {% if 'username' in session %}
-    {% if CURRENT_MODULE != 'library' and inventory_module_enabled %}
+
+    {% if terminplan_module_enabled and CURRENT_MODULE == 'terminplan' %}
+        <nav class="navbar navbar-expand-lg navbar-dark" id="terminplanNavbar">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="{{ url_for('terminplaner.main') }}" data-icon="📅">Terminplaner</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#terminplanNavContent">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="terminplanNavContent">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="terminplanNavList">
+                        <li class="nav-item" data-nav-fixed="true">
+                            <a class="nav-link {% if current_path == url_for('terminplaner.main') %}nav-active{% endif %}" href="{{ url_for('terminplaner.main') }}" data-tutorial-tip="Die Terminplaner-Übersicht bündelt die wichtigsten Aktionen.">Übersicht</a>
+                        </li>
+                        <li class="nav-item" data-nav-fixed="true">
+                            <a class="nav-link {% if current_path == url_for('terminplan') %}nav-active{% endif %}" href="{{ url_for('terminplan') }}" data-tutorial-tip="Hier sehen Sie den Kalender mit den bestehenden Terminen.">Kalender</a>
+                        </li>
+                        {% if current_permissions.pages.get('terminplan', True) and current_permissions.actions.get('can_insert', True) %}
+                        <li class="nav-item">
+                            <a class="nav-link quick-link-pill {% if current_path == url_for('terminplaner.configure') %}nav-active{% endif %}" href="{{ url_for('terminplaner.configure') }}" data-tutorial-tip="Neuen Terminplan erstellen und an Ihr Team versenden.">Neue Planung</a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item" data-nav-fixed="true">
+                            <button id="themeToggleBtn" class="btn btn-link nav-link px-3" aria-label="Dark Mode umschalten" title="Theme umschalten">
+                                <span class="theme-icon-light" style="display: none;">☀️</span>
+                                <span class="theme-icon-dark" style="display: none;">🌙</span>
+                            </button>
+                        </li>
+                        <li class="nav-item dropdown ms-lg-auto">
+                            <a class="nav-link dropdown-toggle" href="#" id="termMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">Mehr Optionen</a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="termMoreDropdown">
+                                {% if current_permissions.pages.get('home', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('home') }}">Inventarsystem</a></li>
+                                {% endif %}
+                                {% if current_permissions.pages.get('library_view', True) and library_module_enabled %}
+                                <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliothek</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    {% elif CURRENT_MODULE != 'library' and inventory_module_enabled %}
         <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
             <div class="container-fluid">
                 <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
@@ -1220,6 +1278,7 @@
                 </div>
             </div>
         </nav>
+    {% endif %}
         {% endif %}
 
         {% if library_module_enabled and CURRENT_MODULE == 'library' %}
@@ -1331,6 +1390,7 @@
                 </div>
             </div>
         </nav>
+        {% endif %}
         {% endif %}
 
     {% else %}

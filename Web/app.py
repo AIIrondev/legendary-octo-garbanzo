@@ -78,6 +78,7 @@ from Web.modules.inventarsystem.data_protection import (
     encrypt_document_fields,
     encrypt_soft_deleted_media_pack,
 )
+from Web.modules.terminplaner.blueprint import appoint_bp as terminplaner_bp
 
 # Set base directory and centralized settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -109,6 +110,7 @@ app.config['SESSION_COOKIE_SECURE'] = cfg.SSL_ENABLED if os.getenv('INVENTAR_SES
 app.config['PREFERRED_URL_SCHEME'] = 'https' if app.config['SESSION_COOKIE_SECURE'] else 'http'
 # app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+app.register_blueprint(terminplaner_bp, url_prefix='/terminplaner')
 
 """--------------------------------------------------------------Path Init-------------------------------------------------------"""
 
@@ -1259,6 +1261,7 @@ def inject_version():
         'CURRENT_MODULE': current_module,
         'school_periods': SCHOOL_PERIODS,
         'inventory_module_enabled': cfg.MODULES.is_enabled('inventory'),
+        'terminplan_module_enabled': cfg.MODULES.is_enabled('terminplan'),
         'library_module_enabled': cfg.MODULES.is_enabled('library'),
         'student_cards_module_enabled': cfg.MODULES.is_enabled('student_cards'),
         'is_admin': is_admin,
@@ -7563,6 +7566,10 @@ def terminplan():
         if 'username' not in session:
             flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
             return redirect(url_for('login'))
+
+        if not cfg.MODULES.is_enabled('terminplan'):
+            flash('Der Terminplaner ist deaktiviert.', 'info')
+            return redirect(url_for('home'))
         
         # Make sure the template exists
         template_path = os.path.join(BASE_DIR, 'templates', 'terminplan.html')

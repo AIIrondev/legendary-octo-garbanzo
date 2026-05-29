@@ -39,6 +39,9 @@ ensure_runtime_config_json() {
         "library": {
             "enabled": false
         },
+            "terminplan": {
+                "enabled": true
+            },
         "student_cards": {
             "enabled": false,
             "default_borrow_days": 14,
@@ -201,6 +204,7 @@ existing['modules'] = {
     'inventory': {'enabled': True},
     'library': {'enabled': True},
     'student_cards': {'enabled': True, 'default_borrow_days': 14, 'max_borrow_days': 365},
+        'terminplan': {'enabled': True},
 }
 existing['trial'] = trial_config
 

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Terminplan konfigurieren - Inventarsystem{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10 col-xl-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #0f4c5c, #16697a);">
+                    <h1 class="h3 mb-1 fw-bold">Terminplan konfigurieren</h1>
+                    <p class="mb-0 opacity-75">Erstellen Sie einen neuen Plan und verschicken Sie anschließend den Buchungslink.</p>
+                </div>
+                <div class="card-body p-4 p-md-5 bg-white">
+                    <form method="post" action="{{ url_for('terminplaner.configure') }}" class="vstack gap-3">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="start_date" class="form-label fw-semibold">Startdatum</label>
+                                <input type="date" id="start_date" name="start_date" class="form-control form-control-lg" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="end_date" class="form-label fw-semibold">Enddatum</label>
+                                <input type="date" id="end_date" name="end_date" class="form-control form-control-lg" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="time_frame" class="form-label fw-semibold">Zeitfenster</label>
+                            <textarea id="time_frame" name="time_frame" class="form-control" rows="5" placeholder="Beispiele:\nMontag 08:00-12:00\nDienstag 08:00-12:00" required></textarea>
+                            <div class="form-text">Jede Zeile kann ein eigenes Zeitfenster enthalten.</div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="slots_amounts" class="form-label fw-semibold">Anzahl Slots</label>
+                                <input type="number" id="slots_amounts" name="slots_amounts" class="form-control" min="1" value="1" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="slot_lenght" class="form-label fw-semibold">Slot-Länge in Minuten</label>
+                                <input type="number" id="slot_lenght" name="slot_lenght" class="form-control" min="1" value="45" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="mail" class="form-label fw-semibold">Empfänger-Mails</label>
+                            <input type="text" id="mail" name="mail" class="form-control" placeholder="adresse1@schule.de, adresse2@schule.de">
+                        </div>
+
+                        <div>
+                            <label for="note" class="form-label fw-semibold">Notiz</label>
+                            <textarea id="note" name="note" class="form-control" rows="4" placeholder="Optionaler Einführungstext für die Mail"></textarea>
+                        </div>
+
+                        <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
+                            <button type="submit" class="btn btn-primary btn-lg">Terminplan erzeugen</button>
+                            <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main') }}">Zur Übersicht</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if generated_link %}
+            <div class="alert alert-success mt-4 shadow-sm rounded-4">
+                <div class="fw-bold mb-1">Buchungslink erstellt</div>
+                <div class="mb-2">Teilen Sie diesen Link mit den Teilnehmenden:</div>
+                <a href="{{ generated_link }}" class="d-inline-block text-break">{{ generated_link }}</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

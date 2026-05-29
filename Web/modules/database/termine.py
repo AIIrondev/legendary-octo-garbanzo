@@ -108,3 +108,58 @@ def update(id,slots_used: list):
         print(f"Error updating item: {e}")
         return False
 
+
+def remove_slot(id, date_start_time, name):
+    """
+    Remove a booked slot from an appointment's `slots_booked`.
+
+    Args:
+        id (str): Appointment ID
+        date_start_time: The start time value used when booking
+        name (str): Name associated with the booking
+
+    Returns:
+        bool: True if a slot was removed, False otherwise
+    """
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        items = db['appointments']
+
+        # Attempt to pull the exact element (stored as an array/tuple)
+        result = items.update_one(
+            {'_id': ObjectId(id)},
+            {'$pull': {'slots_booked': [date_start_time, name]}}
+        )
+
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error removing slot: {e}")
+        return False
+
+
+def remove(id):
+    """
+    Soft-delete an appointment by setting its `Deleted` flag.
+
+    Args:
+        id (str): Appointment ID
+
+    Returns:
+        bool: True if the appointment was marked deleted, False otherwise
+    """
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        items = db['appointments']
+
+        result = items.delete_one({'_id': ObjectId(id)})
+
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error removing appointment: {e}")
+        return False
+
+ 

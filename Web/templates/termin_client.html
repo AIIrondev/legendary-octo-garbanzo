@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Termin buchen - Inventarsystem{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-10">
+            <div class="row g-4">
+                <div class="col-12 col-lg-5">
+                    <div class="card border-0 shadow-lg rounded-4 h-100">
+                        <div class="card-body p-4 p-md-5">
+                            <p class="text-uppercase text-muted fw-semibold mb-2">Terminplaner</p>
+                            <h1 class="h3 fw-bold mb-3">Termin buchen</h1>
+                            <p class="text-muted mb-4">Wählen Sie einen freien Zeitpunkt und tragen Sie Ihren Namen ein. Der Termin wird anschließend im Plan gespeichert.</p>
+
+                            <div class="p-3 rounded-3 bg-light mb-3">
+                                <div class="fw-semibold">Zeitraum</div>
+                                <div>{{ available.date_start }} bis {{ available.date_end }}</div>
+                            </div>
+                            <div class="p-3 rounded-3 bg-light mb-3">
+                                <div class="fw-semibold">Verfügbare Slots</div>
+                                <div>{{ available.slots_left }} von {{ available.slots_total }} frei</div>
+                            </div>
+                            <div class="p-3 rounded-3 bg-light mb-3">
+                                <div class="fw-semibold">Slot-Länge</div>
+                                <div>{{ available.slot_lenght }} Minuten</div>
+                            </div>
+
+                            {% if available.slots_booked %}
+                            <div class="p-3 rounded-3 bg-light">
+                                <div class="fw-semibold mb-2">Bereits gebucht</div>
+                                <ul class="mb-0 small">
+                                    {% for booking in available.slots_booked %}
+                                    <li>{{ booking.start }}{% if booking.name %} - {{ booking.name }}{% endif %}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-7">
+                    <div class="card border-0 shadow-lg rounded-4 h-100">
+                        <div class="card-body p-4 p-md-5 bg-white">
+                            <h2 class="h4 fw-bold mb-4">Buchung absenden</h2>
+                            <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id) }}" class="vstack gap-3">
+                                <div>
+                                    <label for="start_day_time" class="form-label fw-semibold">Gewünschter Zeitpunkt</label>
+                                    <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="2026-05-29 10:30" required>
+                                    <div class="form-text">Tragen Sie Datum und Uhrzeit im Format YYYY-MM-DD HH:MM ein, sofern kein Kalenderfeld genutzt wird.</div>
+                                </div>
+                                <div>
+                                    <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
+                                    <input type="text" id="client_name" name="client_name" class="form-control form-control-lg" placeholder="Vor- und Nachname" required>
+                                </div>
+                                <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
+                                    <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
+                                    <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main') }}">Zur Übersicht</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -97,6 +97,9 @@ DEFAULTS = {
         'inventory': {
             'enabled': True
         },
+        'terminplan': {
+            'enabled': True
+        },
         'library': {
             'enabled': False
         },
@@ -272,13 +275,20 @@ class _TenantAwareBool:
 from Web.modules.module_registry import registry as MODULES
 
 INVENTORY_MODULE_ENABLED = _TenantAwareBool('inventory', _get(_conf, ['modules', 'inventory', 'enabled'], DEFAULTS['modules']['inventory']['enabled']))
+TERMINPLAN_MODULE_ENABLED = _TenantAwareBool('terminplan', _get(_conf, ['modules', 'terminplan', 'enabled'], DEFAULTS['modules']['terminplan']['enabled']))
 LIBRARY_MODULE_ENABLED = _TenantAwareBool('library', _get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
 STUDENT_CARDS_MODULE_ENABLED = _TenantAwareBool('student_cards', _get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
 
 def _match_inventory(path):
     if not path: return False
     if path == '/' or path.startswith('/home'): return True
-    return path.startswith(('/scanner', '/inventory', '/upload_admin', '/manage_filters', '/manage_locations', '/admin_borrowings', '/admin_damaged_items', '/admin/borrowings', '/admin/damaged_items', '/terminplan'))
+    return path.startswith(('/scanner', '/inventory', '/upload_admin', '/manage_filters', '/manage_locations', '/admin_borrowings', '/admin_damaged_items', '/admin/borrowings', '/admin/damaged_items'))
+
+
+def _match_terminplan(path):
+    if not path:
+        return False
+    return path.startswith(('/terminplan', '/terminplaner'))
 
 def _match_library(path):
     if not path: return False
@@ -290,6 +300,7 @@ def _match_student_cards(path):
 
 # Register core modules into the pipeline
 MODULES.register('inventory', INVENTORY_MODULE_ENABLED, _match_inventory)
+MODULES.register('terminplan', TERMINPLAN_MODULE_ENABLED, _match_terminplan)
 MODULES.register('library', LIBRARY_MODULE_ENABLED, _match_library)
 MODULES.register('student_cards', STUDENT_CARDS_MODULE_ENABLED, _match_student_cards)
 
