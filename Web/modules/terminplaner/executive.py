@@ -36,8 +36,16 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     return link
     
         
-def book_slot(id, date, start_time):
+def book_slot(id, date_start_time, name):
     """
+    Updates slot for the booking per a id
+
+    Input:
+    - id: the id is the id you get from the
+    - date_start_time: the date of the booking that was selected with date and time
+    - name: name that the client gave himself
     
+    Output:
+    - bool: if worked or not
     """
     termin.update()
