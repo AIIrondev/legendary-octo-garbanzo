@@ -41,7 +41,37 @@
         </label>
     </div>
     
-    <div id="calendar"></div>
+    <div class="calendar-stage">
+        <div id="calendar-skeleton" class="calendar-skeleton" aria-hidden="true">
+            <div class="skeleton-toolbar">
+                <span class="skeleton-pill"></span>
+                <span class="skeleton-pill"></span>
+                <span class="skeleton-pill"></span>
+            </div>
+            <div class="skeleton-grid">
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-day-header"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+                <div class="skeleton-slot"></div>
+            </div>
+        </div>
+        <div id="calendar"></div>
+    </div>
     
     <!-- Modal for new bookings -->
     <div id="booking-modal" class="modal">
@@ -254,7 +284,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize calendar
     calendar = new FullCalendar.Calendar(calendarEl, {
-        plugins: [FullCalendar.dayGridPlugin, FullCalendar.timeGridPlugin],
         initialView: 'timeGridDay',
         locale: 'de',
         headerToolbar: false, // We're using our custom header
@@ -280,6 +309,12 @@ document.addEventListener('DOMContentLoaded', function() {
             hour: '2-digit',
             minute: '2-digit',
             hour12: false
+        },
+        loading: function(isLoading) {
+            const skeleton = document.getElementById('calendar-skeleton');
+            if (skeleton) {
+                skeleton.classList.toggle('is-hidden', !isLoading);
+            }
         },
         selectAllow: function(info) {
             const startHour = info.start.getHours();
@@ -452,6 +487,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Render calendar
     try {
+        const calendarSkeleton = document.getElementById('calendar-skeleton');
+        if (calendarSkeleton) {
+            calendarSkeleton.classList.remove('is-hidden');
+        }
         calendar.render();
         setCalendarView(activeCalendarView);
         
@@ -1257,6 +1296,74 @@ document.addEventListener('DOMContentLoaded', function() {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
+}
+
+.calendar-stage {
+    position: relative;
+    min-height: 620px;
+}
+
+.calendar-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.96));
+    padding: 20px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.calendar-skeleton.is-hidden {
+    display: none;
+}
+
+.skeleton-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.skeleton-pill,
+.skeleton-day-header,
+.skeleton-slot {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #e9eef5 0%, #f7f9fc 50%, #e9eef5 100%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-pill {
+    width: 90px;
+    height: 34px;
+    border-radius: 999px;
+}
+
+.skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.skeleton-day-header {
+    height: 28px;
+    border-radius: 10px;
+}
+
+.skeleton-slot {
+    height: 72px;
+    border-radius: 14px;
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
 }
 
 .calendar-header {

@@ -22,6 +22,14 @@ from Web.modules.database.settings import MongoClient
 from bson.objectid import ObjectId
 import datetime 
 
+
+def _get_tenant_db(client):
+    try:
+        from tenant import get_tenant_db
+        return get_tenant_db(client)
+    except Exception:
+        return client[cfg.MONGODB_DB]
+
 def _active_record_query(extra_query=None):
     """Build a query that excludes logically deleted records."""
     base_query = {'Deleted': {'$ne': True}}
@@ -33,7 +41,7 @@ def _active_record_query(extra_query=None):
 def add(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False):
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         items = db['appointments']
 
         item = {
@@ -68,7 +76,7 @@ def get_item(id):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         items = db['appointments']
         item = items.find_one(_active_record_query({'_id': ObjectId(id)}))
         client.close()
@@ -90,7 +98,7 @@ def update(id,slots_used: list):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         items = db['appointments']
 
         update_data = {
@@ -124,7 +132,7 @@ def remove_slot(id, date_start_time, name):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         items = db['appointments']
 
         # Attempt to pull the exact element (stored as an array/tuple)
@@ -152,7 +160,7 @@ def remove(id):
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-        db = client[cfg.MONGODB_DB]
+        db = _get_tenant_db(client)
         items = db['appointments']
 
         result = items.delete_one({'_id': ObjectId(id)})
