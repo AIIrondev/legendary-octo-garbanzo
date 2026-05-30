@@ -572,7 +572,7 @@ write_runtime_compose_override() {
 services:
   app:
     working_dir: /app/Web
-    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "${INVENTAR_WORKERS:-2}", "--threads", "${INVENTAR_THREADS:-2}", "--timeout", "${INVENTAR_WORKER_TIMEOUT:-30}", "--graceful-timeout", "20", "--worker-connections", "${INVENTAR_WORKER_CONNECTIONS:-100}", "--max-requests", "200", "--max-requests-jitter", "50", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
+    command: ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "${INVENTAR_WORKERS:-2}", "--threads", "${INVENTAR_THREADS:-2}", "--timeout", "${INVENTAR_WORKER_TIMEOUT:-30}", "--graceful-timeout", "20", "--worker-connections", "${INVENTAR_WORKER_CONNECTIONS:-100}", "--max-requests", "1000", "--max-requests-jitter", "100", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-"]
     image: ${APP_IMAGE_VALUE}
     build: null
 EOF
