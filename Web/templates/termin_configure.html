@@ -24,10 +24,33 @@
                             </div>
                         </div>
 
-                        <div>
-                            <label for="time_frame" class="form-label fw-semibold">Zeitfenster</label>
-                            <textarea id="time_frame" name="time_frame" class="form-control" rows="5" placeholder="Beispiele:\nMontag 08:00-12:00\nDienstag 08:00-12:00" required></textarea>
-                            <div class="form-text">Jede Zeile kann ein eigenes Zeitfenster enthalten.</div>
+                        <div class="border rounded-4 p-3 p-md-4 bg-light-subtle">
+                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+                                <div>
+                                    <label class="form-label fw-semibold mb-0">Zeitfenster pro Tag</label>
+                                    <div class="form-text mb-0">Sobald Start- und Enddatum gesetzt sind, wird für jeden Tag automatisch ein eigener Eintrag erzeugt.</div>
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="build_time_frame">Tage aus Zeitraum erzeugen</button>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-12 col-md-6 col-xl-4">
+                                    <label for="default_day_start" class="form-label fw-semibold">Standard-Startzeit</label>
+                                    <input type="time" id="default_day_start" class="form-control" value="08:00">
+                                </div>
+                                <div class="col-12 col-md-6 col-xl-4">
+                                    <label for="default_day_end" class="form-label fw-semibold">Standard-Endzeit</label>
+                                    <input type="time" id="default_day_end" class="form-control" value="12:00">
+                                </div>
+                            </div>
+
+                            <div id="time_frame_days" class="vstack gap-2"></div>
+
+                            <div class="mt-3">
+                                <label for="time_frame" class="form-label fw-semibold">Gespeichertes Zeitfenster</label>
+                                <textarea id="time_frame" name="time_frame" class="form-control font-monospace" rows="5" placeholder="Wird automatisch aus den Tagen erzeugt" required></textarea>
+                                <div class="form-text">Das Formular überträgt die erzeugten Tageszeilen an das Backend. Sie können die Liste hier bei Bedarf noch anpassen.</div>
+                            </div>
                         </div>
 
                         <div class="row g-3">
@@ -87,4 +110,149 @@
         </div>
     </div>
 </div>
+<script>
+(function () {
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+    const buildButton = document.getElementById('build_time_frame');
+    const daysContainer = document.getElementById('time_frame_days');
+    const timeFrameTextarea = document.getElementById('time_frame');
+    const defaultStartInput = document.getElementById('default_day_start');
+    const defaultEndInput = document.getElementById('default_day_end');
+
+    if (!startDateInput || !endDateInput || !buildButton || !daysContainer || !timeFrameTextarea || !defaultStartInput || !defaultEndInput) {
+        return;
+    }
+
+    const weekdayFormatter = new Intl.DateTimeFormat('de-DE', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+
+    function parseDate(value) {
+        if (!value) {
+            return null;
+        }
+
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) {
+            return null;
+        }
+
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    function formatDateForRow(date) {
+        return weekdayFormatter.format(date);
+    }
+
+    function formatDateForValue(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function addDays(date, days) {
+        const copy = new Date(date);
+        copy.setDate(copy.getDate() + days);
+        return copy;
+    }
+
+    function syncTextarea() {
+        const rows = Array.from(daysContainer.querySelectorAll('[data-day-row]'));
+        const lines = rows.map(function (row) {
+            const dayValue = row.getAttribute('data-day-value') || '';
+            const startTime = row.querySelector('[data-time-start]')?.value || '';
+            const endTime = row.querySelector('[data-time-end]')?.value || '';
+            return `${dayValue} ${startTime}-${endTime}`.trim();
+        }).filter(Boolean);
+
+        timeFrameTextarea.value = lines.join('\n');
+    }
+
+    function renderRows() {
+        const startDate = parseDate(startDateInput.value);
+        const endDate = parseDate(endDateInput.value);
+
+        if (!startDate || !endDate) {
+            daysContainer.innerHTML = '<div class="text-muted small">Bitte Start- und Enddatum auswählen, damit die Tageszeilen erzeugt werden.</div>';
+            timeFrameTextarea.value = '';
+            endDateInput.setCustomValidity('');
+            return;
+        }
+
+        if (endDate < startDate) {
+            daysContainer.innerHTML = '<div class="text-danger small">Das Enddatum muss nach dem Startdatum liegen.</div>';
+            timeFrameTextarea.value = '';
+            endDateInput.setCustomValidity('Das Enddatum muss nach dem Startdatum liegen.');
+            return;
+        }
+
+        endDateInput.setCustomValidity('');
+
+        const existingValues = new Map();
+        Array.from(daysContainer.querySelectorAll('[data-day-row]')).forEach(function (row) {
+            const dayValue = row.getAttribute('data-day-value');
+            const startTime = row.querySelector('[data-time-start]')?.value || '';
+            const endTime = row.querySelector('[data-time-end]')?.value || '';
+            if (dayValue) {
+                existingValues.set(dayValue, { startTime, endTime });
+            }
+        });
+
+        const defaultStart = defaultStartInput.value || '08:00';
+        const defaultEnd = defaultEndInput.value || '12:00';
+        const rows = [];
+
+        for (let current = startDate; current <= endDate; current = addDays(current, 1)) {
+            const dayValue = formatDateForValue(current);
+            const preserved = existingValues.get(dayValue) || {};
+            const rowStart = preserved.startTime || defaultStart;
+            const rowEnd = preserved.endTime || defaultEnd;
+
+            rows.push(`
+                <div class="border rounded-3 bg-white p-3" data-day-row data-day-value="${dayValue}">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-lg-5">
+                            <label class="form-label fw-semibold mb-1">${formatDateForRow(current)}</label>
+                            <div class="text-muted small">${dayValue}</div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <label class="form-label mb-1">Von</label>
+                            <input type="time" class="form-control" value="${rowStart}" data-time-start>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <label class="form-label mb-1">Bis</label>
+                            <input type="time" class="form-control" value="${rowEnd}" data-time-end>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        daysContainer.innerHTML = rows.join('');
+        daysContainer.querySelectorAll('input[type="time"]').forEach(function (input) {
+            input.addEventListener('input', syncTextarea);
+            input.addEventListener('change', syncTextarea);
+        });
+
+        syncTextarea();
+    }
+
+    buildButton.addEventListener('click', renderRows);
+    startDateInput.addEventListener('input', renderRows);
+    startDateInput.addEventListener('change', renderRows);
+    endDateInput.addEventListener('input', renderRows);
+    endDateInput.addEventListener('change', renderRows);
+    defaultStartInput.addEventListener('change', syncTextarea);
+    defaultEndInput.addEventListener('change', syncTextarea);
+
+    if (startDateInput.value && endDateInput.value) {
+        renderRows();
+    }
+})();
+</script>
 {% endblock %}
