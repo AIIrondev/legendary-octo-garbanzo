@@ -19,6 +19,11 @@
             <span id="current-day-display"></span>
             <button id="next-day">Nächster Tag</button>
             <button id="today">Heute</button>
+            <div class="calendar-view-switch" role="group" aria-label="Kalenderansicht wechseln">
+                <button type="button" class="calendar-view-btn active" data-calendar-view="timeGridDay">Tag</button>
+                <button type="button" class="calendar-view-btn" data-calendar-view="timeGridWeek">Woche</button>
+                <button type="button" class="calendar-view-btn" data-calendar-view="dayGridMonth">Monat</button>
+            </div>
             <button id="new-booking" class="primary-button">Neue Reservierung</button>
         </div>
         <div class="calendar-legend">
@@ -179,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentEventId = null;
     let calendar;
     let showCompletedBookings = false;
+    let activeCalendarView = 'timeGridDay';
     
     // School period times from server configuration
     let schoolPeriods;
@@ -423,8 +429,23 @@ document.addEventListener('DOMContentLoaded', function() {
             showEventDetails(info.event);
         },
         datesSet: function(dateInfo) {
+
+    function setCalendarView(viewName) {
+        activeCalendarView = viewName;
+        calendar.changeView(viewName);
+        document.querySelectorAll('[data-calendar-view]').forEach(button => {
+            button.classList.toggle('active', button.dataset.calendarView === viewName);
+        });
+    }
+
+    document.querySelectorAll('[data-calendar-view]').forEach(button => {
+        button.addEventListener('click', function() {
+            setCalendarView(this.dataset.calendarView);
+        });
+    });
             updateCurrentDayDisplay();
         }
+    setCalendarView(activeCalendarView);
     });
 
     // Render calendar
@@ -1256,6 +1277,32 @@ document.addEventListener('DOMContentLoaded', function() {
     white-space: nowrap;
 }
 
+.calendar-view-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid #d7dce3;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.calendar-view-btn {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ui-text);
+    font-weight: 600;
+    padding: 7px 14px;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-view-btn.active {
+    background: var(--module-accent-color);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
 .calendar-actions .primary-button {
     background-color: #3788d8;
     color: white;
@@ -1280,6 +1327,17 @@ document.addEventListener('DOMContentLoaded', function() {
     .calendar-actions button {
         width: 100%;
         margin: 5px 0;
+    }
+
+    .calendar-view-switch {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .calendar-view-btn {
+        flex: 1 1 30%;
+        min-width: 88px;
     }
     
     .calendar-actions .primary-button {

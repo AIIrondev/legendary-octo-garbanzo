@@ -269,23 +269,6 @@
         line-height: 1;
     }
 
-    /* Compact appointment badge on cards */
-    .appointment-badge {
-        margin-top: 10px;
-        padding: 10px 12px;
-        background-color: #e1f5fe;
-        border-left: 4px solid #03a9f4;
-        border-radius: 4px;
-        font-size: 0.9rem;
-        line-height: 1.3;
-    }
-    .appointment-badge .appointment-time {
-        display: inline-block;
-        margin-top: 4px;
-        color: #01579b;
-        font-weight: 600;
-    }
-
     /* Search styles */
     .search-container {
         display: flex;
@@ -1006,23 +989,6 @@
                                 </div>`;
                         }
                         
-                        // Add appointment badge if item has upcoming appointments
-                        let appointmentBadge = '';
-                        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
-                            const upcomingAppointment = getUpcomingAppointment(item.appointments);
-                            if (upcomingAppointment) {
-                                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
-                                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
-                                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
-                                
-                                appointmentBadge = `
-                                    <div class="appointment-badge">
-                                        <strong>Geplant für:</strong> ${formattedDate}<br>
-                                        <span class="appointment-time">${startPeriod}${endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : ''}</span>
-                                    </div>`;
-                            }
-                        }
-
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
                                 <h3 class="item-col-name">${item.Name}</h3>
@@ -1037,7 +1003,6 @@
                                     ${imagesHtml}
                                 </div>
                                 ${borrowerBadge}
-                                ${appointmentBadge}
                             </div>
                             <div class="actions">
                                 ${isAvailableForBorrow && !item.BlockedNow ? 
@@ -1614,27 +1579,6 @@
             `;
         }
         
-        // Add appointment info panel if item has appointments
-        let appointmentInfoHtml = '';
-        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
-            const upcomingAppointment = getUpcomingAppointment(item.appointments);
-            if (upcomingAppointment) {
-                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
-                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
-                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
-                const timeDisplay = startPeriod + (endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : '');
-                
-                appointmentInfoHtml = `
-                    <div class="appointment-info-panel">
-                        <h4>Geplanter Termin</h4>
-                        <p class="appointment-date">Datum: ${formattedDate}</p>
-                        <p class="appointment-time">Zeit: ${timeDisplay}</p>
-                        ${upcomingAppointment.notes ? `<p class="appointment-notes">Notizen: ${upcomingAppointment.notes}</p>` : ''}
-                    </div>
-                `;
-            }
-        }
-        
         // Build modal content HTML
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
@@ -1642,7 +1586,6 @@
                 <button type="button" class="bookmark-btn" id="modal-bookmark-btn" title="Merken">${(window.currentFavorites||new Set()).has(item._id) ? '★' : '☆'}</button>
             </div>
             ${borrowerInfoHtml}
-            ${appointmentInfoHtml}
             
             <div class="modal-image-container">
                 ${imagesHtml}
@@ -2804,66 +2747,6 @@
         }
     }
 
-    // Helper functions for appointment display
-    function formatAppointmentDate(dateString) {
-        if (!dateString) return '';
-        try {
-                       const date = new Date(dateString);
-            return date.toLocaleDateString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
-        } catch (e) {
-            return dateString;
-        }
-    }
-
-    function formatAppointmentPeriod(period) {
-        if (!period) return '';
-        const periodMap = {
-            '1': '1. Stunde',
-            '2': '2. Stunde',
-            '3': '3. Stunde',
-            '4': '4. Stunde',
-            '5': '5. Stunde',
-            '6': '6. Stunde',
-            '7': '7. Stunde',
-            '8': '8. Stunde',
-            '9': '9. Stunde',
-            '10': '10. Stunde',
-            'pause1': '1. Pause',
-            'pause2': '2. Pause',
-            'mittagspause': 'Mittagspause'
-        };
-        return periodMap[period] || period;
-    }
-
-    function getUpcomingAppointment(appointments) {
-        if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
-            return null;
-        }
-        
-        const now = new Date();
-        const today = now.toDateString();
-        
-        // Filter appointments that are today or in the future
-        const futureAppointments = appointments.filter(apt => {
-            try {
-                const aptDate = new Date(apt.date);
-                return aptDate.toDateString() === today || aptDate >= now.setHours(0, 0, 0, 0);
-            } catch (e) {
-                return false;
-            }
-        });
-        
-        if (futureAppointments.length === 0) return null;
-        
-        // Sort by date and return the earliest
-        futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
-        return futureAppointments[0];
-    }
-
     function formatDateForInput(dateString) {
         const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
         const date = new Date(dateString);
@@ -3946,16 +3829,6 @@
     }
     .borrower-info-panel h4 { color: #856404; margin: 0 0 10px 0; font-size: 1.1rem; }
     .borrower-name, .borrow-time { margin: 5px 0; color: #856404; font-weight: 500; }
-
-    .appointment-info-panel {
-        background-color: #e1f5fe;
-        border: 1px solid #81d4fa;
-        border-radius: 5px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-    .appointment-info-panel h4 { color: #0277bd; margin: 0 0 10px 0; font-size: 1.1rem; }
-    .appointment-date, .appointment-time, .appointment-user { margin: 5px 0; color: #0277bd; font-weight: 500; }
 
     /* Modal Details Styling (text formatting) */
     .modal-details { margin: 20px 0; }

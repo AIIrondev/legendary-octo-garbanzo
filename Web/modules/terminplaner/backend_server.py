@@ -2,6 +2,7 @@
 Class for all funktions of the executive -> Lehrer
 """
 import datetime
+from flask import url_for
 import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
 import Web.modules.database.settings as cfg
@@ -56,11 +57,14 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     if tenant_context:
         subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
 
-    host = f"https://{subdomain}.invario.eu" if subdomain else "invario.eu"
-    link = host + "/terminplaner/client" + "?" + "client_id=" + id_str
+    try:
+        link = url_for('terminplaner.client', appointment_id=id_str, _external=True)
+    except Exception:
+        host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+        link = host + "/terminplaner/client/" + id_str
     subject = f"Terminanfrage von {user}"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
-    if normalized_mail:
+    if normalized_mail and cfg.EMAIL_ENABLED:
         mail_service.send(normalized_mail, subject, note_link)
     return link
     

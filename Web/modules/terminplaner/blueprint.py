@@ -75,13 +75,28 @@ def configure():
 
         if not start or not end or not time or not slots_amount or not slot_lenght:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
-            return render_template('termin_configure.html', school_periods=cfg.SCHOOL_PERIODS, generated_link=None)
+            return render_template(
+                'termin_configure.html',
+                school_periods=cfg.SCHOOL_PERIODS,
+                generated_link=None,
+                email_service_enabled=cfg.EMAIL_ENABLED,
+            )
 
         link = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note)
         flash('Der Terminplan wurde angelegt.', 'success')
-        return render_template('termin_configure.html', school_periods=cfg.SCHOOL_PERIODS, generated_link=link)
+        return render_template(
+            'termin_configure.html',
+            school_periods=cfg.SCHOOL_PERIODS,
+            generated_link=link,
+            email_service_enabled=cfg.EMAIL_ENABLED,
+        )
     elif request.method == "GET":
-        return render_template('termin_configure.html', school_periods=cfg.SCHOOL_PERIODS, generated_link=None)
+        return render_template(
+            'termin_configure.html',
+            school_periods=cfg.SCHOOL_PERIODS,
+            generated_link=None,
+            email_service_enabled=cfg.EMAIL_ENABLED,
+        )
 
 @appoint_bp.route('/')
 def main():

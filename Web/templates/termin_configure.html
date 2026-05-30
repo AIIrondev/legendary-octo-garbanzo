@@ -62,7 +62,13 @@
             {% if generated_link %}
             <div class="alert alert-success mt-4 shadow-sm rounded-4">
                 <div class="fw-bold mb-1">Buchungslink erstellt</div>
-                <div class="mb-2">Teilen Sie diesen Link mit den Teilnehmenden:</div>
+                <div class="mb-2">
+                    {% if email_service_enabled %}
+                        Teilen Sie diesen Link mit den Teilnehmenden oder versenden Sie ihn direkt per E-Mail.
+                    {% else %}
+                        Der E-Mail-Service ist deaktiviert. Teilen Sie diesen Link manuell mit den Teilnehmenden.
+                    {% endif %}
+                </div>
                 <a href="{{ generated_link }}" class="d-inline-block text-break">{{ generated_link }}</a>
             </div>
             {% endif %}
