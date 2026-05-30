@@ -13,7 +13,7 @@
 {% block content %}
 <div class="calendar-container">
     <div class="calendar-header">
-        <h1>Schulstunden-Terminplan für Ausleihen</h1>
+        <h1>Schulstunden-Terminplan für Termine</h1>
         <div class="calendar-actions">
             <button id="prev-day">Vorheriger Tag</button>
             <span id="current-day-display"></span>
@@ -27,17 +27,17 @@
             <button id="new-booking" class="primary-button">Neue Reservierung</button>
         </div>
         <div class="calendar-legend">
-            <span class="legend-item"><span class="legend-color current"></span> Aktuelle Ausleihungen</span>
-            <span class="legend-item"><span class="legend-color planned"></span> Geplante Ausleihungen</span>
-            <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Ausleihungen</span>
-            <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Ausleihungen</span>
+            <span class="legend-item"><span class="legend-color current"></span> Aktuelle Termine</span>
+            <span class="legend-item"><span class="legend-color planned"></span> Geplante Termine</span>
+            <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Termine</span>
+            <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Termine</span>
         </div>
     </div>
     
     <div class="calendar-options">
         <label class="checkbox-container">
             <input type="checkbox" id="show-completed-bookings"> 
-            Abgeschlossene Ausleihungen anzeigen
+            Abgeschlossene Termine anzeigen
         </label>
     </div>
     
@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const endStr = info.endStr;
             
             // Load events from the server
-            fetch('/get_bookings?start=' + startStr + '&end=' + endStr)
+            fetch('/get_user_appointments?start=' + startStr + '&end=' + endStr)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`HTTP error! Status: ${response.status}`);

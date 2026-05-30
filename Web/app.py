@@ -84,7 +84,7 @@ from Web.modules.terminplaner.blueprint import appoint_bp as terminplaner_bp
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 import Web.modules.database.settings as cfg
 from Web.modules.database.settings import MongoClient
-from tenant import get_tenant_context, get_tenant_trial_status, purge_expired_trial_tenants
+from tenant import get_tenant_context, get_tenant_db, get_tenant_trial_status, purge_expired_trial_tenants
 
 
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
@@ -4793,6 +4793,98 @@ def get_bookings():
                 'period': period,
                 'isCurrentUser': str(booking.get('User') or '') == username,
                 'itemBorrower': item_borrower,
+            })
+
+        return jsonify({'ok': True, 'bookings': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'bookings': []}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/get_user_appointments')
+def get_user_appointments():
+    """Return the current user's planned and active appointments for the calendar."""
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    client = None
+    try:
+        username = session.get('username')
+        start = request.args.get('start')
+        end = request.args.get('end')
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = get_tenant_db(client)
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        query = {
+            'User': username,
+            'Status': {'$in': ['planned', 'active', 'completed']},
+        }
+
+        if start and end:
+            try:
+                start_dt = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
+                end_dt = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
+                if start_dt.tzinfo is not None:
+                    start_dt = start_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+                if end_dt.tzinfo is not None:
+                    end_dt = end_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+                query['$or'] = [
+                    {'Start': {'$lt': end_dt}, 'End': {'$gt': start_dt}},
+                    {'Start': {'$lt': end_dt}, 'End': {'$exists': False}},
+                ]
+            except Exception:
+                pass
+
+        bookings = list(ausleihungen.find(query).sort('Start', 1))
+
+        result = []
+        for booking in bookings:
+            start_dt = booking.get('Start')
+            if not start_dt:
+                continue
+
+            end_dt = booking.get('End')
+            if not end_dt and isinstance(start_dt, datetime.datetime):
+                end_dt = start_dt + datetime.timedelta(minutes=45)
+            elif not end_dt:
+                end_dt = start_dt
+
+            item_id = str(booking.get('Item') or '')
+            item_doc = None
+            if item_id:
+                try:
+                    item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+                except Exception:
+                    item_doc = None
+
+            item_name = item_id or 'Termin'
+            if item_doc:
+                item_name = item_doc.get('Name') or item_doc.get('Code_4') or item_name
+
+            period = booking.get('Period')
+            title = item_name
+            if period:
+                title = f"{title} - {period}. Std"
+
+            status = booking.get('VerifiedStatus') or booking.get('Status') or 'unknown'
+            result.append({
+                'id': str(booking.get('_id')),
+                'title': title,
+                'start': start_dt.isoformat() if isinstance(start_dt, datetime.datetime) else str(start_dt),
+                'end': end_dt.isoformat() if isinstance(end_dt, datetime.datetime) else str(end_dt),
+                'status': status,
+                'itemId': item_id,
+                'userName': str(booking.get('User') or ''),
+                'notes': str(booking.get('Notes') or ''),
+                'period': period,
+                'isCurrentUser': True,
+                'itemBorrower': '',
             })
 
         return jsonify({'ok': True, 'bookings': result})
