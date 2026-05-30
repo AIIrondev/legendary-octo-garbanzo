@@ -2,6 +2,7 @@
 Class for all funktions of the executive -> Lehrer
 """
 import datetime
+from datetime import timedelta
 from flask import url_for
 import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
@@ -33,7 +34,78 @@ def _normalize_mail_list(mail):
         return [entry.strip() for entry in mail.replace(';', ',').split(',') if entry.strip()]
     return []
 
-def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="") -> str:
+def _escape_ics_text(value):
+    return str(value or '').replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\r\n', '\n').replace('\n', '\\n').replace('\r', '')
+
+
+def _format_ics_date(date_value):
+    if isinstance(date_value, datetime.datetime):
+        return date_value.strftime('%Y%m%dT%H%M%SZ')
+    if isinstance(date_value, datetime.date):
+        return date_value.strftime('%Y%m%d')
+    return ''
+
+
+def build_calendar_ics(appointment_id: str) -> str | None:
+    item = termin.get_item(appointment_id)
+    if not item:
+        return None
+
+    date_start = item.get('date_start')
+    date_end = item.get('date_end')
+    time_span = item.get('time_span', []) or []
+    creator = item.get('user', 'Terminplaner')
+    note = item.get('note', '') or ''
+    try:
+        link = url_for('terminplaner.client', appointment_id=str(appointment_id), _external=True)
+    except Exception:
+        tenant_context = get_tenant_context()
+        subdomain = ''
+        if tenant_context:
+            subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
+        host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+        link = host + "/terminplaner/client/" + str(appointment_id)
+
+    try:
+        start_date = datetime.datetime.strptime(str(date_start), '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(str(date_end), '%Y-%m-%d').date()
+    except Exception:
+        return None
+
+    uid = f"terminplaner-{appointment_id}@invario.eu"
+    created_at = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    summary = f"Terminplan für {creator}"
+    description_lines = [
+        f"Buchungslink: {link}",
+        f"Zeitraum: {date_start} bis {date_end}",
+    ]
+    if time_span:
+        description_lines.append('Zeitfenster: ' + '; '.join(str(entry) for entry in time_span))
+    if note:
+        description_lines.append('Notiz: ' + str(note))
+
+    ics_lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Inventarsystem//Terminplaner//DE',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        f'UID:{uid}',
+        f'DTSTAMP:{created_at}',
+        f'SUMMARY:{_escape_ics_text(summary)}',
+        f'DESCRIPTION:{_escape_ics_text(chr(10).join(description_lines))}',
+        f'URL:{_escape_ics_text(link)}',
+        f'DTSTART;VALUE=DATE:{_format_ics_date(start_date)}',
+        f'DTEND;VALUE=DATE:{_format_ics_date(end_date + timedelta(days=1))}',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+    ]
+    return '\r\n'.join(ics_lines)
+
+
+def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False) -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
     
@@ -49,7 +121,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     """
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail)
-    id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note)
+    id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled)
     id_str = str(id)
 
     tenant_context = get_tenant_context()
@@ -64,9 +136,30 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
         link = host + "/terminplaner/client/" + id_str
     subject = f"Terminanfrage von {user}"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
+    calendar_link = None
+    if calendar_enabled:
+        try:
+            calendar_link = url_for('terminplaner.calendar_export', appointment_id=id_str, _external=True)
+        except Exception:
+            tenant_context = get_tenant_context()
+            subdomain = ''
+            if tenant_context:
+                subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
+            host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+            calendar_link = host + "/terminplaner/calendar/" + id_str + ".ics"
+
+    email_body = note_link
+    if calendar_link:
+        email_body += f"\n\nKalendereintrag: {calendar_link}"
+
     if normalized_mail and cfg.EMAIL_ENABLED:
-        mail_service.send(normalized_mail, subject, note_link)
-    return link
+        mail_service.send(normalized_mail, subject, email_body)
+
+    return {
+        'appointment_id': id_str,
+        'link': link,
+        'calendar_link': calendar_link,
+    }
     
         
 def book_slot(id, date_start_time, name):

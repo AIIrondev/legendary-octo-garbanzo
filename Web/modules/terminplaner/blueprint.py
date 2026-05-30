@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, session, url_for, redirect, flash
+from flask import Response
 import Web.modules.terminplaner.backend_server as appointment_service
 import Web.modules.database.settings as cfg
 
@@ -72,6 +73,7 @@ def configure():
         slot_lenght = request.form.get('slot_lenght')
         mail = request.form.get('mail', '')
         note = request.form.get('note', '')
+        add_to_calendar = request.form.get('add_to_calendar') == 'on'
 
         if not start or not end or not time or not slots_amount or not slot_lenght:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
@@ -82,12 +84,14 @@ def configure():
                 email_service_enabled=cfg.EMAIL_ENABLED,
             )
 
-        link = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note)
+        result = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note, calendar_enabled=add_to_calendar)
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
-            generated_link=link,
+            generated_link=result['link'],
+            calendar_link=result.get('calendar_link'),
+            add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
         )
     elif request.method == "GET":
@@ -95,8 +99,26 @@ def configure():
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
             generated_link=None,
+            calendar_link=None,
+            add_to_calendar=False,
             email_service_enabled=cfg.EMAIL_ENABLED,
         )
+
+
+@appoint_bp.route('/calendar/<appointment_id>.ics', methods=['GET'])
+def calendar_export(appointment_id):
+    guard = _require_module_enabled()
+    if guard:
+        return guard
+
+    ics_content = appointment_service.build_calendar_ics(appointment_id)
+    if not ics_content:
+        flash('Der Termin wurde nicht gefunden.', 'error')
+        return redirect(url_for('terminplaner.configure'))
+
+    response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
+    response.headers['Content-Disposition'] = f'attachment; filename=terminplan-{appointment_id}.ics'
+    return response
 
 @appoint_bp.route('/')
 def main():
