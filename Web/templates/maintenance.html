@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Wartungsarbeiten - Inventarsystem{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8 col-xl-7">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #0f4c5c, #16697a);">
+                    <p class="text-uppercase small fw-semibold mb-1 opacity-75">Systemstatus</p>
+                    <h1 class="h3 mb-0 fw-bold">Wartungsarbeiten</h1>
+                </div>
+                <div class="card-body p-4 p-md-5 bg-white text-center">
+                    <div class="display-3 fw-bold text-warning mb-3">500</div>
+                    <p class="lead mb-2">Das System führt gerade Wartungsarbeiten durch.</p>
+                    <p class="text-muted mb-4">Bitte versuchen Sie es in wenigen Minuten erneut. Falls das Problem bestehen bleibt, informieren Sie bitte die Administration.</p>
+
+                    <div class="d-flex flex-column flex-sm-row justify-content-center gap-2">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Zum Login</a>
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-lg">Zurück</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

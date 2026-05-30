@@ -13,6 +13,14 @@ def _require_module_enabled():
         return redirect(url_for('home'))
     return None
 
+
+def _appointment_not_found_response():
+    return render_template(
+        'terminplaner_not_found.html',
+        error_code=404,
+        error_message='Der Termin wurde nicht gefunden.',
+    ), 404
+
 @appoint_bp.route('/client/<appointment_id>', methods=['POST', 'GET'])
 def client(appointment_id):
     """
@@ -24,8 +32,7 @@ def client(appointment_id):
 
     available = appointment_service.get_available(appointment_id)
     if not available:
-        flash('Der Termin wurde nicht gefunden.', 'error')
-        return redirect(url_for('terminplan'))
+        return _appointment_not_found_response()
 
     if request.method == 'POST':
         start_daytime = request.form.get('start_day_time')
@@ -113,8 +120,7 @@ def calendar_export(appointment_id):
 
     ics_content = appointment_service.build_calendar_ics(appointment_id)
     if not ics_content:
-        flash('Der Termin wurde nicht gefunden.', 'error')
-        return redirect(url_for('terminplaner.configure'))
+        return _appointment_not_found_response()
 
     response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
     response.headers['Content-Disposition'] = f'attachment; filename=terminplan-{appointment_id}.ics'

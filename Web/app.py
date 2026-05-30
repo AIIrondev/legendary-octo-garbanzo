@@ -626,13 +626,17 @@ def handle_unexpected_exception(e):
     if request.is_json or request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error', 'status': 500}), 500
 
-    if 'username' in session:
+    try:
+        return render_template(
+            'maintenance.html',
+            error_code=500,
+            error_message='Das System führt gerade Wartungsarbeiten durch.',
+        ), 500
+    except Exception:
         try:
-            return render_template('error.html', error_code=500, error_message='Interner Serverfehler.'), 500
+            return render_template('error.html', error_code=500, error_message='Das System führt gerade Wartungsarbeiten durch.'), 500
         except Exception:
             return 'Internal Server Error', 500
-
-    return redirect(url_for('login'))
 
 
 def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
