@@ -14,8 +14,8 @@
                         <p class="lead mb-0" style="max-width: 60ch; opacity: .95;">Erstellen Sie neue Terminreihen, teilen Sie Buchungslinks und öffnen Sie den Kalender für bestehende Reservierungen.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <a class="btn btn-light btn-lg fw-semibold" href="{{ url_for('terminplaner.configure') }}">Neue Planung</a>
-                        <a class="btn btn-outline-light btn-lg fw-semibold" href="{{ url_for('terminplan') }}">Kalender öffnen</a>
+                        <a class="btn btn-light btn-lg fw-semibold" href="{{ url_for('terminplaner.configure', tenant=tenant_id) }}">Neue Planung</a>
+                        <a class="btn btn-outline-light btn-lg fw-semibold" href="{{ url_for('terminplan', tenant=tenant_id) }}">Kalender öffnen</a>
                     </div>
                 </div>
             </section>
@@ -27,7 +27,7 @@
                             <div class="display-6 mb-3">🗓️</div>
                             <h2 class="h4 fw-bold">Kalender</h2>
                             <p class="mb-4 text-muted">Sehen Sie vorhandene Termine, ihre Auslastung und die aktuellen Reservierungen im Kalender.</p>
-                            <a class="btn btn-primary w-100" href="{{ url_for('terminplan') }}">Zum Kalender</a>
+                            <a class="btn btn-primary w-100" href="{{ url_for('terminplan', tenant=tenant_id) }}">Zum Kalender</a>
                         </div>
                     </div>
                 </div>
@@ -37,7 +37,7 @@
                             <div class="display-6 mb-3">✍️</div>
                             <h2 class="h4 fw-bold">Neue Planung</h2>
                             <p class="mb-4 text-muted">Erstellen Sie einen neuen Terminplan und verschicken Sie den Buchungslink an Ihre Zielgruppe.</p>
-                            <a class="btn btn-outline-primary w-100" href="{{ url_for('terminplaner.configure') }}">Konfiguration öffnen</a>
+                            <a class="btn btn-outline-primary w-100" href="{{ url_for('terminplaner.configure', tenant=tenant_id) }}">Konfiguration öffnen</a>
                         </div>
                     </div>
                 </div>
@@ -87,6 +87,9 @@
                                     {% if event.calendar_link %}
                                     <a class="btn btn-sm btn-outline-primary" href="{{ event.calendar_link }}">.ics</a>
                                     {% endif %}
+                                    <form method="post" action="{{ url_for('terminplaner.delete_appointment', appointment_id=event.appointment_id, tenant=tenant_id) }}" class="d-inline" onsubmit="return confirm('Diesen Terminplan wirklich löschen?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Entfernen</button>
+                                    </form>
                                 </div>
                             </div>
                         </div>

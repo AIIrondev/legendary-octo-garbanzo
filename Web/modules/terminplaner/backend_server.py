@@ -24,6 +24,18 @@ def _resolve_public_base_url() -> str:
     return f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
 
 
+def _current_tenant_id() -> str:
+    tenant_context = get_tenant_context()
+    if tenant_context and getattr(tenant_context, 'tenant_id', None):
+        return str(tenant_context.tenant_id)
+    if has_request_context():
+        try:
+            return str(request.args.get('tenant', '') or request.args.get('tenant_id', '') or '').strip()
+        except Exception:
+            return ''
+    return ''
+
+
 def _normalize_time_span(time_span):
     if isinstance(time_span, list):
         return [str(entry).strip() for entry in time_span if str(entry).strip()]
@@ -70,11 +82,14 @@ def build_calendar_ics(appointment_id: str) -> str | None:
     time_span = item.get('time_span', []) or []
     creator = item.get('user', 'Terminplaner')
     note = item.get('note', '') or ''
+    tenant_id = _current_tenant_id()
     try:
-        link = url_for('terminplaner.client', appointment_id=str(appointment_id), _external=True)
+        link = url_for('terminplaner.client', appointment_id=str(appointment_id), tenant=tenant_id or None, _external=True)
     except Exception:
         host = _resolve_public_base_url()
         link = host + "/terminplaner/client/" + str(appointment_id)
+        if tenant_id:
+            link += f"?tenant={tenant_id}"
 
     try:
         start_date = datetime.datetime.strptime(str(date_start), '%Y-%m-%d').date()
@@ -133,21 +148,26 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     normalized_mail = _normalize_mail_list(mail)
     id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled)
     id_str = str(id)
+    tenant_id = _current_tenant_id()
 
     try:
-        link = url_for('terminplaner.client', appointment_id=id_str, _external=True)
+        link = url_for('terminplaner.client', appointment_id=id_str, tenant=tenant_id or None, _external=True)
     except Exception:
         host = _resolve_public_base_url()
         link = host + "/terminplaner/client/" + id_str
+        if tenant_id:
+            link += f"?tenant={tenant_id}"
     subject = f"Terminanfrage von {user}"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
     calendar_link = None
     if calendar_enabled:
         try:
-            calendar_link = url_for('terminplaner.calendar_export', appointment_id=id_str, _external=True)
+            calendar_link = url_for('terminplaner.calendar_export', appointment_id=id_str, tenant=tenant_id or None, _external=True)
         except Exception:
             host = _resolve_public_base_url()
             calendar_link = host + "/terminplaner/calendar/" + id_str + ".ics"
+            if tenant_id:
+                calendar_link += f"?tenant={tenant_id}"
 
     email_body = note_link
     if calendar_link:
@@ -324,6 +344,7 @@ def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
 
     appointments = termin.get_upcoming_for_user(user_name, limit=limit)
     host = _resolve_public_base_url()
+    tenant_id = _current_tenant_id()
 
     result = []
     for item in appointments:
@@ -332,14 +353,18 @@ def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
             continue
 
         try:
-            link = url_for('terminplaner.client', appointment_id=appointment_id, _external=True)
+            link = url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id or None, _external=True)
         except Exception:
             link = host + '/terminplaner/client/' + appointment_id
+            if tenant_id:
+                link += f'?tenant={tenant_id}'
 
         try:
-            calendar_link = url_for('terminplaner.calendar_export', appointment_id=appointment_id, _external=True)
+            calendar_link = url_for('terminplaner.calendar_export', appointment_id=appointment_id, tenant=tenant_id or None, _external=True)
         except Exception:
             calendar_link = host + '/terminplaner/calendar/' + appointment_id + '.ics'
+            if tenant_id:
+                calendar_link += f'?tenant={tenant_id}'
 
         slots_total = int(item.get('slots', 0) or 0)
         slots_booked = item.get('slots_booked', []) or []

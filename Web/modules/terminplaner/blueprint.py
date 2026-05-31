@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, session, url_for, redirec
 from flask import Response
 import Web.modules.terminplaner.backend_server as appointment_service
 import Web.modules.database.settings as cfg
+import Web.modules.database.termine as termin
+import Web.modules.database.user as us
 
 # Create a blueprint instance
 appoint_bp = Blueprint('terminplaner', __name__)
@@ -20,6 +22,17 @@ def _appointment_not_found_response():
         error_code=404,
         error_message='Der Termin wurde nicht gefunden.',
     ), 404
+
+
+def _current_tenant_id():
+    try:
+        from Web.tenant import get_tenant_context
+        ctx = get_tenant_context()
+        if ctx and getattr(ctx, 'tenant_id', None):
+            return str(ctx.tenant_id)
+    except Exception:
+        pass
+    return str(session.get('tenant_id', '') or '').strip()
 
 @appoint_bp.route('/client/<appointment_id>', methods=['POST', 'GET'])
 def client(appointment_id):
@@ -57,7 +70,36 @@ def client(appointment_id):
         appointment_id=appointment_id,
         available=available,
         current_user=session.get('username', ''),
+        tenant_id=_current_tenant_id(),
     )
+
+
+@appoint_bp.route('/delete/<appointment_id>', methods=['POST'])
+def delete_appointment(appointment_id):
+    guard = _require_module_enabled()
+    if guard:
+        return guard
+
+    if 'username' not in session:
+        flash('Bitte mit einem Konto anmelden.', 'error')
+        return redirect(url_for('login'))
+
+    appointment = termin.get_item(appointment_id)
+    if not appointment:
+        return _appointment_not_found_response()
+
+    current_user = str(session.get('username', '')).strip()
+    appointment_user = str(appointment.get('user', '')).strip()
+    if not us.check_admin(current_user) and appointment_user != current_user:
+        flash('Sie dürfen diesen Termin nicht löschen.', 'error')
+        return redirect(url_for('terminplaner.main', tenant=_current_tenant_id() or None))
+
+    if termin.remove(appointment_id):
+        flash('Der Terminplan wurde gelöscht.', 'success')
+    else:
+        flash('Der Terminplan konnte nicht gelöscht werden.', 'error')
+
+    return redirect(url_for('terminplaner.main', tenant=_current_tenant_id() or None))
 
 @appoint_bp.route('/configure', methods=['GET', 'POST'])
 def configure():
@@ -134,10 +176,12 @@ def main():
 
     current_user = session.get('username', '')
     upcoming_events = appointment_service.get_user_upcoming_events(current_user) if current_user else []
+    tenant_id = _current_tenant_id()
 
     return render_template(
         'terminplaner.html',
         school_periods=cfg.SCHOOL_PERIODS,
         current_user=current_user,
         upcoming_events=upcoming_events,
+        tenant_id=tenant_id,
     )

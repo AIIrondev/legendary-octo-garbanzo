@@ -473,6 +473,20 @@ class TenantContext:
         if not has_request_context():
             return None
 
+        # Query parameters are useful for public links that must open a specific tenant
+        # even when the host/subdomain cannot be mapped reliably.
+        tenant_from_query = (
+            request.args.get('tenant', '').strip()
+            or request.args.get('tenant_id', '').strip()
+            or request.args.get('tenantId', '').strip()
+        )
+        if tenant_from_query:
+            matched_tenant = _find_registered_tenant_id(tenant_from_query) or tenant_from_query
+            self.tenant_id = matched_tenant
+            self.config = get_tenant_config(matched_tenant)
+            session['tenant_id'] = matched_tenant
+            return self._get_db_name(matched_tenant)
+
         # Priority 1: X-Tenant-ID header (for testing/internal APIs)
         tenant_from_header = request.headers.get('X-Tenant-ID', '').strip()
         if tenant_from_header:
@@ -531,6 +545,10 @@ class TenantContext:
                     potential_subdomain = parts[0]
                     if potential_subdomain not in ('www', 'api', 'admin', 'app', 'mail'):
                         matched_tenant = _find_registered_tenant_id(potential_subdomain)
+                        if not matched_tenant and potential_subdomain.startswith('school'):
+                            matched_tenant = _find_registered_tenant_id('schule' + potential_subdomain[len('school'):])
+                        elif not matched_tenant and potential_subdomain.startswith('schule'):
+                            matched_tenant = _find_registered_tenant_id('school' + potential_subdomain[len('schule'):])
                         if matched_tenant:
                             self.subdomain = potential_subdomain
                             self.tenant_id = matched_tenant

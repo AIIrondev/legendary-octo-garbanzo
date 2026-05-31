@@ -166,7 +166,7 @@ def remove(id):
         result = items.delete_one({'_id': ObjectId(id)})
 
         client.close()
-        return result.modified_count > 0
+        return result.deleted_count > 0
     except Exception as e:
         print(f"Error removing appointment: {e}")
         return False
@@ -179,6 +179,7 @@ def remove_done():
         items = db['appointments']
 
         today = datetime.date.today().strftime('%Y-%m-%d')
+        removed_count = 0
 
         cursor = items.find(
             _active_record_query(
@@ -191,9 +192,10 @@ def remove_done():
         for item in cursor:
             item['_id'] = str(item.get('_id'))
             result = items.delete_one({'_id': ObjectId(item['_id'])})
+            removed_count += result.deleted_count
         
         client.close()
-        return result.modified_count > 0
+        return removed_count > 0
     except Exception as e:
         print(f"Error removing appointment: {e}")
         return False
