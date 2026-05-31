@@ -293,6 +293,17 @@ def get_available(id):
         time_span = termin_range.get('time_span', [])
         slot_lenght = termin_range.get('slot_lenght')
         total_slots = termin_range.get('slots', 0)
+        # Ensure numeric fields are cast to int when stored as strings
+        try:
+            total_slots = int(termin_range.get('slots', 0) or 0)
+        except Exception:
+            total_slots = 0
+
+        try:
+            slot_lenght = int(termin_range.get('slot_lenght') or 0)
+        except Exception:
+            slot_lenght = termin_range.get('slot_lenght')
+
         booked = termin_range.get('slots_booked', []) or []
 
         # Normalize booked entries to dicts for easier consumption
@@ -306,7 +317,10 @@ def get_available(id):
                 normalized.append({'value': s})
 
         slots_used = len(normalized)
-        slots_left = max(0, total_slots - slots_used)
+        try:
+            slots_left = max(0, int(total_slots) - slots_used)
+        except Exception:
+            slots_left = max(0, slots_used - slots_used)
 
         return {
             'date_start': date_start,
