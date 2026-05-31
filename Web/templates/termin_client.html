@@ -141,6 +141,7 @@
         const appointmentId = {{ appointment_id|tojson }};
         const slider = document.getElementById('day-slider');
         const sliderLabel = document.getElementById('day-slider-label');
+        const sliderWrap = slider ? slider.closest('.day-slider-wrap') : null;
         const selectedSlotInput = document.getElementById('start_day_time');
         const selectedSlotBadge = document.getElementById('selected-slot-badge');
         const clientNameInput = document.getElementById('client_name');
@@ -189,6 +190,19 @@
 
         function addMinutes(dateObj, minutes) {
             return new Date(dateObj.getTime() + minutes * 60000);
+        }
+
+        function formatTimeForCalendar(dateObj) {
+            return String(dateObj.getHours()).padStart(2, '0') + ':' + String(dateObj.getMinutes()).padStart(2, '0') + ':00';
+        }
+
+        function addDays(dateStr, days) {
+            const d = new Date(dateStr + 'T00:00:00');
+            d.setDate(d.getDate() + days);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
         }
 
         function parseTimeSpanEntry(entry) {
@@ -242,12 +256,48 @@
 
         const candidateSlots = buildCandidateSlots();
         const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
+        const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
+
+        let slotMinTime = '08:00:00';
+        let slotMaxTime = '18:00:00';
+        if (candidateSlots.length > 0) {
+            const starts = candidateSlots.map(function (slot) {
+                return new Date(slot.start.replace(' ', 'T') + ':00');
+            }).filter(function (d) { return !Number.isNaN(d.getTime()); });
+            const ends = candidateSlots.map(function (slot) {
+                return new Date(slot.end.replace(' ', 'T') + ':00');
+            }).filter(function (d) { return !Number.isNaN(d.getTime()); });
+
+            if (starts.length > 0 && ends.length > 0) {
+                let minStart = starts[0];
+                let maxEnd = ends[0];
+                starts.forEach(function (d) { if (d < minStart) minStart = d; });
+                ends.forEach(function (d) { if (d > maxEnd) maxEnd = d; });
+                slotMinTime = formatTimeForCalendar(minStart);
+                slotMaxTime = formatTimeForCalendar(maxEnd);
+            }
+        }
+
+        const visibleStart = allDays[0] || String(available.date_start || '');
+        const visibleEndExclusive = allDays.length > 0
+            ? addDays(allDays[allDays.length - 1], 1)
+            : addDays(String(available.date_end || available.date_start || ''), 1);
+
+        const multiDayDuration = Math.max(1, allDays.length || 1);
+        const initialViewName = multiDayDuration === 1 ? 'timeGridDay' : 'timeGridRange';
         let selectedSlot = '';
         let selectedEvent = null;
         let selectedShownOnce = false;
 
         const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
+            initialView: initialViewName,
+            views: {
+                timeGridRange: {
+                    type: 'timeGrid',
+                    duration: { days: multiDayDuration },
+                    buttonText: 'Zeitraum'
+                }
+            },
             locale: 'de',
             firstDay: 1,
             height: 'auto',
@@ -258,11 +308,21 @@
             selectable: false,
             slotDuration: '00:15:00',
             snapDuration: '00:15:00',
+            slotMinTime: slotMinTime,
+            slotMaxTime: slotMaxTime,
             nowIndicator: true,
+            validRange: {
+                start: visibleStart,
+                end: visibleEndExclusive,
+            },
+            visibleRange: {
+                start: visibleStart,
+                end: visibleEndExclusive,
+            },
             headerToolbar: {
-                left: 'prev,next today',
+                left: '',
                 center: 'title',
-                right: 'timeGridDay,timeGridWeek'
+                right: multiDayDuration === 1 ? '' : 'timeGridDay,timeGridRange'
             },
             events: [],
             eventDrop: function (info) {
@@ -386,7 +446,10 @@
 
         clientNameInput.addEventListener('input', refreshIcsLink);
 
-        const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
+        if (sliderWrap) {
+            sliderWrap.style.display = multiDayDuration > 1 ? '' : 'none';
+        }
+
         slider.max = String(Math.max(0, allDays.length - 1));
         slider.value = '0';
         updateSliderLabel();
@@ -398,7 +461,9 @@
             const idx = Number.parseInt(slider.value, 10) || 0;
             updateSliderLabel();
             if (allDays[idx]) {
-                calendar.gotoDate(allDays[idx]);
+                if (calendar.view.type === 'timeGridDay') {
+                    calendar.gotoDate(allDays[idx]);
+                }
             }
         });
 
