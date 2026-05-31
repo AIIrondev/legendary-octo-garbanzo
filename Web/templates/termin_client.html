@@ -127,8 +127,9 @@
                 <p class="mb-0 small text-muted">Mit einem Klick auf ".ics herunterladen" können Sie den Termin in Apple/Google/Outlook-Kalender importieren.</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Später</button>
-                <a id="download-slot-ics" class="btn btn-primary" href="#">.ics herunterladen</a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button id="confirm-booking-only" type="button" class="btn btn-primary">Jetzt buchen</button>
+                <button id="confirm-booking-with-ics" type="button" class="btn btn-success">Buchen + .ics</button>
             </div>
         </div>
     </div>
@@ -148,7 +149,8 @@
         const form = document.getElementById('client-booking-form');
         const calendarEl = document.getElementById('client-slot-calendar');
         const modalEl = document.getElementById('calendarDownloadModal');
-        const downloadIcsLink = document.getElementById('download-slot-ics');
+        const confirmBookingOnlyBtn = document.getElementById('confirm-booking-only');
+        const confirmBookingWithIcsBtn = document.getElementById('confirm-booking-with-ics');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
 
         const slotLength = Number.parseInt(available.slot_lenght, 10) || 45;
@@ -287,7 +289,7 @@
         const initialViewName = multiDayDuration === 1 ? 'timeGridDay' : 'timeGridRange';
         let selectedSlot = '';
         let selectedEvent = null;
-        let selectedShownOnce = false;
+        let allowImmediateSubmit = false;
 
         const calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: initialViewName,
@@ -379,18 +381,10 @@
                 editable: true,
             });
 
-            if (modal && !selectedShownOnce) {
-                selectedShownOnce = true;
-                modal.show();
-            }
-
             refreshIcsLink();
         }
 
-        function refreshIcsLink() {
-            if (!downloadIcsLink) {
-                return;
-            }
+        function getIcsDownloadUrl() {
             const base = {{ url_for('terminplaner.client_slot_calendar_export', appointment_id=appointment_id, tenant=tenant_id)|tojson }};
             const url = new URL(base, window.location.origin);
             if (selectedSlot) {
@@ -400,7 +394,14 @@
             if (name) {
                 url.searchParams.set('name', name);
             }
-            downloadIcsLink.setAttribute('href', url.toString());
+            return url.toString();
+        }
+
+        function refreshIcsLink() {
+            const icsUrl = getIcsDownloadUrl();
+            if (confirmBookingWithIcsBtn) {
+                confirmBookingWithIcsBtn.setAttribute('data-ics-url', icsUrl);
+            }
         }
 
         candidateSlots.forEach(function (slot) {
@@ -441,8 +442,42 @@
             if (!selectedSlotInput.value) {
                 ev.preventDefault();
                 window.alert('Bitte zuerst im Kalender einen freien Slot auswählen.');
+                return;
+            }
+
+            if (allowImmediateSubmit) {
+                return;
+            }
+
+            ev.preventDefault();
+            if (modal) {
+                modal.show();
             }
         });
+
+        if (confirmBookingOnlyBtn) {
+            confirmBookingOnlyBtn.addEventListener('click', function () {
+                allowImmediateSubmit = true;
+                if (modal) {
+                    modal.hide();
+                }
+                form.submit();
+            });
+        }
+
+        if (confirmBookingWithIcsBtn) {
+            confirmBookingWithIcsBtn.addEventListener('click', function () {
+                const icsUrl = confirmBookingWithIcsBtn.getAttribute('data-ics-url') || getIcsDownloadUrl();
+                if (icsUrl) {
+                    window.open(icsUrl, '_blank');
+                }
+                allowImmediateSubmit = true;
+                if (modal) {
+                    modal.hide();
+                }
+                form.submit();
+            });
+        }
 
         clientNameInput.addEventListener('input', refreshIcsLink);
 
