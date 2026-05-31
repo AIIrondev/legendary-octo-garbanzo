@@ -2,17 +2,49 @@
 
 {% block title %}Termin buchen - Inventarsystem{% endblock %}
 
+{% block head %}
+{{ super() }}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<style>
+    #client-slot-calendar {
+        min-height: 520px;
+    }
+    .fc .fc-timegrid-slot-label-cushion,
+    .fc .fc-timegrid-axis-cushion,
+    .fc .fc-col-header-cell-cushion {
+        font-weight: 600;
+    }
+    .slot-selected-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        border-radius: 999px;
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+        padding: .35rem .75rem;
+        font-size: .9rem;
+        font-weight: 700;
+    }
+    .day-slider-wrap {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: .9rem;
+        padding: .8rem 1rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
     <div class="row justify-content-center">
-        <div class="col-12 col-xl-10">
+        <div class="col-12 col-xxl-11">
             <div class="row g-4">
-                <div class="col-12 col-lg-5">
+                <div class="col-12 col-lg-4">
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5">
                             <p class="text-uppercase text-muted fw-semibold mb-2">Terminplaner</p>
                             <h1 class="h3 fw-bold mb-3">Termin buchen</h1>
-                            <p class="text-muted mb-4">Wählen Sie einen freien Zeitpunkt und tragen Sie Ihren Namen ein. Der Termin wird anschließend im Plan gespeichert.</p>
+                            <p class="text-muted mb-4">Wählen Sie im Kalender einen freien Slot aus. Den gewählten Termin können Sie danach direkt wie in einem Kalender-Block verschieben.</p>
 
                             <div class="p-3 rounded-3 bg-light mb-3">
                                 <div class="fw-semibold">Zeitraum</div>
@@ -25,6 +57,11 @@
                             <div class="p-3 rounded-3 bg-light mb-3">
                                 <div class="fw-semibold">Slot-Länge</div>
                                 <div>{{ available.slot_lenght }} Minuten</div>
+                            </div>
+
+                            <div class="p-3 rounded-3 bg-light mb-3">
+                                <div class="fw-semibold mb-2">Gewählter Termin</div>
+                                <div id="selected-slot-badge" class="text-muted small">Noch kein Slot ausgewählt.</div>
                             </div>
 
                             {% if available.slots_booked %}
@@ -40,15 +77,26 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-12 col-lg-7">
+                <div class="col-12 col-lg-8">
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5 bg-white">
-                            <h2 class="h4 fw-bold mb-4">Buchung absenden</h2>
-                            <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" class="vstack gap-3">
+                            <h2 class="h4 fw-bold mb-3">Termin im Kalender auswählen</h2>
+
+                            <div class="day-slider-wrap mb-3">
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                    <span class="small text-muted">Tag wählen</span>
+                                    <strong id="day-slider-label" class="small"></strong>
+                                </div>
+                                <input id="day-slider" type="range" class="form-range m-0" min="0" max="0" value="0">
+                            </div>
+
+                            <div id="client-slot-calendar" class="mb-4"></div>
+
+                            <form id="client-booking-form" method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" class="vstack gap-3">
                                 <div>
                                     <label for="start_day_time" class="form-label fw-semibold">Gewünschter Zeitpunkt</label>
-                                    <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="2026-05-29 10:30" required>
-                                    <div class="form-text">Tragen Sie Datum und Uhrzeit im Format YYYY-MM-DD HH:MM ein, sofern kein Kalenderfeld genutzt wird.</div>
+                                    <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="Bitte im Kalender auswählen" readonly required>
+                                    <div class="form-text">Klicken Sie auf einen freien Slot oder verschieben Sie den gewählten Block.</div>
                                 </div>
                                 <div>
                                     <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
@@ -66,4 +114,296 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="calendarDownloadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Termin zum Kalender hinzufügen?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Sie haben einen Termin ausgewählt.</p>
+                <p class="mb-0 small text-muted">Mit einem Klick auf ".ics herunterladen" können Sie den Termin in Apple/Google/Outlook-Kalender importieren.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Später</button>
+                <a id="download-slot-ics" class="btn btn-primary" href="#">.ics herunterladen</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+    (function () {
+        const available = {{ available|tojson }};
+        const appointmentId = {{ appointment_id|tojson }};
+        const slider = document.getElementById('day-slider');
+        const sliderLabel = document.getElementById('day-slider-label');
+        const selectedSlotInput = document.getElementById('start_day_time');
+        const selectedSlotBadge = document.getElementById('selected-slot-badge');
+        const clientNameInput = document.getElementById('client_name');
+        const form = document.getElementById('client-booking-form');
+        const calendarEl = document.getElementById('client-slot-calendar');
+        const modalEl = document.getElementById('calendarDownloadModal');
+        const downloadIcsLink = document.getElementById('download-slot-ics');
+        const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+
+        const slotLength = Number.parseInt(available.slot_lenght, 10) || 45;
+        const bookedStarts = new Set((available.slots_booked || []).map(function (entry) {
+            return String(entry.start || '').trim();
+        }).filter(Boolean));
+
+        function formatDateForInput(dateObj) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            const hh = String(dateObj.getHours()).padStart(2, '0');
+            const mm = String(dateObj.getMinutes()).padStart(2, '0');
+            return y + '-' + m + '-' + d + ' ' + hh + ':' + mm;
+        }
+
+        function formatDateReadable(value) {
+            if (!value) return 'Noch kein Slot ausgewählt.';
+            return 'Ausgewählt: ' + value;
+        }
+
+        function dateRangeInclusive(startStr, endStr) {
+            const days = [];
+            const start = new Date(startStr + 'T00:00:00');
+            const end = new Date(endStr + 'T00:00:00');
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                return days;
+            }
+            const cursor = new Date(start);
+            while (cursor <= end) {
+                const y = cursor.getFullYear();
+                const m = String(cursor.getMonth() + 1).padStart(2, '0');
+                const d = String(cursor.getDate()).padStart(2, '0');
+                days.push(y + '-' + m + '-' + d);
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            return days;
+        }
+
+        function addMinutes(dateObj, minutes) {
+            return new Date(dateObj.getTime() + minutes * 60000);
+        }
+
+        function parseTimeSpanEntry(entry) {
+            const value = String(entry || '').trim();
+            let m = value.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+            if (m) {
+                return { date: m[1], from: m[2], to: m[3] };
+            }
+            m = value.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+            if (m) {
+                return { date: null, from: m[1], to: m[2] };
+            }
+            return null;
+        }
+
+        function buildCandidateSlots() {
+            const slots = [];
+            const allowedDates = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
+            const spans = Array.isArray(available.time_span) ? available.time_span : [];
+
+            spans.forEach(function (entry) {
+                const parsed = parseTimeSpanEntry(entry);
+                if (!parsed) {
+                    return;
+                }
+
+                const targetDates = parsed.date ? [parsed.date] : allowedDates;
+                targetDates.forEach(function (date) {
+                    const from = new Date(date + 'T' + parsed.from + ':00');
+                    const to = new Date(date + 'T' + parsed.to + ':00');
+                    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
+                        return;
+                    }
+
+                    let cursor = new Date(from);
+                    while (addMinutes(cursor, slotLength) <= to) {
+                        const slotStart = formatDateForInput(cursor);
+                        if (!bookedStarts.has(slotStart)) {
+                            slots.push({
+                                start: slotStart,
+                                end: formatDateForInput(addMinutes(cursor, slotLength)),
+                            });
+                        }
+                        cursor = addMinutes(cursor, slotLength);
+                    }
+                });
+            });
+
+            return slots;
+        }
+
+        const candidateSlots = buildCandidateSlots();
+        const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
+        let selectedSlot = '';
+        let selectedEvent = null;
+        let selectedShownOnce = false;
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            locale: 'de',
+            firstDay: 1,
+            height: 'auto',
+            allDaySlot: false,
+            editable: true,
+            eventStartEditable: true,
+            eventDurationEditable: false,
+            selectable: false,
+            slotDuration: '00:15:00',
+            snapDuration: '00:15:00',
+            nowIndicator: true,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'timeGridDay,timeGridWeek'
+            },
+            events: [],
+            eventDrop: function (info) {
+                if (info.event.id !== 'selected-slot') {
+                    return;
+                }
+                const droppedStart = formatDateForInput(info.event.start);
+                if (!slotStartSet.has(droppedStart)) {
+                    info.revert();
+                    window.alert('Dieser Zeitpunkt ist nicht als freier Slot verfügbar.');
+                    return;
+                }
+                applySelectedSlot(droppedStart);
+            },
+            eventClick: function (info) {
+                const slotType = info.event.extendedProps ? info.event.extendedProps.slotType : '';
+                if (slotType !== 'free') {
+                    return;
+                }
+                applySelectedSlot(info.event.extendedProps.slotStart || '');
+            }
+        });
+
+        function updateSliderLabel() {
+            const dateList = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
+            const idx = Number.parseInt(slider.value, 10) || 0;
+            sliderLabel.textContent = dateList[idx] || '';
+        }
+
+        function applySelectedSlot(value) {
+            selectedSlot = String(value || '').trim();
+            selectedSlotInput.value = selectedSlot;
+            selectedSlotBadge.innerHTML = selectedSlot
+                ? '<span class="slot-selected-chip">' + selectedSlot + '</span>'
+                : 'Noch kein Slot ausgewählt.';
+
+            if (selectedEvent) {
+                selectedEvent.remove();
+                selectedEvent = null;
+            }
+
+            if (!selectedSlot) {
+                return;
+            }
+
+            const start = new Date(selectedSlot.replace(' ', 'T') + ':00');
+            const end = addMinutes(start, slotLength);
+            selectedEvent = calendar.addEvent({
+                id: 'selected-slot',
+                title: 'Ihr ausgewählter Termin',
+                start: start,
+                end: end,
+                color: '#0d6efd',
+                editable: true,
+            });
+
+            if (modal && !selectedShownOnce) {
+                selectedShownOnce = true;
+                modal.show();
+            }
+
+            refreshIcsLink();
+        }
+
+        function refreshIcsLink() {
+            if (!downloadIcsLink) {
+                return;
+            }
+            const base = {{ url_for('terminplaner.client_slot_calendar_export', appointment_id=appointment_id, tenant=tenant_id)|tojson }};
+            const url = new URL(base, window.location.origin);
+            if (selectedSlot) {
+                url.searchParams.set('start', selectedSlot);
+            }
+            const name = String(clientNameInput.value || '').trim();
+            if (name) {
+                url.searchParams.set('name', name);
+            }
+            downloadIcsLink.setAttribute('href', url.toString());
+        }
+
+        candidateSlots.forEach(function (slot) {
+            const start = new Date(slot.start.replace(' ', 'T') + ':00');
+            const end = new Date(slot.end.replace(' ', 'T') + ':00');
+            calendar.addEvent({
+                title: 'Freier Slot',
+                start: start,
+                end: end,
+                color: '#20c997',
+                textColor: '#062b1f',
+                editable: false,
+                extendedProps: {
+                    slotStart: slot.start,
+                    slotType: 'free',
+                }
+            });
+        });
+
+        (available.slots_booked || []).forEach(function (booking) {
+            const startStr = String(booking.start || '').trim();
+            if (!startStr) {
+                return;
+            }
+            const start = new Date(startStr.replace(' ', 'T') + ':00');
+            const end = addMinutes(start, slotLength);
+            calendar.addEvent({
+                title: 'Gebucht' + (booking.name ? ' - ' + booking.name : ''),
+                start: start,
+                end: end,
+                color: '#dc3545',
+                editable: false,
+                display: 'block',
+            });
+        });
+
+        form.addEventListener('submit', function (ev) {
+            if (!selectedSlotInput.value) {
+                ev.preventDefault();
+                window.alert('Bitte zuerst im Kalender einen freien Slot auswählen.');
+            }
+        });
+
+        clientNameInput.addEventListener('input', refreshIcsLink);
+
+        const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
+        slider.max = String(Math.max(0, allDays.length - 1));
+        slider.value = '0';
+        updateSliderLabel();
+        if (allDays.length > 0) {
+            calendar.gotoDate(allDays[0]);
+        }
+
+        slider.addEventListener('input', function () {
+            const idx = Number.parseInt(slider.value, 10) || 0;
+            updateSliderLabel();
+            if (allDays[idx]) {
+                calendar.gotoDate(allDays[idx]);
+            }
+        });
+
+        calendar.render();
+        refreshIcsLink();
+    })();
+</script>
 {% endblock %}

@@ -130,6 +130,68 @@ def build_calendar_ics(appointment_id: str) -> str | None:
     return '\r\n'.join(ics_lines)
 
 
+def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str = '') -> str | None:
+    """Build a single-slot ICS export for a client booking candidate."""
+    item = termin.get_item(appointment_id)
+    if not item:
+        return None
+
+    try:
+        start_dt = datetime.datetime.strptime(str(slot_start).strip(), '%Y-%m-%d %H:%M')
+    except Exception:
+        return None
+
+    try:
+        slot_minutes = int(item.get('slot_lenght') or 0)
+    except Exception:
+        slot_minutes = 0
+    if slot_minutes <= 0:
+        slot_minutes = 45
+
+    end_dt = start_dt + datetime.timedelta(minutes=slot_minutes)
+    tenant_id = _current_tenant_id()
+
+    try:
+        link = url_for('terminplaner.client', appointment_id=str(appointment_id), tenant=tenant_id or None, _external=True)
+    except Exception:
+        host = _resolve_public_base_url()
+        link = host + '/terminplaner/client/' + str(appointment_id)
+        if tenant_id:
+            link += f'?tenant={tenant_id}'
+
+    title_name = str(client_name or '').strip() or 'Termin'
+    summary = f"{title_name} - Terminbuchung"
+    description_lines = [
+        f"Buchungslink: {link}",
+        f"Geplanter Termin: {start_dt.strftime('%d.%m.%Y %H:%M')} - {end_dt.strftime('%H:%M')}",
+    ]
+
+    uid = f"terminplaner-slot-{appointment_id}-{start_dt.strftime('%Y%m%d%H%M')}@invario.eu"
+    created_at = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    dt_start = start_dt.strftime('%Y%m%dT%H%M%S')
+    dt_end = end_dt.strftime('%Y%m%dT%H%M%S')
+
+    ics_lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Inventarsystem//Terminplaner Client Slot//DE',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        f'UID:{uid}',
+        f'DTSTAMP:{created_at}',
+        f'SUMMARY:{_escape_ics_text(summary)}',
+        f'DESCRIPTION:{_escape_ics_text(chr(10).join(description_lines))}',
+        f'URL:{_escape_ics_text(link)}',
+        f'DTSTART:{dt_start}',
+        f'DTEND:{dt_end}',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+    ]
+    return '\r\n'.join(ics_lines)
+
+
 def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False) -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot

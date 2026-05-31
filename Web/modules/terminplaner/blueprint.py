@@ -168,6 +168,23 @@ def calendar_export(appointment_id):
     response.headers['Content-Disposition'] = f'attachment; filename=terminplan-{appointment_id}.ics'
     return response
 
+
+@appoint_bp.route('/client_ics/<appointment_id>.ics', methods=['GET'])
+def client_slot_calendar_export(appointment_id):
+    guard = _require_module_enabled()
+    if guard:
+        return guard
+
+    slot_start = str(request.args.get('start', '') or '').strip()
+    client_name = str(request.args.get('name', '') or '').strip()
+    ics_content = appointment_service.build_client_slot_ics(appointment_id, slot_start, client_name=client_name)
+    if not ics_content:
+        return _appointment_not_found_response()
+
+    response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
+    response.headers['Content-Disposition'] = f'attachment; filename=termin-{appointment_id}-{slot_start.replace(" ", "_").replace(":", "")}.ics'
+    return response
+
 @appoint_bp.route('/')
 def main():
     guard = _require_module_enabled()
