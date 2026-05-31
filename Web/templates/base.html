@@ -1392,28 +1392,7 @@
         {% endif %}
 
     {% else %}
-    <nav class="navbar navbar-expand-lg navbar-dark" id="loginNavbar">
-        <div class="container-fluid">
-                    <a class="navbar-brand py-0" href="{{ url_for('home') }}">
-                        {% set school_logo_thumb = school_info.get('logo_thumb') if school_info else '' %}
-                        {% set school_logo_path = school_info.get('logo_path') if school_info else '' %}
-                        {% if school_logo_thumb or school_logo_path %}
-                            {% if school_logo_thumb %}
-                                <img src="{{ url_for('uploaded_file', filename=school_logo_thumb) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
-                            {% else %}
-                                <img src="{{ url_for('uploaded_file', filename=school_logo_path) }}" alt="{{ school_info.name or 'Schullogo' }}" class="invario-logo">
-                            {% endif %}
-                        {% else %}
-                            <img src="{{ url_for('static', filename='img/invario-logo.png') }}" alt="Invario" class="invario-logo">
-                        {% endif %}
-                    </a>
-            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('impressum') }}">Impressum</a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+    <!-- No navbar for anonymous users on public pages. -->
     {% endif %}
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -1427,6 +1406,11 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+    {% if 'username' not in session %}
+    <div class="guest-impressum-footer">
+        <a href="{{ url_for('impressum') }}">Impressum</a>
+    </div>
+    {% endif %}
     <!-- Cookie consent banner -->
     <style>
         #cookie-banner { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(33,37,41,.98); color: #fff; padding: 14px 16px; display: none; z-index: 2000; box-shadow: 0 -2px 8px rgba(0,0,0,.25); }
@@ -1558,6 +1542,29 @@
         .notification-toast strong {
             display: block;
             margin-bottom: 2px;
+        }
+
+        .guest-impressum-footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 10px;
+            text-align: center;
+            z-index: 1200;
+            pointer-events: none;
+        }
+
+        .guest-impressum-footer a {
+            pointer-events: auto;
+            font-size: 0.76rem;
+            color: rgba(15, 23, 42, 0.72);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.28);
+        }
+
+        .guest-impressum-footer a:hover {
+            color: rgba(15, 23, 42, 0.92);
+            border-bottom-color: rgba(15, 23, 42, 0.52);
         }
 
         .notification-toast.show {

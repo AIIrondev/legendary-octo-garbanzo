@@ -69,7 +69,14 @@
                                 <div class="fw-semibold mb-2">Bereits gebucht</div>
                                 <ul class="mb-0 small">
                                     {% for booking in available.slots_booked %}
-                                    <li>{{ booking.start }}{% if booking.name %} - {{ booking.name }}{% endif %}</li>
+                                    <li>
+                                        {{ booking.start }}
+                                        {% if can_view_booking_names and booking.name %}
+                                        - {{ booking.name }}
+                                        {% else %}
+                                        - Belegt
+                                        {% endif %}
+                                    </li>
                                     {% endfor %}
                                 </ul>
                             </div>

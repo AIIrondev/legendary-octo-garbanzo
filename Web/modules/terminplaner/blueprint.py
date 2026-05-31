@@ -47,6 +47,28 @@ def client(appointment_id):
     if not available:
         return _appointment_not_found_response()
 
+    current_user = str(session.get('username', '') or '').strip()
+    appointment_item = termin.get_item(appointment_id) or {}
+    appointment_owner = str(appointment_item.get('user', '') or '').strip()
+    can_view_booking_names = False
+    if current_user:
+        try:
+            can_view_booking_names = bool(us.check_admin(current_user) or current_user == appointment_owner)
+        except Exception:
+            can_view_booking_names = bool(current_user == appointment_owner)
+
+    available_for_view = dict(available)
+    if not can_view_booking_names:
+        sanitized_bookings = []
+        for booking in (available.get('slots_booked') or []):
+            if isinstance(booking, dict):
+                sanitized_bookings.append({'start': booking.get('start', '')})
+            elif isinstance(booking, (list, tuple)) and len(booking) >= 1:
+                sanitized_bookings.append({'start': booking[0]})
+            else:
+                sanitized_bookings.append({'start': ''})
+        available_for_view['slots_booked'] = sanitized_bookings
+
     if request.method == 'POST':
         start_daytime = request.form.get('start_day_time')
         username = request.form.get('client_name')
@@ -55,21 +77,49 @@ def client(appointment_id):
             return render_template(
                 'termin_client.html',
                 appointment_id=appointment_id,
-                available=available,
+                available=available_for_view,
                 current_user=session.get('username', ''),
+                tenant_id=_current_tenant_id(),
+                can_view_booking_names=can_view_booking_names,
             )
 
         if appointment_service.book_slot(appointment_id, start_daytime, username):
-            flash('Der Termin wurde gespeichert.', 'success')
-            return redirect(url_for('terminplaner.client', appointment_id=appointment_id))
+            return redirect(
+                url_for(
+                    'terminplaner.client_success',
+                    appointment_id=appointment_id,
+                    tenant=_current_tenant_id() or None,
+                    start=start_daytime,
+                    name=username,
+                )
+            )
 
         flash('Der Termin konnte nicht gespeichert werden.', 'error')
 
     return render_template(
         'termin_client.html',
         appointment_id=appointment_id,
-        available=available,
+        available=available_for_view,
         current_user=session.get('username', ''),
+        tenant_id=_current_tenant_id(),
+        can_view_booking_names=can_view_booking_names,
+    )
+
+
+@appoint_bp.route('/client/success/<appointment_id>', methods=['GET'])
+def client_success(appointment_id):
+    guard = _require_module_enabled()
+    if guard:
+        return guard
+
+    slot_start = str(request.args.get('start', '') or '').strip()
+    client_name = str(request.args.get('name', '') or '').strip()
+
+    return render_template(
+        'termin_client_success.html',
+        appointment_id=appointment_id,
+        slot_start=slot_start,
+        client_name=client_name,
         tenant_id=_current_tenant_id(),
     )
 
