@@ -2,6 +2,73 @@
 
 {% block title %}Termin buchen - Inventarsystem{% endblock %}
 
+{% block head %}
+{{ super() }}
+<style>
+    .slot-day-strip {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(220px, 1fr);
+        gap: 0.75rem;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        scroll-snap-type: x proximity;
+    }
+
+    .slot-day-card {
+        scroll-snap-align: start;
+        border: 1px solid rgba(15, 76, 92, 0.12);
+        border-radius: 1rem;
+        background: #fff;
+    }
+
+    .slot-day-card.is-active {
+        border-color: #0f4c5c;
+        box-shadow: 0 0.75rem 1.75rem rgba(15, 76, 92, 0.12);
+    }
+
+    .slot-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .slot-pill {
+        border: 1px solid rgba(15, 76, 92, 0.18);
+        background: #f7fbfc;
+        color: #0f4c5c;
+        border-radius: 999px;
+        padding: 0.65rem 0.9rem;
+        font-weight: 600;
+        transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .slot-pill:hover:not(:disabled) {
+        transform: translateY(-1px);
+        background: #e8f4f6;
+        border-color: #0f4c5c;
+    }
+
+    .slot-pill.active {
+        background: #0f4c5c;
+        color: #fff;
+        border-color: #0f4c5c;
+    }
+
+    .slot-pill:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        text-decoration: line-through;
+    }
+
+    .slot-summary {
+        background: linear-gradient(135deg, rgba(15,76,92,0.08), rgba(46,196,182,0.08));
+        border-radius: 1rem;
+        padding: 1rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
     <div class="row justify-content-center">
@@ -27,6 +94,11 @@
                                 <div>{{ available.slot_lenght }} Minuten</div>
                             </div>
 
+                            <div class="slot-summary mb-3">
+                                <div class="fw-semibold mb-2">So funktioniert die Buchung</div>
+                                <div class="small text-muted mb-0">Wählen Sie zuerst ein Datum und dann einen freien Zeitblock. Der Startzeitpunkt wird automatisch übernommen.</div>
+                            </div>
+
                             {% if available.slots_booked %}
                             <div class="p-3 rounded-3 bg-light">
                                 <div class="fw-semibold mb-2">Bereits gebucht</div>
@@ -45,15 +117,66 @@
                         <div class="card-body p-4 p-md-5 bg-white">
                             <h2 class="h4 fw-bold mb-4">Buchung absenden</h2>
                             <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" class="vstack gap-3">
+                                <input type="hidden" id="start_day_time" name="start_day_time" required>
+
                                 <div>
-                                    <label for="start_day_time" class="form-label fw-semibold">Gewünschter Zeitpunkt</label>
-                                    <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="2026-05-29 10:30" required>
-                                    <div class="form-text">Tragen Sie Datum und Uhrzeit im Format YYYY-MM-DD HH:MM ein, sofern kein Kalenderfeld genutzt wird.</div>
+                                    <label for="start_date_picker" class="form-label fw-semibold">Startdatum</label>
+                                    <input type="date" id="start_date_picker" class="form-control form-control-lg" value="{{ available.date_start }}" min="{{ available.date_start }}" max="{{ available.date_end }}">
+                                    <div class="form-text">Wählen Sie zuerst den Tag. Danach erscheint der passende Zeitbereich.</div>
                                 </div>
+
+                                {% if available.slot_days %}
+                                <div>
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <label class="form-label fw-semibold mb-0">Freie Zeitblöcke</label>
+                                        <div id="slot-selection-label" class="small text-muted">Bitte ein Datum und einen Zeitblock auswählen</div>
+                                    </div>
+
+                                    <div class="slot-day-strip mb-3" id="slot-day-strip">
+                                        {% for day in available.slot_days %}
+                                        <button type="button" class="slot-day-card p-3 text-start {% if loop.first %}is-active{% endif %}" data-slot-day="{{ day.date }}" aria-pressed="{% if loop.first %}true{% else %}false{% endif %}">
+                                            <div class="small text-uppercase text-muted fw-semibold">{{ day.weekday }}</div>
+                                            <div class="h5 fw-bold mb-1">{{ day.display_date }}</div>
+                                            <div class="small text-muted">{{ day.slots|length }} mögliche Zeitblöcke</div>
+                                        </button>
+                                        {% endfor %}
+                                    </div>
+
+                                    <div id="slot-panels" class="vstack gap-3">
+                                        {% for day in available.slot_days %}
+                                        <div class="slot-panel {% if not loop.first %}d-none{% endif %}" data-slot-panel="{{ day.date }}">
+                                            <div class="fw-semibold mb-2">{{ day.weekday }}, {{ day.display_date }}</div>
+                                            {% if day.slots %}
+                                            <div class="slot-pills">
+                                                {% for slot in day.slots %}
+                                                <button type="button"
+                                                        class="slot-pill"
+                                                        data-slot-value="{{ slot.value }}"
+                                                        data-slot-label="{{ day.display_date }} {{ slot.label }}"
+                                                        {% if slot.occupied %}disabled{% endif %}>
+                                                    {{ slot.label }}
+                                                </button>
+                                                {% endfor %}
+                                            </div>
+                                            {% else %}
+                                            <div class="text-muted small">Für diesen Tag gibt es keine freien Zeitblöcke.</div>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+
                                 <div>
                                     <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
                                     <input type="text" id="client_name" name="client_name" class="form-control form-control-lg" placeholder="Vor- und Nachname" required>
                                 </div>
+
+                                <div class="p-3 rounded-3 bg-light">
+                                    <div class="fw-semibold">Ausgewählt</div>
+                                    <div id="selected-slot-preview" class="text-muted">Noch kein Termin ausgewählt</div>
+                                </div>
+
                                 <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
                                     <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
                                     <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main', tenant=tenant_id) }}">Zur Übersicht</a>
@@ -66,4 +189,97 @@
         </div>
     </div>
 </div>
+<script>
+    (function () {
+        const dayButtons = Array.from(document.querySelectorAll('[data-slot-day]'));
+        const slotPanels = Array.from(document.querySelectorAll('[data-slot-panel]'));
+        const slotButtons = Array.from(document.querySelectorAll('.slot-pill[data-slot-value]'));
+        const hiddenStartInput = document.getElementById('start_day_time');
+        const selectedPreview = document.getElementById('selected-slot-preview');
+        const dayPicker = document.getElementById('start_date_picker');
+        const selectionLabel = document.getElementById('slot-selection-label');
+
+        function setPreview(text) {
+            if (selectedPreview) {
+                selectedPreview.textContent = text || 'Noch kein Termin ausgewählt';
+            }
+        }
+
+        function setActiveDay(dayValue) {
+            dayButtons.forEach((btn) => {
+                const isActive = btn.dataset.slotDay === dayValue;
+                btn.classList.toggle('is-active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+
+            slotPanels.forEach((panel) => {
+                panel.classList.toggle('d-none', panel.dataset.slotPanel !== dayValue);
+            });
+
+            if (dayPicker && dayValue) {
+                dayPicker.value = dayValue;
+            }
+
+            if (selectionLabel) {
+                selectionLabel.textContent = dayValue ? ('Datum: ' + dayValue) : 'Bitte ein Datum und einen Zeitblock auswählen';
+            }
+
+            const firstAvailable = slotButtons.find((button) => !button.disabled && button.closest('[data-slot-panel]')?.dataset.slotPanel === dayValue);
+            if (firstAvailable) {
+                firstAvailable.click();
+            } else {
+                hiddenStartInput.value = '';
+                setPreview('Für dieses Datum kein freier Block ausgewählt');
+                slotButtons.forEach((button) => button.classList.remove('active'));
+            }
+        }
+
+        function setActiveSlot(button) {
+            if (!button || button.disabled) {
+                return;
+            }
+
+            slotButtons.forEach((item) => item.classList.toggle('active', item === button));
+            hiddenStartInput.value = button.dataset.slotValue || '';
+            setPreview(button.dataset.slotLabel || button.textContent.trim());
+
+            const parentPanel = button.closest('[data-slot-panel]');
+            const dayValue = parentPanel ? parentPanel.dataset.slotPanel : '';
+            if (dayValue && dayPicker) {
+                dayPicker.value = dayValue;
+                dayButtons.forEach((btn) => {
+                    const isActive = btn.dataset.slotDay === dayValue;
+                    btn.classList.toggle('is-active', isActive);
+                    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+                if (selectionLabel) {
+                    selectionLabel.textContent = 'Datum: ' + dayValue;
+                }
+            }
+        }
+
+        dayButtons.forEach((button) => {
+            button.addEventListener('click', function () {
+                setActiveDay(button.dataset.slotDay || '');
+            });
+        });
+
+        slotButtons.forEach((button) => {
+            button.addEventListener('click', function () {
+                setActiveSlot(button);
+            });
+        });
+
+        if (dayPicker) {
+            dayPicker.addEventListener('change', function () {
+                setActiveDay(dayPicker.value || '');
+            });
+        }
+
+        const initialDay = dayPicker && dayPicker.value ? dayPicker.value : (dayButtons[0] ? dayButtons[0].dataset.slotDay : '');
+        if (initialDay) {
+            setActiveDay(initialDay);
+        }
+    })();
+</script>
 {% endblock %}
