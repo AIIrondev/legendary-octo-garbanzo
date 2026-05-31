@@ -4812,36 +4812,18 @@ def get_user_appointments():
     client = None
     try:
         username = session.get('username')
-        start = request.args.get('start')
-        end = request.args.get('end')
 
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = get_tenant_db(client)
-        ausleihungen = db['ausleihungen']
+        db = client[MONGODB_DB]
         items_col = db['items']
 
-        query = {
-            'User': username,
-            'Status': {'$in': ['planned', 'active', 'completed']},
-        }
-
-        if start and end:
-            try:
-                start_dt = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
-                end_dt = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
-                if start_dt.tzinfo is not None:
-                    start_dt = start_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-                if end_dt.tzinfo is not None:
-                    end_dt = end_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-
-                query['$or'] = [
-                    {'Start': {'$lt': end_dt}, 'End': {'$gt': start_dt}},
-                    {'Start': {'$lt': end_dt}, 'End': {'$exists': False}},
-                ]
-            except Exception:
-                pass
-
-        bookings = list(ausleihungen.find(query).sort('Start', 1))
+        # Use the established user-specific route logic for appointments.
+        bookings = au.get_ausleihung_by_user(
+            username,
+            status=['planned', 'active', 'completed'],
+            use_client_side_verification=True,
+        )
+        bookings = sorted(bookings, key=lambda b: b.get('Start') or datetime.datetime.min)
 
         result = []
         for booking in bookings:
@@ -4873,6 +4855,8 @@ def get_user_appointments():
                 title = f"{title} - {period}. Std"
 
             status = booking.get('VerifiedStatus') or booking.get('Status') or 'unknown'
+            if status == 'active':
+                status = 'current'
             result.append({
                 'id': str(booking.get('_id')),
                 'title': title,

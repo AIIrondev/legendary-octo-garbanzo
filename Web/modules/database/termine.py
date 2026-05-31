@@ -102,7 +102,7 @@ def update(id,slots_used: list):
         items = db['appointments']
 
         update_data = {
-            'slots_booked': [slots_used],
+            'slots_booked': slots_used,
             'LastUpdated': datetime.datetime.now()
         }
 
@@ -170,5 +170,63 @@ def remove(id):
     except Exception as e:
         print(f"Error removing appointment: {e}")
         return False
+
+def remove_done():
+    """removose already finisched appointments"""
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = _get_tenant_db(client)
+        items = db['appointments']
+
+        today = datetime.date.today().strftime('%Y-%m-%d')
+
+        cursor = items.find(
+            _active_record_query(
+                {
+                    'date_end': {'$lt': today},
+                }
+            )
+        ).sort('date_start', 1)
+
+        for item in cursor:
+            item['_id'] = str(item.get('_id'))
+            result = items.delete_one({'_id': ObjectId(item['_id'])})
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error removing appointment: {e}")
+        return False
+
+def get_upcoming_for_user(user: str, limit: int = 25):
+    """Return upcoming appointment plans for a user ordered by start date."""
+    remove_done()
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = _get_tenant_db(client)
+        items = db['appointments']
+
+        today = datetime.date.today().strftime('%Y-%m-%d')
+        cursor = items.find(
+            _active_record_query(
+                {
+                    'user': str(user or '').strip(),
+                    'date_end': {'$gte': today},
+                }
+            )
+        ).sort('date_start', 1)
+
+        results = []
+        for item in cursor:
+            item['_id'] = str(item.get('_id'))
+            results.append(item)
+            if len(results) >= max(1, int(limit)):
+                break
+
+        client.close()
+        return results
+    except Exception as e:
+        print(f"Error retrieving upcoming appointments: {e}")
+        return []
 
  

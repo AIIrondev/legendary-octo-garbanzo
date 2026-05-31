@@ -132,8 +132,12 @@ def main():
     if guard:
         return guard
 
+    current_user = session.get('username', '')
+    upcoming_events = appointment_service.get_user_upcoming_events(current_user) if current_user else []
+
     return render_template(
         'terminplaner.html',
         school_periods=cfg.SCHOOL_PERIODS,
-        current_user=session.get('username', ''),
+        current_user=current_user,
+        upcoming_events=upcoming_events,
     )

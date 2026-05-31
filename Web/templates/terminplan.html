@@ -24,7 +24,7 @@
                 <button type="button" class="calendar-view-btn" data-calendar-view="timeGridWeek">Woche</button>
                 <button type="button" class="calendar-view-btn" data-calendar-view="dayGridMonth">Monat</button>
             </div>
-            <button id="new-booking" class="primary-button">Neue Reservierung</button>
+            <button id="new-booking" class="primary-button">Zur Termin-Konfiguration</button>
         </div>
         <div class="calendar-legend">
             <span class="legend-item"><span class="legend-color current"></span> Aktuelle Termine</span>
@@ -73,128 +73,16 @@
         <div id="calendar"></div>
     </div>
     
-    <!-- Modal for new bookings -->
-    <div id="booking-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Neue Reservierung</h2>
-            <form id="booking-form">
-                <input type="hidden" name="user_id" id="user-id" value="{{ current_user }}">
-                
-                <!-- Booking Type -->
-                <div class="form-group">
-                    <label for="booking-type">Reservierungstyp:</label>
-                    <select id="booking-type" name="booking_type">
-                        <option value="single">Einzeltermin</option>
-                        <option value="range">Zeitraum</option>
-                        <option value="recurring">Wiederkehrend</option>
-                    </select>
-                </div>
-                
-                <!-- Start Date -->
-                <div class="form-group" id="start-date-group">
-                    <label for="booking-date" id="booking-date-label">Datum:</label>
-                    <input type="date" id="booking-date" name="booking_date" required>
-                </div>
-                
-                <!-- End Date (for range) -->
-                <div class="form-group" id="end-date-group" style="display:none;">
-                    <label for="booking-end-date">Bis:</label>
-                    <input type="date" id="booking-end-date" name="booking_end_date">
-                </div>
-                
-                <!-- Period Range Selection -->
-                <div class="form-group">
-                    <label for="period-start-select">Von Schulstunde:</label>
-                    <select id="period-start-select" name="period_start" required>
-                        <option value="">-- Bitte wählen --</option>
-                        {% for period, details in school_periods.items() %}
-                        <option value="{{ period }}">{{ details.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="period-end-select">Bis Schulstunde:</label>
-                    <select id="period-end-select" name="period_end" required>
-                        <option value="">-- Bitte wählen --</option>
-                        {% for period, details in school_periods.items() %}
-                        <option value="{{ period }}">{{ details.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <!-- Recurring Options -->
-                <div id="recurring-options" style="display:none;">
-                    <div class="form-group">
-                        <label for="recurrence-pattern">Wiederholungsmuster:</label>
-                        <select id="recurrence-pattern" name="recurrence_pattern">
-                            <option value="daily">Täglich</option>
-                            <option value="weekly" selected>Wöchentlich</option>
-                            <option value="monthly">Monatlich</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="recurrence-end-date">Wiederholung bis:</label>
-                        <input type="date" id="recurrence-end-date" name="recurrence_end_date">
-                    </div>
-                    
-                    <div class="form-group" id="weekly-options">
-                        <label>Wochentage:</label>
-                        <div class="weekday-selector">
-                            <label><input type="checkbox" name="weekdays" value="1"> Mo</label>
-                            <label><input type="checkbox" name="weekdays" value="2"> Di</label>
-                            <label><input type="checkbox" name="weekdays" value="3"> Mi</label>
-                            <label><input type="checkbox" name="weekdays" value="4"> Do</label>
-                            <label><input type="checkbox" name="weekdays" value="5"> Fr</label>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group" id="monthly-options" style="display:none;">
-                        <label>Tag des Monats:</label>
-                        <select id="day-of-month" name="day_of_month">
-                            <option value="same_day">Gleicher Tag</option>
-                            <option value="first_weekday">Erster gleicher Wochentag</option>
-                            <option value="last_weekday">Letzter gleicher Wochentag</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <!-- Item Selection -->
-                <div class="form-group">
-                    <label for="item-select">Objekt:</label>
-                    <select id="item-select" name="item_id" required>
-                        <option value="">-- Bitte wählen --</option>
-                        <!-- Items will be loaded dynamically -->
-                    </select>
-                </div>
-                
-                <!-- Notes -->
-                <div class="form-group">
-                    <label for="booking-notes">Notizen:</label>
-                    <textarea id="booking-notes" name="notes"></textarea>
-                </div>
-                
-                <!-- Booking Summary -->
-                <div class="booking-summary" id="booking-summary" style="display:none;">
-                    <!-- Will be populated dynamically -->
-                </div>
-                
-                <button type="submit" class="primary-button">Ausleihung speichern</button>
-            </form>
-        </div>
-    </div>
-    
     <!-- Modal for event details -->
     <div id="event-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h2>Ausleihungs Details</h2>
+            <h2>Termin-Details</h2>
             <div id="event-details">
                 <!-- Event details will be loaded dynamically -->
             </div>
             <div id="event-actions">
-                <button id="cancel-booking" class="danger-button">Ausleihung stornieren</button>
+                <button id="cancel-booking" class="danger-button">Termin stornieren</button>
             </div>
         </div>
     </div>
@@ -210,7 +98,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize variables
     const calendarEl = document.getElementById('calendar');
-    const bookingModal = document.getElementById('booking-modal');
     const eventModal = document.getElementById('event-modal');
     const newBookingBtn = document.getElementById('new-booking');
     let currentEventId = null;
@@ -452,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const borrowerIndicator = document.createElement('div');
                 borrowerIndicator.className = 'borrowed-indicator';
                 borrowerIndicator.innerHTML = '⚠️';  // Warning symbol
-                borrowerIndicator.title = `Bereits ausgeliehen von: ${info.event.extendedProps.itemBorrower}`;
+                borrowerIndicator.title = `Bereits verknüpft mit: ${info.event.extendedProps.itemBorrower}`;
                 borrowerIndicator.style.position = 'absolute';
                 borrowerIndicator.style.top = '2px';
                 borrowerIndicator.style.left = '2px';
@@ -526,53 +413,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('current-day-display').textContent = dateStr;
     }
     
-    // Load available items for the booking form
-    function loadAvailableItems() {
-        const itemSelect = document.getElementById('item-select');
-        itemSelect.innerHTML = '<option value="">-- Bitte wählen --</option>';
-        
-        fetch('/get_items?available_only=true')
-            .then(response => response.json())
-            .then(data => {
-                // Access the items array in the response
-                const items = data.items || [];
-                
-                items.forEach(item => {
-                    const option = document.createElement('option');
-                    const itemId = item._id.$oid || item._id || item.id;
-                    option.value = itemId;
-                    option.textContent = item.Name;
-                    itemSelect.appendChild(option);
-                });
-                
-                if (items.length === 0) {
-                    itemSelect.innerHTML += '<option value="" disabled>Keine Objekte gefunden</option>';
-                }
-            })
-            .catch(error => console.error('Error loading items:', error));
-    }
-    
-    // Open booking modal
-    function openBookingModal(date = null) {
-        // Set date to today if not provided
-        if (!date) {
-            date = calendar.getDate();
-        }
-        
-        // Format the date for the date picker
-        const formatDate = (date) => {
-            return date.toISOString().split('T')[0];
-        };
-        
-        document.getElementById('booking-date').value = formatDate(date);
-        
-        // Load available items
-        loadAvailableItems();
-        
-        // Show modal
-        bookingModal.style.display = 'block';
-    }
-    
     // Show event details
     function showEventDetails(event) {
         const details = document.getElementById('event-details');
@@ -584,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get status text based on status value
         let statusText = 'Unbekannt';
         if (event.extendedProps.status === 'current') {
-            statusText = 'Aktuell ausgeliehen';
+            statusText = 'Aktiv';
         } else if (event.extendedProps.status === 'planned') {
             statusText = 'Geplant';
         } else if (event.extendedProps.status === 'completed') {
@@ -603,17 +443,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if item is already borrowed by someone else
         let borrowerInfo = '';
         if (event.extendedProps.itemBorrower && event.extendedProps.itemBorrower !== event.extendedProps.userName) {
-            borrowerInfo = `<p class="warning"><strong>Hinweis:</strong> Dieses Objekt ist aktuell ausgeliehen von <strong>${event.extendedProps.itemBorrower}</strong></p>`;
+            borrowerInfo = `<p class="warning"><strong>Hinweis:</strong> Dieser Termin ist aktuell bereits mit <strong>${event.extendedProps.itemBorrower}</strong> verknüpft.</p>`;
         }
         
         // Populate details
         details.innerHTML = `
-            <p><strong>Objekt:</strong> ${event.title}</p>
+            <p><strong>Termin:</strong> ${event.title}</p>
             <p><strong>Datum:</strong> ${new Date(event.start).toLocaleDateString('de-DE')}</p>
             <p><strong>Von:</strong> ${new Date(event.start).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</p>
             <p><strong>Bis:</strong> ${new Date(event.end).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</p>
             ${periodText}
-            <p><strong>Ausgeliehen von:</strong> ${event.extendedProps.userName}</p>
+            <p><strong>Erstellt von:</strong> ${event.extendedProps.userName}</p>
             ${event.extendedProps.notes ? `<p><strong>Notizen:</strong> ${event.extendedProps.notes}</p>` : ''}
             <p><strong>Status:</strong> ${statusText}</p>
             ${borrowerInfo}
@@ -631,149 +471,27 @@ document.addEventListener('DOMContentLoaded', function() {
         eventModal.style.display = 'block';
     }
     
-    // New booking button
+    // Route users to the dedicated configuration flow instead of creating bookings here.
     newBookingBtn.addEventListener('click', function() {
-        openBookingModal();
+        window.location.href = '/terminplaner/configure';
     });
     
-    // Close modals when clicking X
-    document.querySelectorAll('.close').forEach(closeBtn => {
+    // Close event details modal when clicking X
+    document.querySelectorAll('#event-modal .close').forEach(closeBtn => {
         closeBtn.addEventListener('click', function() {
-            bookingModal.style.display = 'none';
             eventModal.style.display = 'none';
         });
     });
     
-    // Close modals when clicking outside
+    // Close event details modal when clicking outside
     window.addEventListener('click', function(event) {
-        if (event.target === bookingModal) {
-            bookingModal.style.display = 'none';
-        }
         if (event.target === eventModal) {
             eventModal.style.display = 'none';
         }
     });
-    
-    // Find the form submission handler (around line 562) and enhance the debug information
-
-    document.getElementById('booking-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Validate form fields
-        const itemId = document.getElementById('item-select').value;
-        const periodStart = document.getElementById('period-start-select').value;
-        const periodEnd = document.getElementById('period-end-select').value;
-        const startDate = document.getElementById('booking-date').value;
-        
-        console.log("DEBUG - Form submission - Required fields:", {
-            itemId,
-            periodStart,
-            periodEnd,
-            startDate,
-            "itemId exists": Boolean(itemId),
-            "periodStart exists": Boolean(periodStart),
-            "periodEnd exists": Boolean(periodEnd),
-            "startDate exists": Boolean(startDate)
-        });
-        
-        // Check required fields
-        if (!itemId || !periodStart || !periodEnd || !startDate) {
-            alert('Bitte füllen Sie alle erforderlichen Felder aus.');
-            return;
-        }
-        
-        // Validate period range
-        if (parseInt(periodStart) > parseInt(periodEnd)) {
-            alert('Die Start-Schulstunde darf nicht nach der End-Schulstunde liegen.');
-            return;
-        }
-        
-        const userId = document.getElementById('user-id').value || 'Admin';  // Get user ID or use fallback
-        const bookingType = document.getElementById('booking-type').value;
-
-        // Convert JSON data to FormData
-        const formData = new FormData();
-        
-        // Add all required fields with correct names the server expects
-        formData.append('item_id', itemId);
-        formData.append('booking_date', startDate);
-        formData.append('period_start', periodStart);
-        formData.append('period_end', periodEnd);
-        formData.append('notes', document.getElementById('booking-notes').value || '');
-        formData.append('user_id', userId);
-        
-        if (bookingType === 'range') {
-            const endDate = document.getElementById('booking-end-date').value;
-            if (!endDate) {
-                alert('Bitte wählen Sie ein Enddatum für den Zeitraum.');
-                return;
-            }
-            formData.append('booking_end_date', endDate);
-            formData.append('booking_type', 'range');
-        } else if (bookingType === 'recurring') {
-            formData.append('booking_type', 'single'); // Server expects 'single' structure for these individually sent requests
-            const dates = calculateDates();
-            if (dates.length === 0) {
-                alert('Es konnten keine Termine berechnet werden. Bitte überprüfen Sie Ihre Eingaben.');
-                return;
-            }
-            if (confirm(`Möchten Sie wirklich ${dates.length} Termine planen?`)) {
-                processMultipleDates(formData, dates, periodStart, periodEnd);
-            }
-            return; // Use processMultipleDates instead
-        } else {
-            formData.append('booking_end_date', startDate); // For single bookings, end = start
-            formData.append('booking_type', 'single');
-        }
-        
-        const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
-        
-        // Submit with FormData instead of JSON
-        fetch('/plan_booking', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken
-            },
-            body: formData // Remove the Content-Type header and JSON.stringify
-        })
-        .then(response => {
-            
-            if (!response.ok) {
-                return response.json().then(data => {
-                    console.error("DEBUG - Error response data:", data);
-                    
-                    // Show detailed error information
-                    let errorMsg = data.error || `Server returned ${response.status}: ${response.statusText}`;
-                    
-                    if (data.missing_fields) {
-                        errorMsg += "\nMissing fields: " + data.missing_fields.join(", ");
-                    }
-                    
-                    throw new Error(errorMsg);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            
-            if (data.success) {
-                bookingModal.style.display = 'none';
-                alert('Ausleihe erfolgreich geplant!');
-                calendar.refetchEvents();
-            } else {
-                const errorMsg = data.errors ? data.errors.join(', ') : (data.error || 'Unbekannter Fehler');
-                alert('Fehler: ' + errorMsg);
-            }
-        })
-        .catch(error => {
-            console.error('DEBUG - Error submitting booking:', error);
-            alert('Ein Fehler ist aufgetreten: ' + error.message);
-        });
-    });
-    
     // Cancel booking
     document.getElementById('cancel-booking').addEventListener('click', function() {
-        if (confirm('Möchten Sie diese Ausleihe wirklich stornieren?')) {
+        if (confirm('Möchten Sie diesen Termin wirklich stornieren?')) {
             const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
             fetch('/cancel_booking/' + currentEventId, {
                 method: 'POST',
@@ -786,7 +504,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     eventModal.style.display = 'none';
                     calendar.refetchEvents();
-                    alert('Ausleihe erfolgreich storniert!');
+                    alert('Termin erfolgreich storniert!');
                 } else {
                     alert('Fehler: ' + data.error);
                 }
@@ -802,492 +520,6 @@ document.addEventListener('DOMContentLoaded', function() {
         showCompletedBookings = this.checked;
         calendar.refetchEvents();
     });
-    
-    // Helper functions for dates
-    function formatDate(date) {
-        if (!date) return '';
-        return date.toISOString().split('T')[0];
-    }
-
-    // Setup booking form controls
-    const bookingTypeSelect = document.getElementById('booking-type');
-    const startDateGroup = document.getElementById('start-date-group');
-    const endDateGroup = document.getElementById('end-date-group');
-    const recurringOptions = document.getElementById('recurring-options');
-    const bookingDateLabel = document.getElementById('booking-date-label');
-    const recurrencePatternSelect = document.getElementById('recurrence-pattern');
-    const weeklyOptions = document.getElementById('weekly-options');
-    const monthlyOptions = document.getElementById('monthly-options');
-    const bookingSummary = document.getElementById('booking-summary');
-
-    // Add this code after the DOMContentLoaded event initialization
-    // Setup booking type toggle
-    bookingTypeSelect.addEventListener('change', function() {
-        const value = this.value;
-        
-        // Reset all form visibility
-        endDateGroup.style.display = 'none';
-        recurringOptions.style.display = 'none';
-        bookingDateLabel.textContent = 'Datum:';
-        
-        if (value === 'range') {
-            endDateGroup.style.display = 'block';
-            bookingDateLabel.textContent = 'Von:';
-        } else if (value === 'recurring') {
-            recurringOptions.style.display = 'block';
-            bookingDateLabel.textContent = 'Start:';
-        }
-        
-        updateBookingSummary();
-    });
-
-    // Setup recurrence pattern toggle
-    recurrencePatternSelect.addEventListener('change', function() {
-        const value = this.value;
-        
-        // Reset visibility
-        weeklyOptions.style.display = value === 'weekly' ? 'block' : 'none';
-        monthlyOptions.style.display = value === 'monthly' ? 'block' : 'none';
-        
-        updateBookingSummary();
-        updateWeekdaySelection();
-    });
-
-    // Validate period range
-    function validatePeriodRange() {
-        const periodStart = parseInt(document.getElementById('period-start-select').value);
-        const periodEnd = parseInt(document.getElementById('period-end-select').value);
-
-        if (periodStart && periodEnd && periodStart > periodEnd) {
-            alert('Die Start-Schulstunde darf nicht nach der End-Schulstunde liegen.');
-            return false;
-        }
-        return true;
-    }
-
-    // Update booking summary to include period range
-    function updateBookingSummary() {
-        const bookingType = bookingTypeSelect.value;
-        const startDate = new Date(document.getElementById('booking-date').value);
-        
-        // Get the period select elements directly
-        const periodStartSelect = document.getElementById('period-start-select');
-        const periodEndSelect = document.getElementById('period-end-select');
-        const periodStart = periodStartSelect ? periodStartSelect.value : "";
-        const periodEnd = periodEndSelect ? periodEndSelect.value : "";
-        
-        // Get the text labels safely
-        let periodLabelStart = "Keine Schulstunde ausgewählt";
-        let periodLabelEnd = "Keine Schulstunde ausgewählt";
-        
-        if (periodStartSelect && periodStartSelect.selectedIndex >= 0) {
-            periodLabelStart = periodStartSelect.options[periodStartSelect.selectedIndex].text;
-        }
-        
-        if (periodEndSelect && periodEndSelect.selectedIndex >= 0) {
-            periodLabelEnd = periodEndSelect.options[periodEndSelect.selectedIndex].text;
-        }
-
-        // Hide summary for single bookings or if date is invalid
-        if (bookingType === 'single' || isNaN(startDate.getTime())) {
-            bookingSummary.style.display = 'none';
-            return;
-        }
-
-        bookingSummary.style.display = 'block';
-        let summaryHTML = '<h4>Reservierungsübersicht:</h4>';
-
-        const formattedStartDate = startDate.toLocaleDateString('de-DE', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-
-        if (bookingType === 'range') {
-            const endDate = new Date(document.getElementById('booking-end-date').value);
-
-            if (isNaN(endDate.getTime())) {
-                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum.</p>';
-            } else {
-                const formattedEndDate = endDate.toLocaleDateString('de-DE', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                });
-
-                summaryHTML += `
-                    <p>Zeitraum vom ${formattedStartDate} bis ${formattedEndDate}</p>
-                    <p>Schulstunden: ${periodLabelStart} bis ${periodLabelEnd}</p>
-                `;
-            }
-        } else if (bookingType === 'recurring') {
-            const pattern = document.getElementById('recurrence-pattern').value;
-            const endDate = new Date(document.getElementById('recurrence-end-date').value);
-            
-            if (isNaN(endDate.getTime())) {
-                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum für die Wiederholung.</p>';
-                bookingSummary.innerHTML = summaryHTML;
-                return;
-            }
-            
-            const formattedEndDate = endDate.toLocaleDateString('de-DE', {
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric'
-            });
-            
-            let patternText = '';
-            let selectedDates = [];
-            
-            if (pattern === 'daily') {
-                patternText = 'Täglich';
-                selectedDates = calculateDailyDates(startDate, endDate, 5);
-            } 
-            else if (pattern === 'weekly') {
-                const selectedWeekdays = [];
-                document.querySelectorAll('input[name="weekdays"]:checked').forEach(cb => {
-                    selectedWeekdays.push(parseInt(cb.value));
-                });
-                
-                if (selectedWeekdays.length === 0) {
-                    summaryHTML += '<p>Bitte wählen Sie mindestens einen Wochentag aus.</p>';
-                    bookingSummary.innerHTML = summaryHTML;
-                    return;
-                }
-                
-                const weekdayNames = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-                patternText = 'Wöchentlich am ' + selectedWeekdays.map(day => weekdayNames[day]).join(', ');
-                
-                selectedDates = calculateWeeklyDates(startDate, endDate, selectedWeekdays, 5);
-            } 
-            else if (pattern === 'monthly') {
-                const monthOption = document.getElementById('day-of-month').value;
-                
-                if (monthOption === 'same_day') {
-                    patternText = `Monatlich am ${startDate.getDate()}. Tag des Monats`;
-                } else if (monthOption === 'first_weekday') {
-                    patternText = `Monatlich am ersten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
-                } else if (monthOption === 'last_weekday') {
-                    patternText = `Monatlich am letzten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
-                }
-                
-                selectedDates = calculateMonthlyDates(startDate, endDate, monthOption, 5);
-            }
-            
-            summaryHTML += `
-                <p>${patternText} bis zum ${formattedEndDate}</p>
-                <p>Schulstunden: ${periodLabelStart} bis ${periodLabelEnd}</p>
-            `;
-            
-            if (selectedDates.length > 0) {
-                summaryHTML += '<p>Beispieltermine:</p><ul>';
-                selectedDates.forEach(date => {
-                    summaryHTML += `<li>${date.toLocaleDateString('de-DE', {
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric'
-                    })}</li>`;
-                });
-                summaryHTML += '</ul>';
-            }
-        }
-        
-        bookingSummary.innerHTML = summaryHTML;
-    }
-
-    // Date calculation functions
-    function calculateDailyDates(startDate, endDate, maxSamples) {
-        const dates = [];
-        let currentDate = new Date(startDate);
-        
-        while (currentDate <= endDate && dates.length < maxSamples) {
-            dates.push(new Date(currentDate));
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return dates;
-    }
-
-    function calculateWeeklyDates(startDate, endDate, weekdays, maxSamples) {
-        const dates = [];
-        let currentDate = new Date(startDate);
-        
-        // Sort weekdays numerically
-        weekdays.sort((a, b) => a - b);
-        
-        // If the start date's weekday isn't in the selected weekdays,
-        // move to the next selected weekday
-        let startWeekday = currentDate.getDay();
-        startWeekday = startWeekday === 0 ? 7 : startWeekday;
-        
-        if (!weekdays.includes(startWeekday)) {
-            // Find next weekday
-            let nextWeekday = weekdays.find(day => day > startWeekday);
-            
-            if (!nextWeekday) {
-                // If no higher weekday, take the first one and add a week
-                nextWeekday = weekdays[0];
-                currentDate.setDate(currentDate.getDate() + (7 - startWeekday + nextWeekday));
-            } else {
-                // Move to the next higher weekday
-                currentDate.setDate(currentDate.getDate() + (nextWeekday - startWeekday));
-            }
-        }
-        
-        while (currentDate <= endDate && dates.length < maxSamples) {
-            dates.push(new Date(currentDate));
-            
-            // Find the next occurrence
-            let currentWeekday = currentDate.getDay();
-            currentWeekday = currentWeekday === 0 ? 7 : currentWeekday;
-            
-            let nextWeekday = weekdays.find(day => day > currentWeekday);
-            
-            if (!nextWeekday) {
-                // If no higher weekday, take the first one and add a week
-                nextWeekday = weekdays[0];
-                currentDate.setDate(currentDate.getDate() + (7 - currentWeekday + nextWeekday));
-            } else {
-                // Move to the next higher weekday
-                currentDate.setDate(currentDate.getDate() + (nextWeekday - currentWeekday));
-            }
-        }
-        
-        return dates;
-    }
-
-    function calculateMonthlyDates(startDate, endDate, option, maxSamples) {
-        const dates = [];
-        let currentDate = new Date(startDate);
-        
-        while (currentDate <= endDate && dates.length < maxSamples) {
-            dates.push(new Date(currentDate));
-            
-            // Move to next month
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            
-            if (option === 'same_day') {
-                // Keep the same day of month
-                const targetDay = startDate.getDate();
-                // Adjust if the day doesn't exist in this month
-                const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-                currentDate.setDate(Math.min(targetDay, lastDayOfMonth));
-            } 
-            else if (option === 'first_weekday' || option === 'last_weekday') {
-                const targetWeekday = startDate.getDay();
-                
-                if (option === 'first_weekday') {
-                    // Set to first day of month
-                    currentDate.setDate(1);
-                    
-                    // Find first occurrence of target weekday
-                    while (currentDate.getDay() !== targetWeekday) {
-                        currentDate.setDate(currentDate.getDate() + 1);
-                    }
-                } else {
-                    // Set to last day of month
-                    currentDate.setMonth(currentDate.getMonth() + 1);
-                    currentDate.setDate(0);
-                    
-                    // Find last occurrence of target weekday going backwards
-                    while (currentDate.getDay() !== targetWeekday) {
-                        currentDate.setDate(currentDate.getDate() - 1);
-                    }
-                }
-            }
-        }
-        
-        return dates;
-    }
-
-    // Update booking summary when relevant fields change
-    document.getElementById('booking-end-date').addEventListener('change', updateBookingSummary);
-    document.getElementById('recurrence-end-date').addEventListener('change', updateBookingSummary);
-    document.getElementById('period-start-select').addEventListener('change', updateBookingSummary);
-    document.getElementById('period-end-select').addEventListener('change', updateBookingSummary);
-
-    // Add listeners to all weekday checkboxes
-    document.querySelectorAll('input[name="weekdays"]').forEach(checkbox => {
-        checkbox.addEventListener('change', updateBookingSummary);
-    });
-
-    // Select the correct weekday checkbox based on chosen date
-    function updateWeekdaySelection() {
-        const date = new Date(document.getElementById('booking-date').value);
-        if (!isNaN(date.getTime())) {
-            // Clear all checkboxes
-            document.querySelectorAll('input[name="weekdays"]').forEach(cb => cb.checked = false);
-            
-            // Get day of week (0=Sunday, 1=Monday, etc.)
-            let dayOfWeek = date.getDay();
-            // Convert to 1=Monday, 2=Tuesday, ... 7=Sunday
-            dayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
-            
-            // Check the corresponding checkbox
-            const checkbox = document.querySelector(`input[name="weekdays"][value="${dayOfWeek}"]`);
-            if (checkbox) checkbox.checked = true;
-        }
-    }
-
-    
-
-    // Process multiple dates for a booking with period ranges
-    function processMultipleDates(formData, dates, periodStart, periodEnd) {
-        // Track progress
-        let successCount = 0;
-        let errorCount = 0;
-        let totalCount = dates.length;
-        let completedCount = 0;
-        
-        // Close modal early to show progress
-        bookingModal.style.display = 'none';
-        
-        // Create a progress indicator
-        const progressDiv = document.createElement('div');
-        progressDiv.className = 'booking-progress';
-        progressDiv.innerHTML = `
-            <div class="progress-overlay">
-                <div class="progress-content">
-                    <h3>Erstelle Reservierungen...</h3>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-text">0 von ${totalCount} abgeschlossen</div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(progressDiv);
-        
-        // Submit bookings sequentially
-        function processNextDate(index) {
-            if (index >= dates.length) {
-                // All done
-                document.body.removeChild(progressDiv);
-                
-                if (errorCount > 0) {
-                    alert(`${successCount} Reservierungen erfolgreich erstellt. ${errorCount} fehlgeschlagen.`);
-                } else {
-                    alert(`${successCount} Reservierungen erfolgreich erstellt!`);
-                }
-                
-                // Refresh calendar
-                calendar.refetchEvents();
-                return;
-            }
-            
-            const currentDate = dates[index];
-            
-            // Create new FormData for this date
-            const newFormData = new FormData();
-            
-            // Copy original form values except dates and booking type
-            for (const [key, value] of formData.entries()) {
-                if (key !== 'booking_date' && key !== 'booking_end_date' && 
-                    key !== 'start_date' && key !== 'end_date' && 
-                    key !== 'recurrence_end_date' && key !== 'booking_type' &&
-                    key !== 'recurrence_pattern' && !key.startsWith('weekdays')) {
-                    newFormData.append(key, value);
-                }
-            }
-            
-            // Format the current date with the period start time
-            const periodStart = formData.get('period_start');
-            const periodEnd = formData.get('period_end');
-            
-            const periodStartInfo = schoolPeriods[periodStart];
-            const periodEndInfo = schoolPeriods[periodEnd];
-            
-            if (periodStartInfo && periodStartInfo.start) {
-                // Format date for start_date with proper time
-                const startYear = currentDate.getFullYear();
-                const startMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
-                const startDay = String(currentDate.getDate()).padStart(2, '0');
-                const startTimeStr = `${startYear}-${startMonth}-${startDay}T${periodStartInfo.start}:00`;
-                
-                // Set the start_date field that server expects
-                newFormData.append('start_date', startTimeStr);
-            }
-            
-            // For the end date, use the same day with the end period time
-            if (periodEndInfo && periodEndInfo.end) {
-                const endYear = currentDate.getFullYear();
-                const endMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
-                const endDay = String(currentDate.getDate()).padStart(2, '0');
-                const endTimeStr = `${endYear}-${endMonth}-${endDay}T${periodEndInfo.end}:00`;
-                
-                // Set the end_date field that server expects
-                newFormData.append('end_date', endTimeStr);
-            }
-            
-            // Debug the data being sent
-            console.log(`Submitting booking ${index + 1}/${dates.length}:`, 
-                newFormData.get('start_date'), 
-                newFormData.get('end_date'));
-            
-            // Submit this booking
-            const csrfToken = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
-            fetch('/plan_booking', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken
-                },
-                body: newFormData
-            })
-            .then(response => response.json())
-            .then(data => {
-                completedCount++;
-                
-                if (data.success) {
-                    successCount++;
-                } else {
-                    errorCount++;
-                    console.error('Booking failed:', data.error || 'Unknown error');
-                }
-                
-                updateProgress();
-                processNextDate(index + 1);
-            })
-            .catch(error => {
-                completedCount++;
-                errorCount++;
-                console.error('Booking request error:', error);
-                updateProgress();
-                processNextDate(index + 1);
-            });
-        }
-        
-        function updateProgress() {
-            const progressBar = progressDiv.querySelector('.progress-bar');
-            const progressText = progressDiv.querySelector('.progress-text');
-            
-            const percentage = Math.round((completedCount / totalCount) * 100);
-            progressBar.style.width = `${percentage}%`;
-            progressText.textContent = `${completedCount} von ${totalCount} abgeschlossen`;
-        }
-        
-        // Start processing
-        processNextDate(0);
-    }
-
-    // Safely attach event listeners only if elements exist
-    const periodStartSelect = document.getElementById('period-start-select');
-    const periodEndSelect = document.getElementById('period-end-select');
-    const bookingDateElement = document.getElementById('booking-date');
-    
-    if (periodStartSelect) {
-        periodStartSelect.addEventListener('change', updateBookingSummary);
-    }
-    
-    if (periodEndSelect) {
-        periodEndSelect.addEventListener('change', updateBookingSummary);
-    }
-    
-    if (bookingDateElement) {
-        bookingDateElement.addEventListener('change', updateBookingSummary);
-    }
 });
 </script>
 

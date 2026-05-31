@@ -3,11 +3,25 @@ Class for all funktions of the executive -> Lehrer
 """
 import datetime
 from datetime import timedelta
-from flask import url_for
+from flask import url_for, has_request_context, request
 import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
 import Web.modules.database.settings as cfg
 from Web.tenant import get_tenant_context
+
+
+def _resolve_public_base_url() -> str:
+    if has_request_context():
+        try:
+            return request.url_root.rstrip('/')
+        except Exception:
+            pass
+
+    tenant_context = get_tenant_context()
+    subdomain = ''
+    if tenant_context:
+        subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
+    return f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
 
 
 def _normalize_time_span(time_span):
@@ -59,11 +73,7 @@ def build_calendar_ics(appointment_id: str) -> str | None:
     try:
         link = url_for('terminplaner.client', appointment_id=str(appointment_id), _external=True)
     except Exception:
-        tenant_context = get_tenant_context()
-        subdomain = ''
-        if tenant_context:
-            subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
-        host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+        host = _resolve_public_base_url()
         link = host + "/terminplaner/client/" + str(appointment_id)
 
     try:
@@ -124,15 +134,10 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled)
     id_str = str(id)
 
-    tenant_context = get_tenant_context()
-    subdomain = ''
-    if tenant_context:
-        subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
-
     try:
         link = url_for('terminplaner.client', appointment_id=id_str, _external=True)
     except Exception:
-        host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+        host = _resolve_public_base_url()
         link = host + "/terminplaner/client/" + id_str
     subject = f"Terminanfrage von {user}"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
@@ -141,11 +146,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
         try:
             calendar_link = url_for('terminplaner.calendar_export', appointment_id=id_str, _external=True)
         except Exception:
-            tenant_context = get_tenant_context()
-            subdomain = ''
-            if tenant_context:
-                subdomain = getattr(tenant_context, 'subdomain', '') or getattr(tenant_context, 'tenant_id', '') or ''
-            host = f"https://{subdomain}.invario.eu" if subdomain else "https://invario.eu"
+            host = _resolve_public_base_url()
             calendar_link = host + "/terminplaner/calendar/" + id_str + ".ics"
 
     email_body = note_link
@@ -313,3 +314,51 @@ def get_available_user(id):
     second day Time frame, third etc.), slot lenght, (bookedslots -> list)]
     """
     return get_available(id)
+
+
+def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
+    """Return upcoming appointment plans for overview display."""
+    user_name = str(user or '').strip()
+    if not user_name:
+        return []
+
+    appointments = termin.get_upcoming_for_user(user_name, limit=limit)
+    host = _resolve_public_base_url()
+
+    result = []
+    for item in appointments:
+        appointment_id = str(item.get('_id') or '')
+        if not appointment_id:
+            continue
+
+        try:
+            link = url_for('terminplaner.client', appointment_id=appointment_id, _external=True)
+        except Exception:
+            link = host + '/terminplaner/client/' + appointment_id
+
+        try:
+            calendar_link = url_for('terminplaner.calendar_export', appointment_id=appointment_id, _external=True)
+        except Exception:
+            calendar_link = host + '/terminplaner/calendar/' + appointment_id + '.ics'
+
+        slots_total = int(item.get('slots', 0) or 0)
+        slots_booked = item.get('slots_booked', []) or []
+        if not isinstance(slots_booked, list):
+            slots_booked = []
+
+        result.append(
+            {
+                'appointment_id': appointment_id,
+                'date_start': str(item.get('date_start') or ''),
+                'date_end': str(item.get('date_end') or ''),
+                'time_span': item.get('time_span', []) or [],
+                'slots_total': slots_total,
+                'slots_booked': len(slots_booked),
+                'slots_left': max(0, slots_total - len(slots_booked)),
+                'note': str(item.get('note') or ''),
+                'link': link,
+                'calendar_link': calendar_link if item.get('calendar_enabled') else None,
+            }
+        )
+
+    return result

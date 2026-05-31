@@ -53,6 +53,9 @@
         "inventory": {
             "enabled": true
         },
+        "terminplan": {
+            "enabled": true
+        },
         "library": {
             "enabled": true
         },
