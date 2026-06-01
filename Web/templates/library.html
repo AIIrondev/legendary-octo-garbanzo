@@ -564,6 +564,29 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     initMobileWindowedLibraryLoading();
+    // On mobile, make tapping an item open details for easier access (tap target larger)
+    function enableMobileTapToDetails() {
+        if (!isMobileViewport()) return;
+        document.querySelectorAll('.library-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                // Ignore clicks on buttons/links inside the card
+                const tag = e.target.tagName.toLowerCase();
+                if (tag === 'button' || tag === 'a' || e.target.closest('.action-button')) return;
+                const itemId = this.dataset.itemId;
+                if (!itemId) return;
+                fetch(`/get_item_details/${itemId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            displayLibraryItemDetail(data.item);
+                            document.getElementById('detailModal').style.display = 'flex';
+                        }
+                    });
+            }, { passive: true });
+        });
+    }
+
+    enableMobileTapToDetails();
 });
 
 function displayLibraryItemDetail(item) {
@@ -574,7 +597,7 @@ function displayLibraryItemDetail(item) {
     modalBody.innerHTML = `
         <h2>${item.Name}</h2>
         <div class="detail-content">
-            ${item.Image ? `<img src="/uploads/${item.Image}" alt="${item.Name}" style="max-width: 200px; margin-bottom: 20px;">` : ''}
+            ${item.Image ? `<img src="/uploads/${item.Image}" alt="${item.Name}" class="detail-image">` : ''}
             <p><strong>Autor:</strong> ${item.Author || '—'}</p>
             <p><strong>ISBN:</strong> ${item.ISBN || '—'}</p>
             <p><strong>Typ:</strong> ${item.ItemType || 'Medium'}</p>
@@ -791,6 +814,37 @@ function onScanError(error) {
     color: #b3261e;
 }
 
+/* Mobile: simplify list entries - show only title */
+@media (max-width: 900px) {
+    .library-item .item-author,
+    .library-item .item-isbn,
+    .table-cell.author-cell,
+    .table-cell.isbn-cell {
+        display: none !important;
+    }
+
+    /* Make title more prominent and full-width */
+    .library-item .item-details {
+        display: block;
+        width: calc(100% - 140px);
+        box-sizing: border-box;
+    }
+
+    .library-item .item-name {
+        font-size: 1.05rem;
+        margin: 0 0 6px 0;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .library-item .item-image-wrapper {
+        width: 100px;
+        height: 130px;
+    }
+}
+
 /* Mobile: allow horizontal scrolling for table-mode views */
 @media (max-width: 900px) {
     .library-table-wrapper {
@@ -931,6 +985,57 @@ function onScanError(error) {
     .scanner-message {
         font-size: 0.85em;
     }
+}
+
+/* Modal styles - responsive for mobile */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    z-index: 2000;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 16px;
+    position: relative;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    position: absolute;
+    right: 20px;
+    top: 18px;
+    cursor: pointer;
+}
+
+.modal-body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.modal-body p { margin: 6px 0; }
+
+@media (max-width: 420px) {
+    .modal-content { padding: 12px; }
 }
 </style>
 {% endblock %}
