@@ -67,8 +67,22 @@
 
     <!-- Scanner Panel -->
     <div id="qrContainer" class="qr-container" style="display: none;">
-        <div id="qr-reader" style="width: auto; height: 300px;"></div>
-        <span id="qr-result" style="display: none;"></span>
+        <div class="scanner-header">
+            <h3>Barcode/QR-Code Scanner</h3>
+            <div class="scanner-controls">
+                <button type="button" id="cameraToggle" class="scanner-button" title="Kamera wechseln">📷 Kamera</button>
+                <label for="uploadScanImage" class="scanner-button" title="Bild hochladen zum Dekodieren">📤 Upload</label>
+                <input type="file" id="uploadScanImage" accept="image/*" style="display: none;">
+            </div>
+        </div>
+        <div class="scanner-video-wrapper">
+            <video id="qr-reader" playsinline style="width: 100%; max-width: 500px; border-radius: 8px;"></video>
+            <canvas id="scanner-canvas" style="display: none;"></canvas>
+        </div>
+        <div id="scanMessage" class="scanner-message" style="margin-top: 10px; text-align: center; font-weight: bold; color: #666;"></div>
+        <p style="font-size: 0.9em; color: #999; margin-top: 10px; text-align: center;">
+            💡 Hinweis: Scan-Ergebnis wird automatisch in das Feld oben übernommen. USB-Scanner werden als Tastatureingabe erkannt.
+        </p>
     </div>
 
     <!-- Table Header (only in table mode) -->
@@ -206,7 +220,8 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="/static/js/scanner.js"></script>
 <script>
 // View mode persistence
 const LIBRARY_VIEW_MODE_KEY = 'inventarLibraryViewMode';
@@ -631,8 +646,9 @@ document.getElementById('favoriteToggle').addEventListener('click', function() {
     // TODO: Implement favorites filtering
 });
 
-// Scanner toggle
+// Scanner instance (hybrid: real-time + upload + keyboard)
 let scanner = null;
+
 document.getElementById('scannerBtn').addEventListener('click', function(e) {
     e.stopPropagation();
     const container = document.getElementById('qrContainer');
@@ -640,7 +656,10 @@ document.getElementById('scannerBtn').addEventListener('click', function(e) {
     
     if (isOpen) {
         container.style.display = 'none';
-        if (scanner) scanner.clear();
+        if (scanner) {
+            scanner.stop();
+            scanner = null;
+        }
         this.classList.remove('open');
         this.setAttribute('aria-expanded', 'false');
     } else {
@@ -649,14 +668,63 @@ document.getElementById('scannerBtn').addEventListener('click', function(e) {
         this.setAttribute('aria-expanded', 'true');
         
         if (!scanner) {
-            scanner = new Html5Qrcode('qr-reader');
-            scanner.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                onScanSuccess,
-                onScanError
-            );
+            initScanner();
         }
+    }
+});
+
+function initScanner() {
+    scanner = new HybridScanner({
+        videoId: 'qr-reader',
+        canvasId: 'scanner-canvas',
+        formats: ['QR_CODE', 'CODE_128', 'EAN_13', 'ISBN', 'CODE_39', 'UPC_A', 'EAN_8'],
+        fps: 10,
+        facingMode: 'environment',
+        onSuccess: function(decodedText) {
+            const studentId = decodedText.trim();
+            document.getElementById('studentIdInput').value = studentId;
+            document.getElementById('scanMessage').textContent = '✓ Erkannt: ' + studentId;
+            document.getElementById('scanMessage').style.color = '#4CAF50';
+        },
+        onError: function(error) {
+            document.getElementById('scanMessage').textContent = '✗ ' + error;
+            document.getElementById('scanMessage').style.color = '#f44336';
+        }
+    });
+
+    scanner.start();
+}
+
+// Camera toggle
+document.getElementById('cameraToggle')?.addEventListener('click', function() {
+    if (scanner) {
+        scanner.toggleCamera();
+        this.textContent = scanner.options.facingMode === 'user' ? '📷 Rückkamera' : '🤳 Frontkamera';
+    }
+});
+
+// Image upload fallback
+document.getElementById('uploadScanImage')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const messageEl = document.getElementById('scanMessage');
+        messageEl.textContent = 'Wird dekodiert...';
+        messageEl.style.color = '#2196F3';
+        
+        HybridScanner.uploadImageForDecoding(
+            file,
+            (decodedText) => {
+                document.getElementById('studentIdInput').value = decodedText;
+                messageEl.textContent = '✓ Erkannt (Upload): ' + decodedText;
+                messageEl.style.color = '#4CAF50';
+                e.target.value = ''; // Reset file input
+            },
+            (error) => {
+                messageEl.textContent = '✗ ' + error;
+                messageEl.style.color = '#f44336';
+                e.target.value = '';
+            }
+        );
     }
 });
 
@@ -735,6 +803,87 @@ function onScanError(error) {
     }
     .table-header, .item-content.table-mode {
         display: block; /* keep rows stacked but allow horizontal scroll */
+    }
+}
+
+/* Hybrid Scanner Styles */
+.qr-container {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+.scanner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.scanner-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.1em;
+}
+
+.scanner-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.scanner-button {
+    background: #2196F3;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.scanner-button:hover {
+    background: #1976D2;
+}
+
+.scanner-button:active {
+    background: #1565C0;
+}
+
+.scanner-video-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0;
+}
+
+#qr-reader {
+    border: 2px solid #2196F3;
+    border-radius: 8px;
+}
+
+.scanner-message {
+    min-height: 20px;
+    font-size: 0.95em;
+    text-align: center;
+}
+
+@media (max-width: 600px) {
+    .scanner-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .scanner-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .scanner-button {
+        flex: 1;
     }
 }
 </style>

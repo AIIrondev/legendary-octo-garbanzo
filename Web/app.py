@@ -3484,6 +3484,66 @@ def api_library_scan_action():
             client.close()
 
 
+@app.route('/api/scan_upload', methods=['POST'])
+def api_scan_upload():
+    """
+    Server-side barcode/QR decoding endpoint.
+    Accepts image upload and returns detected barcodes (fallback for client-side scanner).
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+
+    try:
+        from pyzbar.pyzbar import decode
+        from PIL import Image
+        import io
+    except ImportError:
+        return jsonify({'ok': False, 'message': 'pyzbar library not installed on server.'}), 500
+
+    if 'image' not in request.files:
+        return jsonify({'ok': False, 'message': 'Keine Bilddatei bereitgestellt.'}), 400
+
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'ok': False, 'message': 'Datei ist leer.'}), 400
+
+    try:
+        # Decode image
+        image = Image.open(io.BytesIO(file.read()))
+        image = image.convert('RGB')
+
+        # Detect barcodes using pyzbar
+        results = decode(image)
+
+        if not results:
+            return jsonify({'ok': False, 'message': 'Kein Barcode im Bild erkannt.'}), 400
+
+        # Return all detected barcodes, sorted by confidence (quality)
+        barcodes = [
+            {
+                'type': result.type,
+                'value': result.data.decode('utf-8'),
+                'rect': {
+                    'x': result.rect.left,
+                    'y': result.rect.top,
+                    'width': result.rect.width,
+                    'height': result.rect.height,
+                }
+            }
+            for result in results
+        ]
+
+        return jsonify({
+            'ok': True,
+            'barcodes': barcodes,
+            'message': f'{len(barcodes)} Barcode(s) erkannt.'
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error decoding barcode image: {e}")
+        return jsonify({'ok': False, 'message': f'Fehler beim Dekodieren: {str(e)}'}), 500
+
+
 @app.route('/api/item_detail/<item_id>')
 def api_item_detail(item_id):
     """
