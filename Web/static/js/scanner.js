@@ -47,8 +47,26 @@ class HybridScanner {
         return;
       }
 
+      // Use fallback URL for better mobile compatibility
+      let scriptUrl = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
+      
+      // Check if already loading
+      const existingScript = document.querySelector(`script[src="${scriptUrl}"]`);
+      if (existingScript) {
+        existingScript.addEventListener('load', () => {
+          this.state.zxingReady = typeof ZXing !== 'undefined';
+          resolve(this.state.zxingReady);
+        }, { once: true });
+        existingScript.addEventListener('error', () => {
+          console.error('Failed to load ZXing library');
+          resolve(false);
+        }, { once: true });
+        return;
+      }
+
       const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
+      script.src = scriptUrl;
+      script.async = true;
       script.onload = () => {
         this.state.zxingReady = typeof ZXing !== 'undefined';
         resolve(this.state.zxingReady);
@@ -154,32 +172,46 @@ class HybridScanner {
     const canvas = this.state.canvas;
     const video = this.state.videoElement;
 
+    if (!video || !canvas) {
+      setTimeout(() => this.scanLoop(), 100);
+      return;
+    }
+
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
+      try {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        if (canvas.width === 0 || canvas.height === 0) {
+          setTimeout(() => this.scanLoop(), 100);
+          return;
+        }
 
-      if (context) {
-        context.drawImage(video, 0, 0);
+        const context = canvas.getContext('2d');
 
-        try {
-          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-          const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
-          const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+        if (context) {
+          context.drawImage(video, 0, 0);
 
           try {
-            const result = this.state.reader.decodeFromBitmap(binaryBitmap);
-            this.handleScanResult(result.text);
-          } catch (e) {
-            // No barcode found in frame; continue scanning
+            const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+            const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+
+            try {
+              const result = this.state.reader.decodeFromBitmap(binaryBitmap);
+              this.handleScanResult(result.text);
+            } catch (e) {
+              // No barcode found in frame; continue scanning
+            }
+          } catch (err) {
+            // Silently ignore canvas errors
           }
-        } catch (err) {
-          // Silently ignore canvas errors
         }
+      } catch (err) {
+        console.warn('Scan loop error:', err);
       }
     }
 
-    // Throttle scan loop
+    // Throttle scan loop based on FPS setting
     setTimeout(() => this.scanLoop(), 1000 / this.options.fps);
   }
 

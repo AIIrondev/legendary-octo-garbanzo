@@ -2435,7 +2435,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
-            <div id="qr-reader"></div>
+            <div id="qr-reader" style="display: none;">
+                <video id="qr-reader-video" playsinline style="width: 100%; max-width: 100%; height: auto; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px;"></video>
+                <canvas id="qr-reader-canvas" style="display: none;"></canvas>
+            </div>
         </div>
 
         <div id="table-view-header" class="table-view-header" aria-hidden="true">
@@ -2729,7 +2732,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     
     window.isDebug = false; // Set to true only for development environment
 </script>
-<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="/static/js/scanner.js"></script>
 <script>
     // Function to check if a file is a video
     function isVideoFile(filename) {
@@ -2739,7 +2743,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     // Initialize QR Code scanner and global variables
-    let html5QrcodeScanner = null;
+    let hybridScanner = null;
     let codeSearchTerm = '';
     let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
@@ -2783,33 +2787,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (qrReader.style.display === 'none') {
             qrReader.style.display = 'block';
             
-            html5QrcodeScanner = new Html5QrcodeScanner(
-                "qr-reader", { 
-                    fps: 10, 
-                    qrbox: 250,
-                    rememberLastUsedCamera: true
-                }
-            );
-            
-            html5QrcodeScanner.render((decodedText) => {
-                html5QrcodeScanner.clear();
-                qrReader.style.display = 'none';
-                
-                // Instead of navigating to the URL, put the scanned code in the search box
-                const searchInput = document.getElementById('code-search');
-                if (searchInput) {
-                    searchInput.value = decodedText;
-                    // Trigger search automatically
-                    searchByCode();
-                }
+            hybridScanner = new HybridScanner({
+                videoId: 'qr-reader-video',
+                canvasId: 'qr-reader-canvas',
+                formats: ['QR_CODE', 'CODE_128', 'EAN_13', 'EAN_8', 'CODE_39', 'UPC_A'],
+                fps: 10,
+                facingMode: 'environment',
+                onSuccess: function(decodedText) {
+                    hybridScanner.stop();
+                    qrReader.style.display = 'none';
+                    
+                    // Put the scanned code in the search box
+                    const searchInput = document.getElementById('code-search');
+                    if (searchInput) {
+                        searchInput.value = decodedText;
+                        // Trigger search automatically
+                        searchByCode();
+                    }
 
-                setScannerUi(false);
+                    setScannerUi(false);
+                },
+                onError: function(error) {
+                    console.error('Scanner error:', error);
+                }
             });
 
+            hybridScanner.start();
             setScannerUi(true);
         } else {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
+            if (hybridScanner) {
+                hybridScanner.stop();
+                hybridScanner = null;
             }
             qrReader.style.display = 'none';
             setScannerUi(false);
@@ -2825,8 +2833,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
 
         if (qrReader.style.display !== 'none') {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
+            if (hybridScanner) {
+                hybridScanner.stop();
+                hybridScanner = null;
             }
             qrReader.style.display = 'none';
             scanEditBtn.textContent = 'Barcode scannen';
@@ -2835,18 +2844,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
         qrReader.style.display = 'block';
         scanEditBtn.textContent = 'Scanner schließen';
-        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { 
-            fps: 10, 
-            qrbox: 250,
-            rememberLastUsedCamera: true
+        hybridScanner = new HybridScanner({
+            videoId: 'qr-reader-video',
+            canvasId: 'qr-reader-canvas',
+            formats: ['CODE_128', 'CODE_39', 'QR_CODE'],
+            fps: 10,
+            facingMode: 'environment',
+            onSuccess: function(decodedText) {
+                hybridScanner.stop();
+                qrReader.style.display = 'none';
+                editCodeInput.value = String(decodedText || '').trim();
+                validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+                scanEditBtn.textContent = 'Barcode scannen';
+            },
+            onError: function(error) {
+                console.error('Scanner error:', error);
+            }
         });
-        html5QrcodeScanner.render((decodedText) => {
-            html5QrcodeScanner.clear();
-            qrReader.style.display = 'none';
-            editCodeInput.value = String(decodedText || '').trim();
-            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
-            scanEditBtn.textContent = 'Barcode scannen';
-        });
+        
+        hybridScanner.start();
     }
 
     function scanIntoEditIsbn() {
@@ -2858,8 +2874,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
 
         if (qrReader.style.display !== 'none') {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
+            if (hybridScanner) {
+                hybridScanner.stop();
+                hybridScanner = null;
             }
             qrReader.style.display = 'none';
             scanIsbnBtn.textContent = 'ISBN scannen';
@@ -2868,20 +2885,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
         qrReader.style.display = 'block';
         scanIsbnBtn.textContent = 'Scanner schließen';
-        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', {
+        hybridScanner = new HybridScanner({
+            videoId: 'qr-reader-video',
+            canvasId: 'qr-reader-canvas',
+            formats: ['ISBN', 'EAN_13', 'EAN_8', 'QR_CODE'],
             fps: 10,
-            qrbox: 250,
-            rememberLastUsedCamera: true
-        });
-        html5QrcodeScanner.render((decodedText) => {
-            html5QrcodeScanner.clear();
-            qrReader.style.display = 'none';
-            editIsbnInput.value = String(decodedText || '').trim();
-            scanIsbnBtn.textContent = 'ISBN scannen';
-            if (typeof fetchBookInfo === 'function') {
-                fetchBookInfo('edit');
+            facingMode: 'environment',
+            onSuccess: function(decodedText) {
+                hybridScanner.stop();
+                qrReader.style.display = 'none';
+                editIsbnInput.value = String(decodedText || '').trim();
+                scanIsbnBtn.textContent = 'ISBN scannen';
+                if (typeof fetchBookInfo === 'function') {
+                    fetchBookInfo('edit');
+                }
+            },
+            onError: function(error) {
+                console.error('Scanner error:', error);
             }
         });
+        
+        hybridScanner.start();
     }
 
     function rebuildFilter3Options() {
