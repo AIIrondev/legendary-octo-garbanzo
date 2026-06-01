@@ -37,6 +37,7 @@ if _CURRENT_DIR not in sys.path:
 import Web.modules.database.user as us
 import Web.modules.database.items as it
 import Web.modules.database.ausleihung as au
+import Web.modules.database.termine as termin
 import Web.modules.log.audit_log as al
 import push_notifications as pn
 import Web.modules.inventarsystem.pdf_export as pdf_export 
@@ -4817,56 +4818,44 @@ def get_user_appointments():
         db = client[MONGODB_DB]
         items_col = db['items']
 
-        # Use the established user-specific route logic for appointments.
-        bookings = au.get_ausleihung_by_user(
-            username,
-            status=['planned', 'active', 'completed'],
-            use_client_side_verification=True,
-        )
-        bookings = sorted(bookings, key=lambda b: b.get('Start') or datetime.datetime.min)
+        # Use the appointment collection for the user's appointments
+        appointments = termin.get_upcoming_for_user(username, limit=250)
 
         result = []
-        for booking in bookings:
-            start_dt = booking.get('Start')
-            if not start_dt:
+        for appt in appointments:
+            appt_id = str(appt.get('_id') or '')
+            if not appt_id:
                 continue
 
-            end_dt = booking.get('End')
-            if not end_dt and isinstance(start_dt, datetime.datetime):
-                end_dt = start_dt + datetime.timedelta(minutes=45)
-            elif not end_dt:
-                end_dt = start_dt
+            date_start = str(appt.get('date_start') or '')
+            date_end = str(appt.get('date_end') or date_start)
+            time_span = appt.get('time_span', []) or []
 
-            item_id = str(booking.get('Item') or '')
-            item_doc = None
-            if item_id:
-                try:
-                    item_doc = items_col.find_one({'_id': ObjectId(item_id)})
-                except Exception:
-                    item_doc = None
+            # Try to extract a time range from the first time_span entry
+            start_dt_str = date_start
+            end_dt_str = date_end
+            try:
+                import re as _re
+                if time_span:
+                    first = str(time_span[0])
+                    m = _re.search(r"(\d{2}:\d{2})-(\d{2}:\d{2})", first)
+                    if m:
+                        start_dt_str = f"{date_start}T{m.group(1)}"
+                        end_dt_str = f"{date_start}T{m.group(2)}"
+            except Exception:
+                pass
 
-            item_name = item_id or 'Termin'
-            if item_doc:
-                item_name = item_doc.get('Name') or item_doc.get('Code_4') or item_name
-
-            period = booking.get('Period')
-            title = item_name
-            if period:
-                title = f"{title} - {period}. Std"
-
-            status = booking.get('VerifiedStatus') or booking.get('Status') or 'unknown'
-            if status == 'active':
-                status = 'current'
+            title = appt.get('note') or f"Termin von {appt.get('user') or ''}"
             result.append({
-                'id': str(booking.get('_id')),
+                'id': appt_id,
                 'title': title,
-                'start': start_dt.isoformat() if isinstance(start_dt, datetime.datetime) else str(start_dt),
-                'end': end_dt.isoformat() if isinstance(end_dt, datetime.datetime) else str(end_dt),
-                'status': status,
-                'itemId': item_id,
-                'userName': str(booking.get('User') or ''),
-                'notes': str(booking.get('Notes') or ''),
-                'period': period,
+                'start': start_dt_str,
+                'end': end_dt_str,
+                'status': 'planned',
+                'itemId': appt_id,
+                'userName': str(appt.get('user') or ''),
+                'notes': str(appt.get('note') or ''),
+                'period': None,
                 'isCurrentUser': True,
                 'itemBorrower': '',
             })
