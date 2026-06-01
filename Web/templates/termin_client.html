@@ -267,8 +267,10 @@
         const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
         const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
 
-        let slotMinTime = '08:00:00';
-        let slotMaxTime = '18:00:00';
+        // Show a reasonable full-day range, but we'll visually highlight available slots
+        // Keep computed min/max for calculating slot gaps, but use UI range wider
+        let slotMinTime = '06:00:00';
+        let slotMaxTime = '20:00:00';
         if (candidateSlots.length > 0) {
             const starts = candidateSlots.map(function (slot) {
                 return new Date(slot.start.replace(' ', 'T') + ':00');
@@ -277,13 +279,14 @@
                 return new Date(slot.end.replace(' ', 'T') + ':00');
             }).filter(function (d) { return !Number.isNaN(d.getTime()); });
 
+            // Keep the computed min/max for gap calculations below
+            var computedMinStart = null;
+            var computedMaxEnd = null;
             if (starts.length > 0 && ends.length > 0) {
-                let minStart = starts[0];
-                let maxEnd = ends[0];
-                starts.forEach(function (d) { if (d < minStart) minStart = d; });
-                ends.forEach(function (d) { if (d > maxEnd) maxEnd = d; });
-                slotMinTime = formatTimeForCalendar(minStart);
-                slotMaxTime = formatTimeForCalendar(maxEnd);
+                computedMinStart = starts[0];
+                computedMaxEnd = ends[0];
+                starts.forEach(function (d) { if (d < computedMinStart) computedMinStart = d; });
+                ends.forEach(function (d) { if (d > computedMaxEnd) computedMaxEnd = d; });
             }
         }
 
@@ -355,6 +358,64 @@
             }
         });
 
+        // Build background gap events to grey-out times that are not available
+        function buildBackgroundGaps() {
+            const bgEvents = [];
+            const uiMin = slotMinTime; // UI visible window start
+            const uiMax = slotMaxTime; // UI visible window end
+
+            // Helper to collect allowed intervals per day
+            const spans = Array.isArray(available.time_span) ? available.time_span : [];
+
+            allDays.forEach(function(day) {
+                // collect allowed intervals for this day
+                const allowed = [];
+                spans.forEach(function(entry) {
+                    const p = parseTimeSpanEntry(entry);
+                    if (!p) return;
+                    if (p.date && p.date !== day) return;
+                    // for generic spans (no date) include for all days
+                    allowed.push({from: p.from + ':00', to: p.to + ':00'});
+                });
+
+                // sort allowed intervals
+                allowed.sort(function(a,b){ return a.from < b.from ? -1 : (a.from > b.from ? 1 : 0); });
+
+                // if no allowed intervals -> grey the full ui window
+                if (allowed.length === 0) {
+                    bgEvents.push({
+                        start: new Date(day + 'T' + uiMin),
+                        end: new Date(day + 'T' + uiMax),
+                        display: 'background',
+                        backgroundColor: '#f1f3f5'
+                    });
+                    return;
+                }
+
+                // gap before first allowed
+                if (allowed[0].from > uiMin) {
+                    bgEvents.push({ start: new Date(day + 'T' + uiMin), end: new Date(day + 'T' + allowed[0].from), display: 'background', backgroundColor: '#f1f3f5' });
+                }
+
+                // gaps between allowed intervals
+                for (let i = 0; i < allowed.length - 1; i++) {
+                    const endA = allowed[i].to;
+                    const startB = allowed[i+1].from;
+                    if (startB > endA) {
+                        bgEvents.push({ start: new Date(day + 'T' + endA), end: new Date(day + 'T' + startB), display: 'background', backgroundColor: '#f1f3f5' });
+                    }
+                }
+
+                // gap after last allowed
+                const last = allowed[allowed.length - 1];
+                if (last.to < uiMax) {
+                    bgEvents.push({ start: new Date(day + 'T' + last.to), end: new Date(day + 'T' + uiMax), display: 'background', backgroundColor: '#f1f3f5' });
+                }
+            });
+
+            return bgEvents;
+        }
+
         function updateSliderLabel() {
             const dateList = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
             const idx = Number.parseInt(slider.value, 10) || 0;
@@ -410,6 +471,12 @@
                 confirmBookingWithIcsBtn.setAttribute('data-ics-url', icsUrl);
             }
         }
+
+        // Add background gap events first so they appear behind slot events
+        const bgGaps = buildBackgroundGaps();
+        bgGaps.forEach(function(be) {
+            calendar.addEvent(be);
+        });
 
         candidateSlots.forEach(function (slot) {
             const start = new Date(slot.start.replace(' ', 'T') + ':00');
