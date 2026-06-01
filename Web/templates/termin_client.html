@@ -267,9 +267,8 @@
         const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
         const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
 
-        // Show a reasonable full-day range, but we'll visually highlight available slots
-        // Keep computed min/max for calculating slot gaps, but use UI range wider
-        let slotMinTime = '06:00:00';
+        // Show the requested UI time window from 08:15 to 20:00 and highlight available slots
+        let slotMinTime = '08:15:00';
         let slotMaxTime = '20:00:00';
         if (candidateSlots.length > 0) {
             const starts = candidateSlots.map(function (slot) {
@@ -478,6 +477,7 @@
             calendar.addEvent(be);
         });
 
+        // Add candidate free slots (blue)
         candidateSlots.forEach(function (slot) {
             const start = new Date(slot.start.replace(' ', 'T') + ':00');
             const end = new Date(slot.end.replace(' ', 'T') + ':00');
@@ -485,8 +485,8 @@
                 title: 'Freier Slot',
                 start: start,
                 end: end,
-                color: '#20c997',
-                textColor: '#062b1f',
+                color: '#0d6efd',
+                textColor: '#ffffff',
                 editable: false,
                 extendedProps: {
                     slotStart: slot.start,
