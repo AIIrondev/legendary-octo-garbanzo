@@ -119,6 +119,21 @@ class HybridScanner {
       
       // Make video element visible (ensure it's not hidden by display: none)
       this.state.videoElement.style.display = 'block';
+      // Ensure autoplay works on mobile by muting and setting playsInline
+      try {
+        this.state.videoElement.muted = true;
+        this.state.videoElement.autoplay = true;
+        this.state.videoElement.playsInline = true;
+        // Some browsers require explicit play() after setting srcObject
+        const p = this.state.videoElement.play();
+        if (p && p.then) {
+          p.catch(() => {
+            // ignore play promise rejection (user gesture required on some browsers)
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
 
       // Initialize ZXing reader
       const hints = new Map();
@@ -157,6 +172,16 @@ class HybridScanner {
       this.state.videoElement.srcObject = null;
       this.state.videoElement.style.display = 'none';
     }
+
+    // Reset ZXing reader to stop any internal loops
+    try {
+      if (this.state.reader && typeof this.state.reader.reset === 'function') {
+        this.state.reader.reset();
+      }
+    } catch (e) {
+      // ignore
+    }
+    this.state.reader = null;
 
     this.removeKeyboardInput();
   }
