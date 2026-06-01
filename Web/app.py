@@ -4823,6 +4823,22 @@ def get_user_appointments():
 
         result = []
         import re as _re
+
+        def _date_iter(start_value: str, end_value: str):
+            try:
+                start_date = datetime.datetime.strptime(start_value, '%Y-%m-%d').date()
+                end_date = datetime.datetime.strptime(end_value, '%Y-%m-%d').date()
+            except Exception:
+                return []
+            if end_date < start_date:
+                end_date = start_date
+            cursor = start_date
+            days = []
+            while cursor <= end_date:
+                days.append(cursor.strftime('%Y-%m-%d'))
+                cursor += datetime.timedelta(days=1)
+            return days
+
         for appt in appointments:
             appt_id = str(appt.get('_id') or '')
             if not appt_id:
@@ -4831,72 +4847,44 @@ def get_user_appointments():
             date_start = str(appt.get('date_start') or '')
             date_end = str(appt.get('date_end') or date_start)
             time_span = appt.get('time_span', []) or []
-
-            # Determine a sensible start and end datetime for the event.
-            # Prefer a time from the time_span for the first day and a time for the last day when multi-day.
-            start_dt_str = date_start
-            end_dt_str = date_end
-            first_time = None
-            last_time = None
-            generic_first = None
-            generic_last = None
-            try:
-                # collect times from spans
-                for entry in time_span:
-                    s = str(entry or '').strip()
-                    if not s:
-                        continue
-                    m_date = _re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
-                    if m_date:
-                        d = m_date.group(1)
-                        if d == date_start and not first_time:
-                            first_time = m_date.group(2)
-                        if d == date_end:
-                            last_time = m_date.group(3)
-                        continue
-                    m = _re.match(r"^(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
-                    if m:
-                        if generic_first is None:
-                            generic_first = m.group(1)
-                        generic_last = m.group(2)
-
-                if not first_time and generic_first:
-                    first_time = generic_first
-                if not last_time and generic_last:
-                    last_time = generic_last
-
-                if first_time:
-                    start_dt_str = f"{date_start}T{first_time}"
-
-                # If appointment spans multiple days and we have a last_time for the final day, use it
-                if date_end != date_start:
-                    if last_time:
-                        end_dt_str = f"{date_end}T{last_time}"
-                    else:
-                        # span until end of final day
-                        end_dt_str = f"{date_end}T23:59:59"
-                else:
-                    if last_time:
-                        end_dt_str = f"{date_start}T{last_time}"
-            except Exception:
-                # fallback: use whole-day span
-                if date_end != date_start:
-                    end_dt_str = f"{date_end}T23:59:59"
-
             title = appt.get('note') or f"Termin von {appt.get('user') or ''}"
-            result.append({
-                'id': appt_id,
-                'title': title,
-                'start': start_dt_str,
-                'end': end_dt_str,
-                'status': 'planned',
-                'itemId': appt_id,
-                'userName': str(appt.get('user') or ''),
-                'notes': str(appt.get('note') or ''),
-                'period': None,
-                'isCurrentUser': True,
-                'itemBorrower': '',
-            })
+            days_in_range = _date_iter(date_start, date_end) or ([date_start] if date_start else [])
+
+            span_entries = []
+            for entry in time_span:
+                s = str(entry or '').strip()
+                if not s:
+                    continue
+                m_date = _re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
+                if m_date:
+                    span_entries.append((m_date.group(1), m_date.group(2), m_date.group(3)))
+                    continue
+                m = _re.match(r"^(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
+                if m:
+                    for day in days_in_range:
+                        span_entries.append((day, m.group(1), m.group(2)))
+
+            # If the stored span is already day-specific, use it as-is.
+            # If it was generic, we duplicated it to each day in the range above.
+            if not span_entries and days_in_range:
+                # Fallback: create a simple all-day marker for each date so the appointment is visible.
+                for day in days_in_range:
+                    span_entries.append((day, '08:00', '16:45'))
+
+            for day, start_time, end_time in span_entries:
+                result.append({
+                    'id': f"{appt_id}-{day}-{start_time}",
+                    'title': title,
+                    'start': f"{day}T{start_time}",
+                    'end': f"{day}T{end_time}",
+                    'status': 'planned',
+                    'itemId': appt_id,
+                    'userName': str(appt.get('user') or ''),
+                    'notes': str(appt.get('note') or ''),
+                    'period': None,
+                    'isCurrentUser': True,
+                    'itemBorrower': '',
+                })
 
         return jsonify({'ok': True, 'bookings': result})
     except Exception as e:
