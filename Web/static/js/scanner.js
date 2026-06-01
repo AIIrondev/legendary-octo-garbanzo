@@ -98,6 +98,9 @@ class HybridScanner {
 
       this.state.stream = stream;
       this.state.videoElement.srcObject = stream;
+      
+      // Make video element visible (ensure it's not hidden by display: none)
+      this.state.videoElement.style.display = 'block';
 
       // Initialize ZXing reader
       const hints = new Map();
@@ -134,6 +137,7 @@ class HybridScanner {
 
     if (this.state.videoElement) {
       this.state.videoElement.srcObject = null;
+      this.state.videoElement.style.display = 'none';
     }
 
     this.removeKeyboardInput();
