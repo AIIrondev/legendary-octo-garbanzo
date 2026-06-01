@@ -357,63 +357,7 @@
             }
         });
 
-        // Build background gap events to grey-out times that are not available
-        function buildBackgroundGaps() {
-            const bgEvents = [];
-            const uiMin = slotMinTime; // UI visible window start
-            const uiMax = slotMaxTime; // UI visible window end
-
-            // Helper to collect allowed intervals per day
-            const spans = Array.isArray(available.time_span) ? available.time_span : [];
-
-            allDays.forEach(function(day) {
-                // collect allowed intervals for this day
-                const allowed = [];
-                spans.forEach(function(entry) {
-                    const p = parseTimeSpanEntry(entry);
-                    if (!p) return;
-                    if (p.date && p.date !== day) return;
-                    // for generic spans (no date) include for all days
-                    allowed.push({from: p.from + ':00', to: p.to + ':00'});
-                });
-
-                // sort allowed intervals
-                allowed.sort(function(a,b){ return a.from < b.from ? -1 : (a.from > b.from ? 1 : 0); });
-
-                // if no allowed intervals -> grey the full ui window
-                if (allowed.length === 0) {
-                    bgEvents.push({
-                        start: new Date(day + 'T' + uiMin),
-                        end: new Date(day + 'T' + uiMax),
-                        display: 'background',
-                        backgroundColor: '#f1f3f5'
-                    });
-                    return;
-                }
-
-                // gap before first allowed
-                if (allowed[0].from > uiMin) {
-                    bgEvents.push({ start: new Date(day + 'T' + uiMin), end: new Date(day + 'T' + allowed[0].from), display: 'background', backgroundColor: '#f1f3f5' });
-                }
-
-                // gaps between allowed intervals
-                for (let i = 0; i < allowed.length - 1; i++) {
-                    const endA = allowed[i].to;
-                    const startB = allowed[i+1].from;
-                    if (startB > endA) {
-                        bgEvents.push({ start: new Date(day + 'T' + endA), end: new Date(day + 'T' + startB), display: 'background', backgroundColor: '#f1f3f5' });
-                    }
-                }
-
-                // gap after last allowed
-                const last = allowed[allowed.length - 1];
-                if (last.to < uiMax) {
-                    bgEvents.push({ start: new Date(day + 'T' + last.to), end: new Date(day + 'T' + uiMax), display: 'background', backgroundColor: '#f1f3f5' });
-                }
-            });
-
-            return bgEvents;
-        }
+        // No background greying: show full calendar skeleton and only mark possible slots
 
         function updateSliderLabel() {
             const dateList = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
@@ -471,11 +415,7 @@
             }
         }
 
-        // Add background gap events first so they appear behind slot events
-        const bgGaps = buildBackgroundGaps();
-        bgGaps.forEach(function(be) {
-            calendar.addEvent(be);
-        });
+        // No background gaps: keep full skeleton/grid visible
 
         // Add candidate free slots (blue)
         candidateSlots.forEach(function (slot) {
