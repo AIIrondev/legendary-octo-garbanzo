@@ -287,7 +287,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     const filteredEvents = showCompletedBookings 
                         ? processedEvents 
                         : processedEvents.filter(event => event.extendedProps.status !== 'completed');
-                    
+
+                    // If any event spans multiple days, switch to week view for better visibility
+                    try {
+                        const multiDay = processedEvents.some(ev => {
+                            try {
+                                const s = new Date(ev.start);
+                                const e = new Date(ev.end);
+                                return s && e && s.toDateString() !== e.toDateString();
+                            } catch (e) { return false; }
+                        });
+                        if (multiDay && calendar && calendar.view && calendar.view.type === 'timeGridDay') {
+                            calendar.changeView('timeGridWeek');
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+
                     // Provide events to calendar
                     successCallback(filteredEvents);
                 })

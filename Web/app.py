@@ -4822,6 +4822,7 @@ def get_user_appointments():
         appointments = termin.get_upcoming_for_user(username, limit=250)
 
         result = []
+        import re as _re
         for appt in appointments:
             appt_id = str(appt.get('_id') or '')
             if not appt_id:
@@ -4831,19 +4832,56 @@ def get_user_appointments():
             date_end = str(appt.get('date_end') or date_start)
             time_span = appt.get('time_span', []) or []
 
-            # Try to extract a time range from the first time_span entry
+            # Determine a sensible start and end datetime for the event.
+            # Prefer a time from the time_span for the first day and a time for the last day when multi-day.
             start_dt_str = date_start
             end_dt_str = date_end
+            first_time = None
+            last_time = None
+            generic_first = None
+            generic_last = None
             try:
-                import re as _re
-                if time_span:
-                    first = str(time_span[0])
-                    m = _re.search(r"(\d{2}:\d{2})-(\d{2}:\d{2})", first)
+                # collect times from spans
+                for entry in time_span:
+                    s = str(entry or '').strip()
+                    if not s:
+                        continue
+                    m_date = _re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
+                    if m_date:
+                        d = m_date.group(1)
+                        if d == date_start and not first_time:
+                            first_time = m_date.group(2)
+                        if d == date_end:
+                            last_time = m_date.group(3)
+                        continue
+                    m = _re.match(r"^(\d{2}:\d{2})-(\d{2}:\d{2})$", s)
                     if m:
-                        start_dt_str = f"{date_start}T{m.group(1)}"
-                        end_dt_str = f"{date_start}T{m.group(2)}"
+                        if generic_first is None:
+                            generic_first = m.group(1)
+                        generic_last = m.group(2)
+
+                if not first_time and generic_first:
+                    first_time = generic_first
+                if not last_time and generic_last:
+                    last_time = generic_last
+
+                if first_time:
+                    start_dt_str = f"{date_start}T{first_time}"
+
+                # If appointment spans multiple days and we have a last_time for the final day, use it
+                if date_end != date_start:
+                    if last_time:
+                        end_dt_str = f"{date_end}T{last_time}"
+                    else:
+                        # span until end of final day
+                        end_dt_str = f"{date_end}T23:59:59"
+                else:
+                    if last_time:
+                        end_dt_str = f"{date_start}T{last_time}"
             except Exception:
-                pass
+                # fallback: use whole-day span
+                if date_end != date_start:
+                    end_dt_str = f"{date_end}T23:59:59"
 
             title = appt.get('note') or f"Termin von {appt.get('user') or ''}"
             result.append({
