@@ -15,15 +15,6 @@ on:
           - patch
           - minor
           - major
-          - development
-      push_dev:
-        description: "If true, push the :dev image to GHCR for development releases"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "true"
-          - "false"
 
 permissions:
   contents: write
@@ -48,7 +39,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           BUMP_TYPE: ${{ github.event.inputs.bump || 'patch' }}
-          PUSH_DEV: ${{ github.event.inputs.push_dev || 'false' }}
         run: |
           if [ "$EVENT_NAME" = "push" ] && [ -n "$REF_NAME" ]; then
             TAG="$REF_NAME"
@@ -78,16 +68,10 @@ jobs:
             else
               patch=$((patch + 1))
             fi
-
-            if [ "${BUMP_TYPE:-}" = "development" ]; then
-              TAG="v${major}.${minor}.${patch}-dev"
-            else
-              TAG="v${major}.${minor}.${patch}"
-            fi
           fi
 
-          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev(\.[0-9]+)?)?$'; then
-            echo "Error: tag '$TAG' is not valid semver (vX.Y.Z or vX.Y.Z-dev)"
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]?$'; then
+            echo "Error: tag '$TAG' is not valid semver (vX.Y.Z)"
             exit 1
           fi
 
@@ -123,33 +107,6 @@ jobs:
           IMAGE="ghcr.io/aiirondev/legendary-octo-garbanzo:${TAG}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-          if [ "${BUMP_TYPE:-}" = "development" ]; then
-            echo "is_development=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_development=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ "${BUMP_TYPE:-}" = "development" ] && [ "${PUSH_DEV:-}" = "true" ]; then
-            echo "push_dev=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "push_dev=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Update .release-version file
-        run: |
-          echo "${{ steps.meta.outputs.tag }}" > .release-version
-          cat .release-version
-
-      - name: Create and push tag for manual releases
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          TAG="${{ steps.meta.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .release-version
-          git commit -m "chore: bump version to $TAG" || true
-          git tag "$TAG"
-          git push origin "$TAG"
-          git push origin HEAD:${{ github.ref_name }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -162,7 +119,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push release image
-        if: steps.meta.outputs.is_development != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -171,16 +127,6 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}
             ghcr.io/aiirondev/legendary-octo-garbanzo:latest
-
-      - name: Build and push development image (:dev)
-        if: steps.meta.outputs.is_development == 'true' && steps.meta.outputs.push_dev == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/aiirondev/legendary-octo-garbanzo:dev
 
       - name: Build local image tar for offline deploy
         run: |
@@ -203,19 +149,6 @@ jobs:
           echo "Pull failed, attempting local docker build as fallback"
           docker build -t "$IMG" .
           docker save "$IMG" | gzip > "inventarsystem-image-${TAG}.tar.gz"
-
-      # development tar omitted: dev releases will be versioned (vX.Y.Z-dev) and handled by update.sh using the tag
-
-      - name: Commit .release-version for tag pushes
-        if: github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet .release-version; then
-            git add .release-version
-            git commit -m "chore: update version to ${{ steps.meta.outputs.tag }}"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
 
       - name: Create release-only docker bundle
         run: |
@@ -300,14 +233,6 @@ jobs:
             fi
           done
 
-          cat > release-bundle/DEVELOPMENT.md <<EOF
-          This is a development prerelease bundle for tag: ${{ steps.meta.outputs.tag }}
-
-          This prerelease is intentionally separate from normal releases and will not be used by default.
-
-          To install this prerelease on a target host run:
-
-            ./update.sh ${{ steps.meta.outputs.tag }}
 
           EOF
 
@@ -319,10 +244,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          prerelease: ${{ steps.meta.outputs.is_development }}
           files: |
             inventarsystem-docker-bundle.tar.gz
             inventarsystem-image-${{ steps.meta.outputs.tag }}.tar.gz
-            inventarsystem-image-dev.tar.gz
           fail_on_unmatched_files: false
           generate_release_notes: true
