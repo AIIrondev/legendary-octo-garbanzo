@@ -54,7 +54,7 @@ jobs:
             TAG="$REF_NAME"
           else
             # Fetch latest release tag via GitHub API (fall back to v3.0.0)
-            latest_tag="v3.0.0"
+            latest_tag="v0.8.31
             if meta_json=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
               tag_name=$(printf "%s" "$meta_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
               if [ -n "$tag_name" ]; then
@@ -94,14 +94,14 @@ jobs:
           git fetch --tags --force
           LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
           if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v3.0.0"
+            LATEST_TAG="0.8.31"
           fi
 
           TAG_MAJOR="${TAG#v}"
           TAG_MAJOR="${TAG_MAJOR%%.*}"
           LATEST_MAJOR="$(echo "$LATEST_TAG" | grep -Eo '^v[0-9]+' | tr -d 'v')"
           if [ -z "$LATEST_MAJOR" ]; then
-            LATEST_MAJOR="3"
+            LATEST_MAJOR="0"
           fi
 
           # If not explicitly bumping major, disallow changing major version
