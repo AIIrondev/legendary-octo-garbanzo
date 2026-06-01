@@ -44,7 +44,7 @@ jobs:
             TAG="$REF_NAME"
           else
             # Fetch latest release tag via GitHub API (fall back to v3.0.0)
-            latest_tag="v0.8.31
+            latest_tag="v0.8.31"
             if meta_json=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
               tag_name=$(printf "%s" "$meta_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
               if [ -n "$tag_name" ]; then
