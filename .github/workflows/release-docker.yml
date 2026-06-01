@@ -43,7 +43,7 @@ jobs:
           if [ "$EVENT_NAME" = "push" ] && [ -n "$REF_NAME" ]; then
             TAG="$REF_NAME"
           else
-            # Fetch latest release tag via GitHub API (fall back to v3.0.0)
+            # Fetch latest release tag via GitHub API (fall back to v0.8.31)
             latest_tag="v0.8.31"
             if meta_json=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
               tag_name=$(printf "%s" "$meta_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
@@ -57,7 +57,7 @@ jobs:
               minor=${BASH_REMATCH[2]}
               patch=${BASH_REMATCH[3]}
             else
-              major=3; minor=0; patch=0
+              major=0; minor=8; patch=31
             fi
 
             # Bump strategy: major / minor / patch
@@ -68,9 +68,13 @@ jobs:
             else
               patch=$((patch + 1))
             fi
+            
+            # Zusammenbau des Tags für den manuellen Run
+            TAG="v${major}.${minor}.${patch}"
           fi
 
-          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]?$'; then
+          # Validierung des erzeugten oder übergebenen Tags
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev(\.[0-9]+)?)?$'; then
             echo "Error: tag '$TAG' is not valid semver (vX.Y.Z)"
             exit 1
           fi
@@ -78,7 +82,7 @@ jobs:
           git fetch --tags --force
           LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
           if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="0.8.31"
+            LATEST_TAG="v0.8.31"
           fi
 
           TAG_MAJOR="${TAG#v}"
@@ -124,6 +128,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          load: true # Lädt das Image in den lokalen Docker-Daemon für den 'docker save' Schritt
           tags: |
             ${{ steps.meta.outputs.image }}
             ghcr.io/aiirondev/legendary-octo-garbanzo:latest
@@ -156,11 +161,11 @@ jobs:
           cat > release-bundle/docker-compose.yml <<EOF
           services:
             app:
-              image: ${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/legendary-octo-garbanzo:${{ steps.meta.outputs.tag }}}
+              image: \${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/legendary-octo-garbanzo:${{ steps.meta.outputs.tag }}}
               container_name: inventarsystem-app
               restart: unless-stopped
               ports:
-                - "${INVENTAR_HTTP_PORT:-10000}:8000"
+                - "\${INVENTAR_HTTP_PORT:-10000}:8000"
               depends_on:
                 - mongodb
                 - redis
@@ -232,9 +237,6 @@ jobs:
               cp "$f" "release-bundle/$(basename "$f")"
             fi
           done
-
-
-          EOF
 
           # Make any shipped scripts executable
           find release-bundle -maxdepth 1 -type f -name '*.sh' -exec chmod +x {} \; || true
