@@ -850,10 +850,168 @@
     }
 
     // Keep track of the scanner state globally/outer scope
-    let scannerRunning = false;
+    let scannerRunning = false; // Maps directly to your 'isScanning' flag style
+    let activeScannerCallback = null; // Dynamically routes the scanned barcode to the caller
     let lastScanValue = null;
     let lastScanAt = 0;
     let activeStudentCardId = ''; // Managed globally by your system
+    
+    // =========================================================================
+    // 1. CORE SCANNER ROUTING ENGINE (QUAGGA2)
+    // =========================================================================
+    
+    function startScanner(targetCallback) {
+        if (scannerRunning) return;
+    
+        const readerWrap = document.getElementById('scanReaderWrap');
+        const toggleBtn = document.getElementById('toggleScannerBtn');
+        
+        // Store the custom action that should happen when a barcode is found
+        activeScannerCallback = targetCallback;
+    
+        if (readerWrap) readerWrap.style.display = 'block';
+        setScanStatus('Initializing camera...', 'warn');
+    
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                // Targets your interior relative viewport box
+                target: document.querySelector('#library-scanner-container'), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Force rear camera
+                },
+            },
+            decoder: {
+                readers: [
+                    "code_128_reader", 
+                    "ean_reader", 
+                    "code_39_reader", 
+                    "upc_reader", 
+                    "codabar_reader", 
+                    "i2of5_reader"
+                ]
+            } 
+        }, function(err) {
+            if (err) {
+                console.error('Scanner start failed:', err);
+                if (readerWrap) readerWrap.style.display = 'none';
+                const detail = (err && (err.message || err.name)) ? ` (${err.message || err.name})` : '';
+                setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
+                return;
+            }
+        
+            Quagga.start();
+            scannerRunning = true;
+            
+            // Update the main toggle button text if no specific edit callback is provided
+            if (!targetCallback && toggleBtn) {
+                toggleBtn.textContent = 'Scanner stoppen';
+            }
+            setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
+        });
+    }
+    
+    function stopScanner() {
+        if (!scannerRunning) return;
+        
+        const readerWrap = document.getElementById('scanReaderWrap');
+        const toggleBtn = document.getElementById('toggleScannerBtn');
+    
+        Quagga.stop();
+    
+        scannerRunning = false;
+        activeScannerCallback = null; // Clear out callback routing
+    
+        if (readerWrap) readerWrap.style.display = 'none';
+        if (toggleBtn) toggleBtn.textContent = 'Scanner starten';
+        setScanStatus('Scanner gestoppt.', 'warn');
+    }
+    
+    // Unified global reader callback routing data based on who opened the scanner
+    Quagga.onDetected(function(data) {
+        if (!data || !data.codeResult || !data.codeResult.code) return;
+        
+        const barcode = String(data.codeResult.code || '').trim();
+        console.log("Barcode detected:", barcode);
+    
+        // Keep a local reference to the active callback before stopping the engine
+        const currentCallback = activeScannerCallback;
+    
+        // Critical: Stop scanning immediately to prevent multiple triggers
+        stopScanner();
+    
+        // 1. If an explicit modal/edit function asked for the scan, route to it directly
+        if (typeof currentCallback === "function") {
+            currentCallback(barcode);
+        } else {
+            // 2. Fallback Default: Pass it to your library dashboard's primary business processing
+            handleScanSuccess(barcode);
+        }
+    });
+    
+    // Event Listener for the main standalone library processing scanner button
+    document.getElementById('toggleScannerBtn')?.addEventListener('click', async function() {
+        if (scannerRunning) {
+            await stopScanner();
+        } else {
+            await startScanner(null); // Passing null flags it to run default library processing
+        }
+    });
+    
+    
+    // =========================================================================
+    // 2. LIBRARY WORKFLOW AND MODAL IMPLEMENTATIONS
+    // =========================================================================
+    
+    function handleScanSuccess(decodedText) {
+        const scannedCode = normalizeScannedCode(decodedText);
+        if (!scannedCode) return;
+    
+        // Debounce checks
+        const now = Date.now();
+        if (scannedCode === lastScanValue && (now - lastScanAt) < 1500) {
+            return;
+        }
+        lastScanValue = scannedCode;
+        lastScanAt = now;
+    
+        const mode = (document.getElementById('scanModeSelect') || {}).value || 'card_only';
+        if (mode === 'card_only') {
+            setActiveStudentCard(scannedCode);
+            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
+            return;
+        }
+    
+        processQuickToggleScan(scannedCode);
+    }
+    
+    function scanIntoEditCode() {
+        const scanReaderWrap = document.getElementById('scanReaderWrap');
+        const editCodeInput = document.getElementById('edit-code4');
+        const scanEditBtn = document.getElementById('scan-edit-code-btn');
+        if (!scanReaderWrap || !editCodeInput || !scanEditBtn) {
+            return;
+        }
+    
+        // Toggle close if it's already running
+        if (scannerRunning && scanReaderWrap.style.display !== 'none') {
+            stopScanner();
+            scanEditBtn.textContent = 'Barcode scannen';
+            return;
+        }
+    
+        scanEditBtn.textContent = 'Scanner schließen';
+    
+        // Launch the scanner with custom callback routing to the item edit fields
+        startScanner(function(decodedText) {
+            editCodeInput.value = decodedText;
+            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            scanEditBtn.textContent = 'Barcode scannen';
+        });
+    }
     
     function borrowItem(itemId) {
         const selectedItem = (libraryItems || []).find(item => item._id === itemId);
@@ -984,95 +1142,6 @@
         }
     }
     
-    function handleScanSuccess(decodedText) {
-        const scannedCode = normalizeScannedCode(decodedText);
-        if (!scannedCode) return;
-    
-        const now = Date.now();
-        if (scannedCode === lastScanValue && (now - lastScanAt) < 1500) {
-            return;
-        }
-        lastScanValue = scannedCode;
-        lastScanAt = now;
-    
-        const mode = (document.getElementById('scanModeSelect') || {}).value || 'card_only';
-        if (mode === 'card_only') {
-            setActiveStudentCard(scannedCode);
-            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
-            return;
-        }
-    
-        processQuickToggleScan(scannedCode);
-    }
-    
-    // Global Quagga reader hook
-    Quagga.onDetected(function(data) {
-        if (data && data.codeResult && data.codeResult.code) {
-            handleScanSuccess(data.codeResult.code);
-        }
-    });
-    
-    async function startScanner() {
-        if (scannerRunning) return;
-    
-        const readerWrap = document.getElementById('scanReaderWrap');
-        const toggleBtn = document.getElementById('toggleScannerBtn');
-        if (readerWrap) readerWrap.style.display = 'block';
-    
-        setScanStatus('Initializing camera...', 'warn');
-    
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                // Corrected to target your relative viewport wrapper child element
-                target: document.querySelector('#library-scanner-container'), 
-                constraints: {
-                    width: 640,
-                    height: 480,
-                    facingMode: "environment" // Force rear camera lenses
-                },
-            },
-            decoder: {
-                // Limited precisely down to your standard barcode layouts
-                readers: [
-                    "code_128_reader", 
-                    "ean_reader", 
-                    "code_39_reader", 
-                    "upc_reader", 
-                    "codabar_reader", 
-                    "i2of5_reader" // Replaces old ITF layout configuration mapping
-                ]
-            } 
-        }, function(err) {
-            if (err) {
-                console.error('Scanner start failed:', err);
-                if (readerWrap) readerWrap.style.display = 'none';
-                const detail = (err && (err.message || err.name)) ? ` (${err.message || err.name})` : '';
-                setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
-                return;
-            }
-        
-            Quagga.start();
-            scannerRunning = true;
-            if (toggleBtn) toggleBtn.textContent = 'Scanner stoppen';
-            setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
-        });
-    }
-    
-    async function stopScanner() {
-        if (!scannerRunning) return;
-        const readerWrap = document.getElementById('scanReaderWrap');
-        const toggleBtn = document.getElementById('toggleScannerBtn');
-    
-        Quagga.stop();
-    
-        scannerRunning = false;
-        if (readerWrap) readerWrap.style.display = 'none';
-        if (toggleBtn) toggleBtn.textContent = 'Scanner starten';
-        setScanStatus('Scanner gestoppt.', 'warn');
-    }
-    
     function wireScannerUi() {
         const toggleBtn = document.getElementById('toggleScannerBtn');
         const resetBtn = document.getElementById('resetCardBtn');
@@ -1083,7 +1152,7 @@
                 if (scannerRunning) {
                     await stopScanner();
                 } else {
-                    await startScanner();
+                    await startScanner(null);
                 }
             });
         }
