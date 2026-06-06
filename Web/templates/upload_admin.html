@@ -876,10 +876,7 @@
                     <button type="button" id="scan-code4-btn" class="fetch-isbn-button">Barcode scannen</button>
                 </div>
                 <small style="display:block; color:#666;">Einzelcode manuell setzen oder per Scanner erfassen.</small>
-                <div id="code4-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;">
-                    <video id="code4-scanner-video" playsinline style="width: 100%; border-radius: 8px;"></video>
-                    <canvas id="code4-scanner-canvas" style="display: none;"></canvas>
-                </div>
+                <div id="code4-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
                 <small id="code4-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
             </div>
             <div class="form-group">
@@ -910,10 +907,7 @@
                     <button type="button" id="scan-isbn-btn" class="fetch-isbn-button">Barcode scannen</button>
                     <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Bild abrufen</button>
                 </div>
-                <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;">
-                    <video id="isbn-scanner-video" playsinline style="width: 100%; border-radius: 8px;"></video>
-                    <canvas id="isbn-scanner-canvas" style="display: none;"></canvas>
-                </div>
+                <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
                 <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;">Scannen oder manuell eingeben. Gültige ISBNs helfen beim Abruf von Buchdaten, andere Codes werden trotzdem akzeptiert.</small>
                 <div id="book-info-container" class="book-info-container"></div>
             </div>
@@ -977,8 +971,7 @@
     }
 </script>
 
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
-<script src="/static/js/scanner.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
     const libraryModuleEnabled = {{ 'true' if library_module_enabled else 'false' }};
 
@@ -1057,19 +1050,16 @@
 
         // Stop ISBN scanner if currently running to avoid camera conflicts.
         if (isbnScannerRunning && isbnScannerInstance) {
-            isbnScannerInstance.stop();
-            isbnScannerInstance = null;
+            isbnScannerInstance.clear().catch(() => {});
             const isbnScannerBox = document.getElementById('isbn-scanner');
             const isbnScanButton = document.getElementById('scan-isbn-btn');
             if (isbnScannerBox) isbnScannerBox.style.display = 'none';
             if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
             isbnScannerRunning = false;
-            setIsbnScanStatus('Scanner gestoppt.');
         }
 
         if (code4ScannerRunning && code4ScannerInstance) {
-            code4ScannerInstance.stop();
-            code4ScannerInstance = null;
+            code4ScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
             scanButton.textContent = 'Barcode scannen';
             code4ScannerRunning = false;
@@ -1079,36 +1069,29 @@
 
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
+        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { 
+            fps: 10, 
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
         code4ScannerRunning = true;
         setCode4ScanStatus('Scanner läuft. Der Scan wird im Basis-Codefeld übernommen.');
 
-        code4ScannerInstance = new HybridScanner({
-            videoId: 'code4-scanner-video',
-            canvasId: 'code4-scanner-canvas',
-            formats: ['CODE_128', 'CODE_39', 'QR_CODE'],
-            fps: 10,
-            facingMode: 'environment',
-            onSuccess: function(decodedText) {
-                const scannedCode = String(decodedText || '').trim();
-                if (!scannedCode) return;
+        code4ScannerInstance.render((decodedText) => {
+            const scannedCode = String(decodedText || '').trim();
+            if (!scannedCode) return;
 
-                const now = Date.now();
-                if (scannedCode === code4LastScanned && (now - code4LastScannedAt) < 1500) {
-                    return;
-                }
-                code4LastScanned = scannedCode;
-                code4LastScannedAt = now;
-
-                codeField.value = scannedCode;
-                validateCodeField(codeField);
-                setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
-            },
-            onError: function(error) {
-                setCode4ScanStatus(`Fehler: ${error}`, true);
+            const now = Date.now();
+            if (scannedCode === code4LastScanned && (now - code4LastScannedAt) < 1500) {
+                return;
             }
-        });
+            code4LastScanned = scannedCode;
+            code4LastScannedAt = now;
 
-        code4ScannerInstance.start();
+            codeField.value = scannedCode;
+            validateCodeField(codeField);
+            setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
+        }, () => {});
     }
 
     function startIsbnScanner() {
@@ -1123,8 +1106,7 @@
 
         // Stop Code_4 scanner if currently running to avoid camera conflicts.
         if (code4ScannerRunning && code4ScannerInstance) {
-            code4ScannerInstance.stop();
-            code4ScannerInstance = null;
+            code4ScannerInstance.clear().catch(() => {});
             const codeScannerBox = document.getElementById('code4-scanner');
             const codeScanButton = document.getElementById('scan-code4-btn');
             if (codeScannerBox) codeScannerBox.style.display = 'none';
@@ -1134,8 +1116,7 @@
         }
 
         if (isbnScannerRunning && isbnScannerInstance) {
-            isbnScannerInstance.stop();
-            isbnScannerInstance = null;
+            isbnScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
             scanButton.textContent = 'ISBN scannen';
             isbnScannerRunning = false;
@@ -1145,16 +1126,15 @@
 
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
+        isbnScannerInstance = new Html5QrcodeScanner('isbn-scanner', {
+            fps: 10,
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
         isbnScannerRunning = true;
         setIsbnScanStatus('Scanner läuft. Bitte ISBN-Code erfassen.');
 
-        isbnScannerInstance = new HybridScanner({
-            videoId: 'isbn-scanner-video',
-            canvasId: 'isbn-scanner-canvas',
-            formats: ['ISBN', 'EAN_13', 'EAN_8', 'QR_CODE'],
-            fps: 10,
-            facingMode: 'environment',
-            onSuccess: function(decodedText) {
+        isbnScannerInstance.render((decodedText) => {
             const scannedCode = String(decodedText || '').trim();
             if (!scannedCode) return;
 
@@ -1167,11 +1147,7 @@
                 setIsbnScanStatus('Kein gültiges ISBN-Format erkannt, der gescannte Wert bleibt aber im Feld.', true);
             }
 
-            // Stop scanner after successful scan
-            if (isbnScannerInstance) {
-                isbnScannerInstance.stop();
-                isbnScannerInstance = null;
-            }
+            isbnScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
             scanButton.textContent = 'ISBN scannen';
             isbnScannerRunning = false;
@@ -1180,13 +1156,7 @@
                 // Automatically load book metadata after a valid ISBN scan.
                 fetchBookInfo('upload');
             }
-            },
-            onError: function(error) {
-                setIsbnScanStatus(`Fehler: ${error}`, true);
-            }
-        });
-
-        isbnScannerInstance.start();
+        }, () => {});
     }
 
     // Load predefined filter values for dropdowns

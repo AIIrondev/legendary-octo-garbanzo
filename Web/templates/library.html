@@ -67,22 +67,8 @@
 
     <!-- Scanner Panel -->
     <div id="qrContainer" class="qr-container" style="display: none;">
-        <div class="scanner-header">
-            <h3>Barcode/QR-Code Scanner</h3>
-            <div class="scanner-controls">
-                <button type="button" id="cameraToggle" class="scanner-button" title="Kamera wechseln">📷 Kamera</button>
-                <label for="uploadScanImage" class="scanner-button" title="Bild hochladen zum Dekodieren">📤 Upload</label>
-                <input type="file" id="uploadScanImage" accept="image/*" style="display: none;">
-            </div>
-        </div>
-        <div class="scanner-video-wrapper">
-            <video id="qr-reader" playsinline style="width: 100%; max-width: 100%; height: auto; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px;"></video>
-            <canvas id="scanner-canvas" style="display: none;"></canvas>
-        </div>
-        <div id="scanMessage" class="scanner-message" style="margin-top: 10px; text-align: center; font-weight: bold; color: #666;"></div>
-        <p style="font-size: 0.85em; color: #999; margin-top: 10px; margin-bottom: 0; text-align: center;">
-            💡 Hinweis: Scan-Ergebnis wird automatisch in das Feld oben übernommen. USB-Scanner werden als Tastatureingabe erkannt.
-        </p>
+        <div id="qr-reader" style="width: auto; height: 300px;"></div>
+        <span id="qr-result" style="display: none;"></span>
     </div>
 
     <!-- Table Header (only in table mode) -->
@@ -220,8 +206,7 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
-<script src="/static/js/scanner.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
 <script>
 // View mode persistence
 const LIBRARY_VIEW_MODE_KEY = 'inventarLibraryViewMode';
@@ -564,29 +549,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     initMobileWindowedLibraryLoading();
-    // On mobile, make tapping an item open details for easier access (tap target larger)
-    function enableMobileTapToDetails() {
-        if (!isMobileViewport()) return;
-        document.querySelectorAll('.library-item').forEach(item => {
-            item.addEventListener('click', function(e) {
-                // Ignore clicks on buttons/links inside the card
-                const tag = e.target.tagName.toLowerCase();
-                if (tag === 'button' || tag === 'a' || e.target.closest('.action-button')) return;
-                const itemId = this.dataset.itemId;
-                if (!itemId) return;
-                fetch(`/get_item_details/${itemId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            displayLibraryItemDetail(data.item);
-                            document.getElementById('detailModal').style.display = 'flex';
-                        }
-                    });
-            }, { passive: true });
-        });
-    }
-
-    enableMobileTapToDetails();
 });
 
 function displayLibraryItemDetail(item) {
@@ -597,7 +559,7 @@ function displayLibraryItemDetail(item) {
     modalBody.innerHTML = `
         <h2>${item.Name}</h2>
         <div class="detail-content">
-            ${item.Image ? `<img src="/uploads/${item.Image}" alt="${item.Name}" class="detail-image">` : ''}
+            ${item.Image ? `<img src="/uploads/${item.Image}" alt="${item.Name}" style="max-width: 200px; margin-bottom: 20px;">` : ''}
             <p><strong>Autor:</strong> ${item.Author || '—'}</p>
             <p><strong>ISBN:</strong> ${item.ISBN || '—'}</p>
             <p><strong>Typ:</strong> ${item.ItemType || 'Medium'}</p>
@@ -669,9 +631,8 @@ document.getElementById('favoriteToggle').addEventListener('click', function() {
     // TODO: Implement favorites filtering
 });
 
-// Scanner instance (hybrid: real-time + upload + keyboard)
+// Scanner toggle
 let scanner = null;
-
 document.getElementById('scannerBtn').addEventListener('click', function(e) {
     e.stopPropagation();
     const container = document.getElementById('qrContainer');
@@ -679,10 +640,7 @@ document.getElementById('scannerBtn').addEventListener('click', function(e) {
     
     if (isOpen) {
         container.style.display = 'none';
-        if (scanner) {
-            scanner.stop();
-            scanner = null;
-        }
+        if (scanner) scanner.clear();
         this.classList.remove('open');
         this.setAttribute('aria-expanded', 'false');
     } else {
@@ -691,63 +649,14 @@ document.getElementById('scannerBtn').addEventListener('click', function(e) {
         this.setAttribute('aria-expanded', 'true');
         
         if (!scanner) {
-            initScanner();
+            scanner = new Html5Qrcode('qr-reader');
+            scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 250 },
+                onScanSuccess,
+                onScanError
+            );
         }
-    }
-});
-
-function initScanner() {
-    scanner = new HybridScanner({
-        videoId: 'qr-reader',
-        canvasId: 'scanner-canvas',
-        formats: ['QR_CODE', 'CODE_128', 'EAN_13', 'ISBN', 'CODE_39', 'UPC_A', 'EAN_8'],
-        fps: 10,
-        facingMode: 'environment',
-        onSuccess: function(decodedText) {
-            const studentId = decodedText.trim();
-            document.getElementById('studentIdInput').value = studentId;
-            document.getElementById('scanMessage').textContent = '✓ Erkannt: ' + studentId;
-            document.getElementById('scanMessage').style.color = '#4CAF50';
-        },
-        onError: function(error) {
-            document.getElementById('scanMessage').textContent = '✗ ' + error;
-            document.getElementById('scanMessage').style.color = '#f44336';
-        }
-    });
-
-    scanner.start();
-}
-
-// Camera toggle
-document.getElementById('cameraToggle')?.addEventListener('click', function() {
-    if (scanner) {
-        scanner.toggleCamera();
-        this.textContent = scanner.options.facingMode === 'user' ? '📷 Rückkamera' : '🤳 Frontkamera';
-    }
-});
-
-// Image upload fallback
-document.getElementById('uploadScanImage')?.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const messageEl = document.getElementById('scanMessage');
-        messageEl.textContent = 'Wird dekodiert...';
-        messageEl.style.color = '#2196F3';
-        
-        HybridScanner.uploadImageForDecoding(
-            file,
-            (decodedText) => {
-                document.getElementById('studentIdInput').value = decodedText;
-                messageEl.textContent = '✓ Erkannt (Upload): ' + decodedText;
-                messageEl.style.color = '#4CAF50';
-                e.target.value = ''; // Reset file input
-            },
-            (error) => {
-                messageEl.textContent = '✗ ' + error;
-                messageEl.style.color = '#f44336';
-                e.target.value = '';
-            }
-        );
     }
 });
 
@@ -814,46 +723,12 @@ function onScanError(error) {
     color: #b3261e;
 }
 
-/* Mobile: simplify list entries - show only title */
-@media (max-width: 900px) {
-    .library-item .item-author,
-    .library-item .item-isbn,
-    .table-cell.author-cell,
-    .table-cell.isbn-cell {
-        display: none !important;
-    }
-
-    /* Make title more prominent and full-width */
-    .library-item .item-details {
-        display: block;
-        width: calc(100% - 140px);
-        box-sizing: border-box;
-    }
-
-    .library-item .item-name {
-        font-size: 1.05rem;
-        margin: 0 0 6px 0;
-        line-height: 1.2;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .library-item .item-image-wrapper {
-        width: 100px;
-        height: 130px;
-    }
-}
-
 /* Mobile: allow horizontal scrolling for table-mode views */
 @media (max-width: 900px) {
     .library-table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         width: 100%;
-        box-sizing: border-box;
-        margin: 0 -12px;
-        padding: 0 12px;
     }
     .library-table-wrapper .table-row {
         min-width: 720px; /* allow table to have intrinsic width and be scrolled */
@@ -861,181 +736,6 @@ function onScanError(error) {
     .table-header, .item-content.table-mode {
         display: block; /* keep rows stacked but allow horizontal scroll */
     }
-}
-
-/* Hybrid Scanner Styles */
-.qr-container {
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 12px 0;
-    overflow-x: hidden;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.scanner-header {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.scanner-header h3 {
-    margin: 0;
-    color: #333;
-    font-size: 1em;
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-
-.scanner-controls {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.scanner-button {
-    background: #2196F3;
-    color: white;
-    border: none;
-    padding: 6px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.85em;
-    white-space: nowrap;
-    flex: 0 1 auto;
-    transition: background-color 0.2s;
-}
-
-.scanner-button:hover {
-    background: #1976D2;
-}
-
-.scanner-button:active {
-    background: #1565C0;
-}
-
-.scanner-video-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 12px 0;
-    width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-#qr-reader {
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    border: 2px solid #2196F3;
-    border-radius: 8px;
-    display: block;
-}
-
-.scanner-message {
-    min-height: 20px;
-    font-size: 0.9em;
-    text-align: center;
-    word-wrap: break-word;
-}
-
-@media (max-width: 600px) {
-    .qr-container {
-        padding: 10px;
-        margin: 10px 0;
-    }
-
-    .scanner-header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-    }
-
-    .scanner-header h3 {
-        width: 100%;
-        font-size: 0.95em;
-    }
-
-    .scanner-controls {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .scanner-button {
-        flex: 1 1 auto;
-        padding: 8px 6px;
-        font-size: 0.8em;
-    }
-
-    #qr-reader {
-        max-width: 100%;
-        border-radius: 6px;
-    }
-
-    .scanner-message {
-        font-size: 0.85em;
-    }
-}
-
-/* Modal styles - responsive for mobile */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.5);
-    z-index: 2000;
-    padding: 16px;
-    box-sizing: border-box;
-}
-
-.modal-content {
-    background: #fff;
-    border-radius: 10px;
-    width: 100%;
-    max-width: 640px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-sizing: border-box;
-    padding: 16px;
-    position: relative;
-}
-
-.modal-close {
-    background: transparent;
-    border: none;
-    font-size: 1.1rem;
-    position: absolute;
-    right: 20px;
-    top: 18px;
-    cursor: pointer;
-}
-
-.modal-body img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin-bottom: 12px;
-}
-
-.modal-body p { margin: 6px 0; }
-
-@media (max-width: 420px) {
-    .modal-content { padding: 12px; }
 }
 </style>
 {% endblock %}
