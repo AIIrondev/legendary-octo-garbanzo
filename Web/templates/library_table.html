@@ -547,7 +547,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script>
     // State
     let libraryItems = [];
@@ -847,10 +847,16 @@
         document.getElementById('detailModal').style.display = 'none';
     }
 
+        // Keep track of the scanner state globally/outer scope
+    let scannerRunning = false;
+    let lastScanValue = null;
+    let lastScanAt = 0;
+    let activeStudentCardId = ''; // Managed globally by your system
+
     function borrowItem(itemId) {
         const selectedItem = (libraryItems || []).find(item => item._id === itemId);
         if (selectedItem && selectedItem.LibraryDisplayStatus === 'damaged') {
-            alert('Dieses Medium ist als defekt/zerstört markiert und kann nicht ausgeliehen werden.');
+            alert('Dieses Medium ist als defekt/zerstör markiert und kann nicht ausgeliehen werden.');
             return;
         }
 
@@ -997,130 +1003,71 @@
         processQuickToggleScan(scannedCode);
     }
 
-    function handleScanError() {
-        // Intentionally silent to avoid UI spam while camera searches codes.
-    }
-
-    async function ensureScannerLibraryLoaded() {
-        if (typeof Html5QrcodeScanner !== 'undefined') {
-            return true;
+    // Global Quagga reader hook
+    Quagga.onDetected(function(data) {
+        if (data && data.codeResult && data.codeResult.code) {
+            handleScanSuccess(data.codeResult.code);
         }
-
-        const sources = [
-            'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js'
-        ];
-
-        for (const src of sources) {
-            try {
-                await new Promise((resolve, reject) => {
-                    const existing = document.querySelector(`script[data-scanner-src="${src}"]`);
-                    if (existing) {
-                        const onLoad = () => resolve();
-                        const onError = () => reject(new Error('Script load failed'));
-                        existing.addEventListener('load', onLoad, { once: true });
-                        existing.addEventListener('error', onError, { once: true });
-                        setTimeout(() => {
-                            existing.removeEventListener('load', onLoad);
-                            existing.removeEventListener('error', onError);
-                            if (typeof Html5QrcodeScanner !== 'undefined') {
-                                resolve();
-                            } else {
-                                reject(new Error('Script not available'));
-                            }
-                        }, 1200);
-                        return;
-                    }
-
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.async = true;
-                    script.defer = true;
-                    script.dataset.scannerSrc = src;
-                    script.onload = () => resolve();
-                    script.onerror = () => reject(new Error('Script load failed'));
-                    document.head.appendChild(script);
-                });
-
-                if (typeof Html5QrcodeScanner !== 'undefined') {
-                    return true;
-                }
-            } catch (err) {
-                console.warn('Scanner library load failed from', src, err);
-            }
-        }
-
-        return false;
-    }
+    });
 
     async function startScanner() {
         if (scannerRunning) return;
 
-        const scannerLoaded = await ensureScannerLibraryLoaded();
-        if (!scannerLoaded) {
-            setScanStatus('Scanner-Bibliothek konnte nicht geladen werden.', 'error');
-            return;
-        }
-
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
-        readerWrap.style.display = 'block';
+        if (readerWrap) readerWrap.style.display = 'block';
 
-        try {
-            const formats = [];
-            if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
-                formats.push(
-                    Html5QrcodeSupportedFormats.QR_CODE,
-                    Html5QrcodeSupportedFormats.EAN_13,
-                    Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.UPC_A,
-                    Html5QrcodeSupportedFormats.UPC_E,
-                    Html5QrcodeSupportedFormats.ITF,
-                    Html5QrcodeSupportedFormats.CODABAR
-                );
+        setScanStatus('Initializing camera...', 'warn');
+
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                // Points to the interior viewport layout box
+                target: document.querySelector('#libraryQrReader'), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Force rear mobile lenses
+                },
+            },
+            decoder: {
+                // Limited down precisely to standard library/ID configurations
+                readers: [
+                    "code_128_reader", 
+                    "ean_reader", 
+                    "code_39_reader", 
+                    "upc_reader", 
+                    "codabar_reader", 
+                    "i2of5_reader" // Matches original 'ITF' format mapping
+                ]
+            } 
+        }, function(err) {
+            if (err) {
+                console.error('Scanner start failed:', err);
+                if (readerWrap) readerWrap.style.display = 'none';
+                const detail = (err && (err.message || err.name)) ? ` (${err.message || err.name})` : '';
+                setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
+                return;
             }
 
-            const scannerConfig = {
-                fps: 10,
-                rememberLastUsedCamera: true,
-                aspectRatio: 1.333334
-            };
-            if (formats.length > 0) {
-                scannerConfig.formatsToSupport = formats;
-            }
-
-            scannerInstance = scannerInstance || new Html5QrcodeScanner(
-                'libraryQrReader',
-                scannerConfig,
-                false
-            );
-
-            scannerInstance.render(handleScanSuccess, handleScanError);
+            Quagga.start();
             scannerRunning = true;
-            toggleBtn.textContent = 'Scanner stoppen';
+            if (toggleBtn) toggleBtn.textContent = 'Scanner stoppen';
             setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
-        } catch (err) {
-            console.error('Scanner start failed:', err);
-            readerWrap.style.display = 'none';
-            const detail = (err && (err.message || err.name)) ? ` (${err.message || err.name})` : '';
-            setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
-        }
+        });
     }
 
     async function stopScanner() {
-        if (!scannerRunning || !scannerInstance) return;
+        if (!scannerRunning) return;
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
-        try {
-            await scannerInstance.clear();
-        } catch (err) {
-            console.error('Scanner stop failed:', err);
-        }
+
+        Quagga.stop();
+
         scannerRunning = false;
-        scannerInstance = null;
-        readerWrap.style.display = 'none';
-        toggleBtn.textContent = 'Scanner starten';
+        if (readerWrap) readerWrap.style.display = 'none';
+        if (toggleBtn) toggleBtn.textContent = 'Scanner starten';
         setScanStatus('Scanner gestoppt.', 'warn');
     }
 
