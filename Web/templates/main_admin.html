@@ -2436,8 +2436,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <div class="qr-container">
             <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
             <div id="qr-reader" style="display: none;">
-                <video id="qr-reader-video" playsinline style="width: 100%; max-width: 100%; height: auto; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px;"></video>
-                <canvas id="qr-reader-canvas" style="display: none;"></canvas>
+                <h3>Status: <span id="status">Ready</span></h3>
+                <div id="scanner-container"></div>
             </div>
         </div>
 
@@ -2743,7 +2743,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     // Initialize QR Code scanner and global variables
-    let hybridScanner = null;
     let codeSearchTerm = '';
     let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
@@ -2799,7 +2798,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             decoder: {
                 // Your required formats mapped to Quagga2 reader strings
                 readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
-            }
+            } 
         }, function(err) {
             if (err) {
                 console.error("Initialization error:", err);
