@@ -849,28 +849,28 @@
         document.getElementById('detailModal').style.display = 'none';
     }
 
-        // Keep track of the scanner state globally/outer scope
+    // Keep track of the scanner state globally/outer scope
     let scannerRunning = false;
     let lastScanValue = null;
     let lastScanAt = 0;
     let activeStudentCardId = ''; // Managed globally by your system
-
+    
     function borrowItem(itemId) {
         const selectedItem = (libraryItems || []).find(item => item._id === itemId);
         if (selectedItem && selectedItem.LibraryDisplayStatus === 'damaged') {
-            alert('Dieses Medium ist als defekt/zerstör markiert und kann nicht ausgeliehen werden.');
+            alert('Dieses Medium ist als defekt/zerstört markiert und kann nicht ausgeliehen werden.');
             return;
         }
-
+    
         const defaultCardId = activeStudentCardId || '';
         const cardId = (window.prompt('Bitte Schülerausweis-ID eingeben:', defaultCardId) || '').trim().toUpperCase();
         if (!cardId) {
             alert('Ausleihe abgebrochen: Für Bibliotheksmedien ist eine gültige Schülerausweis-ID erforderlich.');
             return;
         }
-
+    
         setActiveStudentCard(cardId);
-
+    
         const durationInput = (window.prompt('Ausleihdauer in Tagen (optional):') || '').trim();
         const maxAvailable = Math.max(1, parseInt(selectedItem?.AvailableGroupedCount || selectedItem?.Quantity || 1, 10) || 1);
         const countPrompt = (window.prompt(`Anzahl ausleihen? (Standard: 1, verfügbar: ${maxAvailable})`, '1') || '').trim();
@@ -882,29 +882,29 @@
             alert(`Es sind nur ${maxAvailable} Exemplar(e) verfügbar.`);
             return;
         }
-
+    
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/ausleihen/${itemId}`;
-
+    
         const csrfField = document.createElement('input');
         csrfField.type = 'hidden';
         csrfField.name = 'csrf_token';
         csrfField.value = '{{ csrf_token }}';
         form.appendChild(csrfField);
-
+    
         const cardField = document.createElement('input');
         cardField.type = 'hidden';
         cardField.name = 'borrower_card_id';
         cardField.value = cardId;
         form.appendChild(cardField);
-
+    
         const returnTargetField = document.createElement('input');
         returnTargetField.type = 'hidden';
         returnTargetField.name = 'return_to';
         returnTargetField.value = 'library';
         form.appendChild(returnTargetField);
-
+    
         if (durationInput) {
             const durationField = document.createElement('input');
             durationField.type = 'hidden';
@@ -912,17 +912,17 @@
             durationField.value = durationInput;
             form.appendChild(durationField);
         }
-
+    
         const countField = document.createElement('input');
         countField.type = 'hidden';
         countField.name = 'exemplare_count';
         countField.value = String(borrowCount || 1);
         form.appendChild(countField);
-
+    
         document.body.appendChild(form);
         form.submit();
     }
-
+    
     function setScanStatus(message, kind = '') {
         const el = document.getElementById('scanStatus');
         if (!el) return;
@@ -932,7 +932,7 @@
             el.classList.add(kind);
         }
     }
-
+    
     function setActiveStudentCard(cardId) {
         activeStudentCardId = (cardId || '').trim().toUpperCase();
         const input = document.getElementById('activeStudentCard');
@@ -940,18 +940,18 @@
             input.value = activeStudentCardId;
         }
     }
-
+    
     function normalizeScannedCode(code) {
         return (code || '').trim();
     }
-
+    
     async function processQuickToggleScan(scannedCode) {
         if (!activeStudentCardId) {
             setActiveStudentCard(scannedCode);
             setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
             return;
         }
-
+    
         try {
             setScanStatus('Verarbeite Mediencode...', 'warn');
             const response = await fetch('/api/library_scan_action', {
@@ -962,13 +962,13 @@
                     item_code: scannedCode
                 })
             });
-
+        
             const result = await response.json();
             if (!response.ok || !result.ok) {
                 setScanStatus(result.message || 'Scan-Aktion fehlgeschlagen.', 'error');
                 return;
             }
-
+        
             if (result.action === 'borrowed') {
                 setScanStatus(`Ausgeliehen: ${result.item_name}`, 'ok');
             } else if (result.action === 'returned') {
@@ -976,72 +976,72 @@
             } else {
                 setScanStatus(result.message || 'Aktion durchgeführt.', 'ok');
             }
-
+        
             await loadLibraryItems();
         } catch (err) {
             console.error('Quick scan action failed:', err);
             setScanStatus('Fehler beim Verarbeiten des Scans.', 'error');
         }
     }
-
+    
     function handleScanSuccess(decodedText) {
         const scannedCode = normalizeScannedCode(decodedText);
         if (!scannedCode) return;
-
+    
         const now = Date.now();
         if (scannedCode === lastScanValue && (now - lastScanAt) < 1500) {
             return;
         }
         lastScanValue = scannedCode;
         lastScanAt = now;
-
+    
         const mode = (document.getElementById('scanModeSelect') || {}).value || 'card_only';
         if (mode === 'card_only') {
             setActiveStudentCard(scannedCode);
             setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
             return;
         }
-
+    
         processQuickToggleScan(scannedCode);
     }
-
+    
     // Global Quagga reader hook
     Quagga.onDetected(function(data) {
         if (data && data.codeResult && data.codeResult.code) {
             handleScanSuccess(data.codeResult.code);
         }
     });
-
+    
     async function startScanner() {
         if (scannerRunning) return;
-
+    
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
         if (readerWrap) readerWrap.style.display = 'block';
-
+    
         setScanStatus('Initializing camera...', 'warn');
-
+    
         Quagga.init({
             inputStream: {
                 name: "Live",
                 type: "LiveStream",
-                // Points to the interior viewport layout box
-                target: document.querySelector('#libraryQrReader'), 
+                // Corrected to target your relative viewport wrapper child element
+                target: document.querySelector('#library-scanner-container'), 
                 constraints: {
                     width: 640,
                     height: 480,
-                    facingMode: "environment" // Force rear mobile lenses
+                    facingMode: "environment" // Force rear camera lenses
                 },
             },
             decoder: {
-                // Limited down precisely to standard library/ID configurations
+                // Limited precisely down to your standard barcode layouts
                 readers: [
                     "code_128_reader", 
                     "ean_reader", 
                     "code_39_reader", 
                     "upc_reader", 
                     "codabar_reader", 
-                    "i2of5_reader" // Matches original 'ITF' format mapping
+                    "i2of5_reader" // Replaces old ITF layout configuration mapping
                 ]
             } 
         }, function(err) {
@@ -1052,32 +1052,32 @@
                 setScanStatus(`Scanner konnte nicht gestartet werden${detail}`, 'error');
                 return;
             }
-
+        
             Quagga.start();
             scannerRunning = true;
             if (toggleBtn) toggleBtn.textContent = 'Scanner stoppen';
             setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
         });
     }
-
+    
     async function stopScanner() {
         if (!scannerRunning) return;
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
-
+    
         Quagga.stop();
-
+    
         scannerRunning = false;
         if (readerWrap) readerWrap.style.display = 'none';
         if (toggleBtn) toggleBtn.textContent = 'Scanner starten';
         setScanStatus('Scanner gestoppt.', 'warn');
     }
-
+    
     function wireScannerUi() {
         const toggleBtn = document.getElementById('toggleScannerBtn');
         const resetBtn = document.getElementById('resetCardBtn');
         const modeSelect = document.getElementById('scanModeSelect');
-
+    
         if (toggleBtn) {
             toggleBtn.addEventListener('click', async () => {
                 if (scannerRunning) {
@@ -1087,14 +1087,14 @@
                 }
             });
         }
-
+    
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 setActiveStudentCard('');
                 setScanStatus('Ausweis zurückgesetzt. Bitte neu scannen.', 'warn');
             });
         }
-
+    
         if (modeSelect) {
             modeSelect.addEventListener('change', () => {
                 if (modeSelect.value === 'quick_toggle' && !activeStudentCardId) {
@@ -1107,18 +1107,18 @@
             });
         }
     }
-
+    
     function getLibraryItemById(itemId) {
         return libraryItems.find(i => String(i._id) === String(itemId));
     }
-
+    
     function openEditLibraryItem(itemId) {
         const item = getLibraryItemById(itemId);
         if (!item) {
             alert('Element nicht gefunden.');
             return;
         }
-
+    
         const modal = document.getElementById('editLibraryModal');
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
@@ -1130,7 +1130,7 @@
         document.getElementById('editLibraryType').value = (item.ItemType || 'book');
         modal.style.display = 'flex';
     }
-
+    
     function closeEditLibraryModal() {
         const modal = document.getElementById('editLibraryModal');
         modal.style.display = 'none';
