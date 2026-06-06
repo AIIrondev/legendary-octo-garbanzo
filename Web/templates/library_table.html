@@ -445,7 +445,7 @@
     <!-- Customizable Filter Panel -->
 
     <!-- Student card / quick scan workflow -->
-    <div class="library-scan-panel">
+   <div class="library-scan-panel">
         <div class="library-scan-controls">
             <select id="scanModeSelect" aria-label="Scan-Modus">
                 <option value="card_only">Nur Ausweis erfassen</option>
@@ -458,8 +458,10 @@
         <div id="scanStatus" class="library-scan-status">
             Hinweis: Im Schnellmodus zuerst den Schülerausweis scannen, danach den Buch-/Mediencode.
         </div>
-        <div id="scanReaderWrap" class="library-scan-reader-wrap">
-            <div id="libraryQrReader" class="library-scan-reader"></div>
+        <div id="scanReaderWrap" class="library-scan-reader-wrap" style="display: none;">
+            <div id="libraryQrReader" class="library-scan-reader">
+                <div id="library-scanner-container"></div>
+            </div>
         </div>
     </div>
     <div id="filterPanel" class="library-filter-panel">
