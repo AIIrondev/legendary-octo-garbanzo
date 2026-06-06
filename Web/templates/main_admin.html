@@ -2436,7 +2436,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <div class="qr-container">
             <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
             <div id="qr-reader" style="display: none;">
-                <h3>Status: <span id="status">Ready</span></h3>
+                <h3>Status: <span id="status">Bereit</span></h3>
                 <div id="scanner-container"></div>
             </div>
         </div>
@@ -2733,7 +2733,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     window.isDebug = false; // Set to true only for development environment
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
-<script src="/static/js/scanner.js"></script>
 <script>
     // Function to check if a file is a video
     function isVideoFile(filename) {
@@ -2771,13 +2770,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // No-op in production
         return;
     }
-    
+
     // Keep track of the scanner state globally/outer scope
     let isScanning = false; 
+    let activeScannerCallback = null; // Tracks which function currently owns the scanner output
 
-    function startScanner() {
+    function startScanner(targetCallback) {
         const qrReader = document.getElementById('qr-reader');
         const statusText = document.getElementById('status');
+
+        // Store the custom action that should happen when a barcode is found
+        activeScannerCallback = targetCallback;
 
         // Show the container
         if (qrReader) qrReader.style.display = 'block';
@@ -2808,7 +2811,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
             Quagga.start();
             isScanning = true;
-            setScannerUi(true);
+
+            // If we are using the main search button, manage its UI state
+            if (!targetCallback) {
+                setScannerUi(true);
+            }
+
             if (statusText) statusText.innerText = "Scanning...";
         });
     }
@@ -2816,6 +2824,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function stopScanner() {
         Quagga.stop();
         isScanning = false;
+        activeScannerCallback = null; // Reset the callback routing
 
         const qrReader = document.getElementById('qr-reader');
         if (qrReader) qrReader.style.display = 'none';
@@ -2832,37 +2841,46 @@ document.addEventListener('DOMContentLoaded', ()=>{
         scanBtn.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
     }
 
-    // 4. Quagga event listener for successful scans
+    // Unified global reader callback
     Quagga.onDetected(function(data) {
-        const barcode = data.codeResult.code;
+        const barcode = String(data.codeResult.code || '').trim();
         console.log("Barcode detected:", barcode);
+
+        // Keep a local reference to the active callback before shutting down the engine
+        const currentCallback = activeScannerCallback;
 
         // Critical: Stop scanning immediately to prevent multiple triggers
         stopScanner();
 
-        // Update your results display if you have them
-        const resultText = document.getElementById('barcode-result');
-        if (resultText) resultText.innerText = barcode;
+        // Route data based on who opened the scanner
+        if (typeof currentCallback === "function") {
+            // Send data directly to the specific edit field's logic
+            currentCallback(barcode);
+        } else {
+            // Fallback Default: Main search box logic
+            const resultText = document.getElementById('barcode-result');
+            if (resultText) resultText.innerText = barcode;
 
-        // Put the scanned code in the search box
-        const searchInput = document.getElementById('code-search');
-        if (searchInput) {
-            searchInput.value = barcode;
-            // Trigger your automatic search
-            if (typeof searchByCode === "function") {
-                searchByCode();
+            const searchInput = document.getElementById('code-search');
+            if (searchInput) {
+                searchInput.value = barcode;
+                if (typeof searchByCode === "function") {
+                    searchByCode();
+                }
             }
         }
     });
 
-    // 5. Wire up your Toggle Button click event
-    document.getElementById('scanButton').addEventListener('click', function() {
+    // Event Listener for the main standalone search button
+    document.getElementById('scanButton')?.addEventListener('click', function() {
         if (!isScanning) {
-            startScanner();
+            // Pass null so it defaults to filling the standard search box
+            startScanner(null); 
         } else {
             stopScanner();
         }
     });
+
     function scanIntoEditCode() {
         const qrReader = document.getElementById('qr-reader');
         const editCodeInput = document.getElementById('edit-code4');
@@ -2871,37 +2889,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return;
         }
 
-        if (qrReader.style.display !== 'none') {
-            if (hybridScanner) {
-                hybridScanner.stop();
-                hybridScanner = null;
-            }
-            qrReader.style.display = 'none';
+        // Toggle close if it's already running
+        if (isScanning && qrReader.style.display !== 'none') {
+            stopScanner();
             scanEditBtn.textContent = 'Barcode scannen';
             return;
         }
 
-        qrReader.style.display = 'block';
         scanEditBtn.textContent = 'Scanner schließen';
-        hybridScanner = new HybridScanner({
-            videoId: 'qr-reader-video',
-            canvasId: 'qr-reader-canvas',
-            formats: ['CODE_128', 'CODE_39', 'QR_CODE'],
-            fps: 10,
-            facingMode: 'environment',
-            onSuccess: function(decodedText) {
-                hybridScanner.stop();
-                qrReader.style.display = 'none';
-                editCodeInput.value = String(decodedText || '').trim();
-                validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
-                scanEditBtn.textContent = 'Barcode scannen';
-            },
-            onError: function(error) {
-                console.error('Scanner error:', error);
-            }
+
+        // Start scanner with custom logic mapping to the Code input field
+        startScanner(function(decodedText) {
+            editCodeInput.value = decodedText;
+            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            scanEditBtn.textContent = 'Barcode scannen';
         });
-        
-        hybridScanner.start();
     }
 
     function scanIntoEditIsbn() {
@@ -2912,39 +2914,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return;
         }
 
-        if (qrReader.style.display !== 'none') {
-            if (hybridScanner) {
-                hybridScanner.stop();
-                hybridScanner = null;
-            }
-            qrReader.style.display = 'none';
+        // Toggle close if it's already running
+        if (isScanning && qrReader.style.display !== 'none') {
+            stopScanner();
             scanIsbnBtn.textContent = 'ISBN scannen';
             return;
         }
 
-        qrReader.style.display = 'block';
         scanIsbnBtn.textContent = 'Scanner schließen';
-        hybridScanner = new HybridScanner({
-            videoId: 'qr-reader-video',
-            canvasId: 'qr-reader-canvas',
-            formats: ['ISBN', 'EAN_13', 'EAN_8', 'QR_CODE'],
-            fps: 10,
-            facingMode: 'environment',
-            onSuccess: function(decodedText) {
-                hybridScanner.stop();
-                qrReader.style.display = 'none';
-                editIsbnInput.value = String(decodedText || '').trim();
-                scanIsbnBtn.textContent = 'ISBN scannen';
-                if (typeof fetchBookInfo === 'function') {
-                    fetchBookInfo('edit');
-                }
-            },
-            onError: function(error) {
-                console.error('Scanner error:', error);
+
+        // Start scanner with custom logic mapping to the ISBN input field
+        startScanner(function(decodedText) {
+            editIsbnInput.value = decodedText;
+            scanIsbnBtn.textContent = 'ISBN scannen';
+            if (typeof fetchBookInfo === 'function') {
+                fetchBookInfo('edit');
             }
         });
-        
-        hybridScanner.start();
     }
 
     function rebuildFilter3Options() {

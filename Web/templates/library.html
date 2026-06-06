@@ -205,8 +205,7 @@
         </form>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script>
 // View mode persistence
 const LIBRARY_VIEW_MODE_KEY = 'inventarLibraryViewMode';
@@ -632,43 +631,79 @@ document.getElementById('favoriteToggle').addEventListener('click', function() {
 });
 
 // Scanner toggle
-let scanner = null;
+l// Scanner state tracking
+let isScanning = false; 
+
 document.getElementById('scannerBtn').addEventListener('click', function(e) {
     e.stopPropagation();
     const container = document.getElementById('qrContainer');
     const isOpen = container.style.display !== 'none';
+    const btn = this;
     
     if (isOpen) {
+        // Close the scanner
         container.style.display = 'none';
-        if (scanner) scanner.clear();
-        this.classList.remove('open');
-        this.setAttribute('aria-expanded', 'false');
-    } else {
-        container.style.display = 'block';
-        this.classList.add('open');
-        this.setAttribute('aria-expanded', 'true');
+        Quagga.stop();
+        isScanning = false;
         
-        if (!scanner) {
-            scanner = new Html5Qrcode('qr-reader');
-            scanner.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                onScanSuccess,
-                onScanError
-            );
-        }
+        btn.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    } else {
+        // Open the scanner
+        container.style.display = 'block';
+        btn.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+        
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                // Targets the element where the video stream will inject
+                target: document.querySelector('#qr-reader'), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Forces back camera
+                },
+            },
+            decoder: {
+                // Optimized for 1D barcodes (e.g., student IDs, member cards)
+                readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+            } 
+        }, function(err) {
+            if (err) {
+                console.error("Initialization error:", err);
+                alert("Kamera konnte nicht gestartet werden.");
+                return;
+            }
+            Quagga.start();
+            isScanning = true;
+        });
     }
 });
 
-function onScanSuccess(decodedText, decodedResult) {
-    const studentId = decodedText.trim();
+// Single Quagga event listener for successful scans
+Quagga.onDetected(function(data) {
+    const decodedText = data.codeResult.code;
+    const studentId = String(decodedText || '').trim();
+    
+    // Stop scanning immediately to prevent multiple triggers
+    Quagga.stop();
+    isScanning = false;
+    
+    // Reset UI states to closed
+    const container = document.getElementById('qrContainer');
+    const btn = document.getElementById('scannerBtn');
+    if (container) container.style.display = 'none';
+    if (btn) {
+        btn.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    }
+    
+    // Route the scanned data to your input
     document.getElementById('studentIdInput').value = studentId;
     alert('Ausweis gescannt: ' + studentId);
-}
-
-function onScanError(error) {
-    // Silently ignore scan errors
-}
+});
 </script>
 
 <style>

@@ -525,8 +525,7 @@
     
     window.isDebug = false; // Set to true only for development environment
 </script>
-
-<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script>
     // Global state
     const highlightItemId = (window.serverVars && window.serverVars.highlightItemId && window.serverVars.highlightItemId !== 'null')
@@ -535,51 +534,114 @@
     let codeSearchTerm = '';
     let descSearchIds = null; // Set of matching IDs or null when disabled
 
-    // QR scanner toggle setup
-    document.addEventListener('DOMContentLoaded', function() {
-        const scanButton = document.getElementById('scanButton');
+    // Keep track of the scanner state globally/outer scope
+    let isScanning = false; 
+    let activeScannerCallback = null; // Tracks which function currently owns the scanner output
+
+    function startScanner(targetCallback) {
         const qrReader = document.getElementById('qr-reader');
-        let html5QrcodeScanner = null;
+        const statusText = document.getElementById('status');
 
-        if (!scanButton || !qrReader) return;
+        // Store the custom action that should happen when a barcode is found
+        activeScannerCallback = targetCallback;
 
-        const setScannerUi = (isOpen) => {
-            scanButton.classList.toggle('is-active', isOpen);
-            scanButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            scanButton.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
-        };
+        // Show the container
+        if (qrReader) qrReader.style.display = 'block';
+        if (statusText) statusText.innerText = "Initializing camera...";
 
-        scanButton.addEventListener('click', function() {
-            if (qrReader.style.display !== 'block') {
-                qrReader.style.display = 'block';
-                
-                html5QrcodeScanner = new Html5QrcodeScanner(
-                    'qr-reader', { fps: 10, qrbox: 250 }
-                );
-                
-                html5QrcodeScanner.render((decodedText) => {
-                    html5QrcodeScanner.clear();
-                    qrReader.style.display = 'none';
-                    
-                    // Put scanned code into the search box and trigger search
-                    const searchInput = document.getElementById('code-search');
-                    if (searchInput) {
-                        searchInput.value = decodedText;
-                        searchByCode();
-                    }
-
-                    setScannerUi(false);
-                });
-
-                setScannerUi(true);
-            } else {
-                if (html5QrcodeScanner) {
-                    html5QrcodeScanner.clear();
-                }
-                qrReader.style.display = 'none';
-                setScannerUi(false);
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                // Make sure this targets your correct HTML container element 
+                target: document.querySelector('#scanner-container'), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Force rear camera
+                },
+            },
+            decoder: {
+                // Your required formats mapped to Quagga2 reader strings
+                readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+            } 
+        }, function(err) {
+            if (err) {
+                console.error("Initialization error:", err);
+                if (statusText) statusText.innerText = "Camera Error";
+                return;
             }
+
+            Quagga.start();
+            isScanning = true;
+
+            // If we are using the main search button, manage its UI state
+            if (!targetCallback) {
+                setScannerUi(true);
+            }
+
+            if (statusText) statusText.innerText = "Scanning...";
         });
+    }
+
+    function stopScanner() {
+        Quagga.stop();
+        isScanning = false;
+        activeScannerCallback = null; // Reset the callback routing
+
+        const qrReader = document.getElementById('qr-reader');
+        if (qrReader) qrReader.style.display = 'none';
+
+        setScannerUi(false);
+    }
+
+    function setScannerUi(isOpen) {
+        const scanBtn = document.getElementById('scanButton');
+        if (!scanBtn) return;
+
+        scanBtn.classList.toggle('is-active', isOpen);
+        scanBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        scanBtn.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
+    }
+
+    // Unified global reader callback
+    Quagga.onDetected(function(data) {
+        const barcode = String(data.codeResult.code || '').trim();
+        console.log("Barcode detected:", barcode);
+
+        // Keep a local reference to the active callback before shutting down the engine
+        const currentCallback = activeScannerCallback;
+
+        // Critical: Stop scanning immediately to prevent multiple triggers
+        stopScanner();
+
+        // Route data based on who opened the scanner
+        if (typeof currentCallback === "function") {
+            // Send data directly to the specific edit field's logic
+            currentCallback(barcode);
+        } else {
+            // Fallback Default: Main search box logic
+            const resultText = document.getElementById('barcode-result');
+            if (resultText) resultText.innerText = barcode;
+
+            const searchInput = document.getElementById('code-search');
+            if (searchInput) {
+                searchInput.value = barcode;
+                if (typeof searchByCode === "function") {
+                    searchByCode();
+                }
+            }
+        }
+    });
+
+    // Event Listener for the main standalone search button
+    document.getElementById('scanButton')?.addEventListener('click', function() {
+        if (!isScanning) {
+            // Pass null so it defaults to filling the standard search box
+            startScanner(null); 
+        } else {
+            stopScanner();
+        }
     });
 
     // Return preferred primary and fallback image URLs based on extension
