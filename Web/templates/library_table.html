@@ -459,10 +459,7 @@
             Hinweis: Im Schnellmodus zuerst den Schülerausweis scannen, danach den Buch-/Mediencode.
         </div>
         <div id="scanReaderWrap" class="library-scan-reader-wrap">
-            <div id="libraryQrReader" class="library-scan-reader">
-                <video id="libraryQrReaderVideo" playsinline style="width: 100%; border-radius: 8px;"></video>
-                <canvas id="libraryQrReaderCanvas" style="display: none;"></canvas>
-            </div>
+            <div id="libraryQrReader" class="library-scan-reader"></div>
         </div>
     </div>
     <div id="filterPanel" class="library-filter-panel">
@@ -550,8 +547,7 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
-<script src="/static/js/scanner.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
 <script>
     // State
     let libraryItems = [];
@@ -1006,8 +1002,54 @@
     }
 
     async function ensureScannerLibraryLoaded() {
-        // HybridScanner is loaded globally via script tag
-        return typeof HybridScanner !== 'undefined';
+        if (typeof Html5QrcodeScanner !== 'undefined') {
+            return true;
+        }
+
+        const sources = [
+            'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js'
+        ];
+
+        for (const src of sources) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const existing = document.querySelector(`script[data-scanner-src="${src}"]`);
+                    if (existing) {
+                        const onLoad = () => resolve();
+                        const onError = () => reject(new Error('Script load failed'));
+                        existing.addEventListener('load', onLoad, { once: true });
+                        existing.addEventListener('error', onError, { once: true });
+                        setTimeout(() => {
+                            existing.removeEventListener('load', onLoad);
+                            existing.removeEventListener('error', onError);
+                            if (typeof Html5QrcodeScanner !== 'undefined') {
+                                resolve();
+                            } else {
+                                reject(new Error('Script not available'));
+                            }
+                        }, 1200);
+                        return;
+                    }
+
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    script.defer = true;
+                    script.dataset.scannerSrc = src;
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Script load failed'));
+                    document.head.appendChild(script);
+                });
+
+                if (typeof Html5QrcodeScanner !== 'undefined') {
+                    return true;
+                }
+            } catch (err) {
+                console.warn('Scanner library load failed from', src, err);
+            }
+        }
+
+        return false;
     }
 
     async function startScanner() {
@@ -1024,17 +1066,37 @@
         readerWrap.style.display = 'block';
 
         try {
-            scannerInstance = scannerInstance || new HybridScanner({
-                videoId: 'libraryQrReaderVideo',
-                canvasId: 'libraryQrReaderCanvas',
-                formats: ['QR_CODE', 'EAN_13', 'EAN_8', 'CODE_128', 'CODE_39', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR'],
-                fps: 10,
-                facingMode: 'environment',
-                onSuccess: handleScanSuccess,
-                onError: handleScanError
-            });
+            const formats = [];
+            if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+                formats.push(
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.ITF,
+                    Html5QrcodeSupportedFormats.CODABAR
+                );
+            }
 
-            scannerInstance.start();
+            const scannerConfig = {
+                fps: 10,
+                rememberLastUsedCamera: true,
+                aspectRatio: 1.333334
+            };
+            if (formats.length > 0) {
+                scannerConfig.formatsToSupport = formats;
+            }
+
+            scannerInstance = scannerInstance || new Html5QrcodeScanner(
+                'libraryQrReader',
+                scannerConfig,
+                false
+            );
+
+            scannerInstance.render(handleScanSuccess, handleScanError);
             scannerRunning = true;
             toggleBtn.textContent = 'Scanner stoppen';
             setScanStatus('Scanner aktiv. Jetzt Code scannen.', 'warn');
@@ -1051,7 +1113,7 @@
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
         try {
-            scannerInstance.stop();
+            await scannerInstance.clear();
         } catch (err) {
             console.error('Scanner stop failed:', err);
         }
