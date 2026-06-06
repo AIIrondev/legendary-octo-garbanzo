@@ -2732,7 +2732,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     
     window.isDebug = false; // Set to true only for development environment
 </script>
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script src="/static/js/scanner.js"></script>
 <script>
     // Function to check if a file is a video
@@ -2773,57 +2773,97 @@ document.addEventListener('DOMContentLoaded', ()=>{
         return;
     }
     
-    document.getElementById('scanButton').addEventListener('click', function() {
+    // Keep track of the scanner state globally/outer scope
+    let isScanning = false; 
+
+    function startScanner() {
         const qrReader = document.getElementById('qr-reader');
-        const scanBtn = document.getElementById('scanButton');
+        const statusText = document.getElementById('status');
 
-        const setScannerUi = (isOpen) => {
-            if (!scanBtn) return;
-            scanBtn.classList.toggle('is-active', isOpen);
-            scanBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            scanBtn.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
-        };
-        
-        if (qrReader.style.display === 'none') {
-            qrReader.style.display = 'block';
-            
-            hybridScanner = new HybridScanner({
-                videoId: 'qr-reader-video',
-                canvasId: 'qr-reader-canvas',
-                formats: ['QR_CODE', 'CODE_128', 'EAN_13', 'EAN_8', 'CODE_39', 'UPC_A'],
-                fps: 10,
-                facingMode: 'environment',
-                onSuccess: function(decodedText) {
-                    hybridScanner.stop();
-                    qrReader.style.display = 'none';
-                    
-                    // Put the scanned code in the search box
-                    const searchInput = document.getElementById('code-search');
-                    if (searchInput) {
-                        searchInput.value = decodedText;
-                        // Trigger search automatically
-                        searchByCode();
-                    }
+        // Show the container
+        if (qrReader) qrReader.style.display = 'block';
+        if (statusText) statusText.innerText = "Initializing camera...";
 
-                    setScannerUi(false);
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                // Make sure this targets your correct HTML container element 
+                target: document.querySelector('#scanner-container'), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Force rear camera
                 },
-                onError: function(error) {
-                    console.error('Scanner error:', error);
-                }
-            });
-
-            hybridScanner.start();
-            setScannerUi(true);
-        } else {
-            if (hybridScanner) {
-                hybridScanner.stop();
-                hybridScanner = null;
+            },
+            decoder: {
+                // Your required formats mapped to Quagga2 reader strings
+                readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
             }
-            qrReader.style.display = 'none';
-            setScannerUi(false);
+        }, function(err) {
+            if (err) {
+                console.error("Initialization error:", err);
+                if (statusText) statusText.innerText = "Camera Error";
+                return;
+            }
+
+            Quagga.start();
+            isScanning = true;
+            setScannerUi(true);
+            if (statusText) statusText.innerText = "Scanning...";
+        });
+    }
+
+    function stopScanner() {
+        Quagga.stop();
+        isScanning = false;
+
+        const qrReader = document.getElementById('qr-reader');
+        if (qrReader) qrReader.style.display = 'none';
+
+        setScannerUi(false);
+    }
+
+    function setScannerUi(isOpen) {
+        const scanBtn = document.getElementById('scanButton');
+        if (!scanBtn) return;
+
+        scanBtn.classList.toggle('is-active', isOpen);
+        scanBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        scanBtn.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
+    }
+
+    // 4. Quagga event listener for successful scans
+    Quagga.onDetected(function(data) {
+        const barcode = data.codeResult.code;
+        console.log("Barcode detected:", barcode);
+
+        // Critical: Stop scanning immediately to prevent multiple triggers
+        stopScanner();
+
+        // Update your results display if you have them
+        const resultText = document.getElementById('barcode-result');
+        if (resultText) resultText.innerText = barcode;
+
+        // Put the scanned code in the search box
+        const searchInput = document.getElementById('code-search');
+        if (searchInput) {
+            searchInput.value = barcode;
+            // Trigger your automatic search
+            if (typeof searchByCode === "function") {
+                searchByCode();
+            }
         }
     });
 
+    // 5. Wire up your Toggle Button click event
+    document.getElementById('scanButton').addEventListener('click', function() {
+        if (!isScanning) {
+            startScanner();
+        } else {
+            stopScanner();
+        }
+    });
     function scanIntoEditCode() {
         const qrReader = document.getElementById('qr-reader');
         const editCodeInput = document.getElementById('edit-code4');
