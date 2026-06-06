@@ -10,24 +10,6 @@
             <h1>📚 Bibliothek</h1>
             <p class="subtitle">Bücher, CDs und weitere Medien</p>
         </div>
-        
-        <div class="header-controls">
-            <!-- Favorites Toggle -->
-            <div class="view-switch">
-                <button id="favoriteToggle" class="toggle-btn" aria-label="Favoriten anzeigen/verbergen">
-                    <span class="toggle-icon">⭐</span>
-                    <span class="toggle-label">Favoriten</span>
-                </button>
-            </div>
-
-            <!-- View Mode Toggle -->
-            <div class="view-switch">
-                <button id="viewModeToggle" class="toggle-btn" aria-label="Ansichtsmodus wechseln">
-                    <span class="toggle-icon">ㄷ</span>
-                    <span class="toggle-label">Tabelle</span>
-                </button>
-            </div>
-        </div>
     </div>
 
     <!-- Search & Filter Section -->
@@ -624,14 +606,8 @@ document.getElementById('clearFiltersBtn').addEventListener('click', function() 
     closeAllFilters();
 });
 
-// Favorites toggle
-document.getElementById('favoriteToggle').addEventListener('click', function() {
-    this.classList.toggle('open');
-    // TODO: Implement favorites filtering
-});
-
 // Scanner toggle
-l// Scanner state tracking
+// Scanner state tracking
 let isScanning = false; 
 
 document.getElementById('scannerBtn').addEventListener('click', function(e) {
