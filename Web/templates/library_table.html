@@ -550,8 +550,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script>
-    // State
+    // =========================================================================
+    // 1. GLOBAL STATE DEFINITIONS
+    // =========================================================================
     let libraryItems = [];
     let filteredItems = [];
     let visibleItems = [];
@@ -573,13 +576,20 @@
     const RENDER_BATCH_COUNT = 120;
     let renderedCount = INITIAL_RENDER_COUNT;
     let filterPanelOpen = false;
+    
+    // Scanner Related State Variables
     let scannerInstance = null;
-    let scannerRunning = false;
+    let scannerRunning = false; 
+    let activeScannerCallback = null; 
     let activeStudentCardId = '';
     let lastScanValue = '';
     let lastScanAt = 0;
+    
     const canEditLibraryItems = (document.getElementById('libraryTableContainer')?.dataset.canEdit === '1');
 
+    // =========================================================================
+    // 2. DATA LOADING & FILTERING ENGINE
+    // =========================================================================
     async function fetchLibraryPage(offset, limit) {
         const response = await fetch(`/api/library_items?offset=${offset}&limit=${limit}`);
         if (!response.ok) {
@@ -588,7 +598,6 @@
         return response.json();
     }
 
-    // Load items progressively: first page immediately, rest in background
     async function loadLibraryItems() {
         if (pagingState.loading) return;
         pagingState.loading = true;
@@ -627,7 +636,6 @@
                 pagingState.total = page.total || pagingState.total;
                 pagingState.hasMore = Boolean(page.has_more);
 
-                // Keep the current view reactive while avoiding a full rerender burst.
                 applyFiltersAndSearch(false);
 
                 if ('requestIdleCallback' in window) {
@@ -679,7 +687,6 @@
         renderItems();
     }
 
-    // Display current view with incremental rendering
     function renderItems() {
         const tbody = document.getElementById('itemsTableBody');
         const emptyState = document.getElementById('emptyState');
@@ -697,37 +704,34 @@
         emptyState.style.display = 'none';
         const rowsToRender = visibleItems.slice(0, renderedCount);
 
-        tbody.innerHTML = rowsToRender.map(item => `
-            ${(() => {
-                const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
-                const statusClass = statusKey === 'damaged' ? 'status-damaged' : (statusKey === 'borrowed' ? 'status-borrowed' : 'status-available');
-                const statusText = statusKey === 'damaged' ? 'Defekt/Zerstört' : (statusKey === 'borrowed' ? 'Ausgeliehen' : 'Verfügbar');
-                const actionLabel = statusKey === 'available' ? 'Ausleihen' : (statusKey === 'borrowed' ? 'Reservieren' : 'Nicht ausleihbar');
-                const actionDisabled = statusKey === 'damaged' ? 'disabled' : '';
-                return `
-            <tr>
-                <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
-                <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
-                <td>${escapeHtml(item.ISBN || item.Code_4 || item.Code4 || '-')}</td>
-                <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
-                <td style="font-weight:600; text-align:center;">${item.Quantity || item.GroupedDisplayCount || 1}</td>
-                <td>
-                    <span class="table-status ${statusClass}">
-                        ${statusText}
-                    </span>
-                </td>
-                <td class="table-actions">
-                    <button class="button" onclick="showItemDetail('${item._id}')">Details</button>
-                    <button class="button" style="background: #28a745; color: white;" onclick="borrowItem('${item._id}')" ${actionDisabled}>
-                        ${actionLabel}
-                    </button>
-                    ${canEditLibraryItems ? `<button class="button" style="background:#0ea5e9;color:#fff;" onclick="openEditLibraryItem('${item._id}')">Bearbeiten</button>` : ''}
-                    ${canEditLibraryItems ? `<button class="button" style="background:#dc2626;color:#fff; margin-left:6px;" onclick="confirmDeleteLibraryItem('${item._id}')">Löschen</button>` : ''}
-                </td>
-            </tr>
-                `;
-            })()}
-        `).join('');
+        tbody.innerHTML = rowsToRender.map(item => {
+            const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+            const statusClass = statusKey === 'damaged' ? 'status-damaged' : (statusKey === 'borrowed' ? 'status-borrowed' : 'status-available');
+            const statusText = statusKey === 'damaged' ? 'Defekt/Zerstört' : (statusKey === 'borrowed' ? 'Ausgeliehen' : 'Verfügbar');
+            const actionLabel = statusKey === 'available' ? 'Ausleihen' : (statusKey === 'borrowed' ? 'Reservieren' : 'Nicht ausleihbar');
+            const actionDisabled = statusKey === 'damaged' ? 'disabled' : '';
+            return `
+        <tr>
+            <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
+            <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
+            <td>${escapeHtml(item.ISBN || item.Code_4 || item.Code4 || '-')}</td>
+            <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
+            <td style="font-weight:600; text-align:center;">${item.Quantity || item.GroupedDisplayCount || 1}</td>
+            <td>
+                <span class="table-status ${statusClass}">
+                    ${statusText}
+                </span>
+            </td>
+            <td class="table-actions">
+                <button class="button" onclick="showItemDetail('${item._id}')">Details</button>
+                <button class="button" style="background: #28a745; color: white;" onclick="borrowItem('${item._id}')" ${actionDisabled}>
+                    ${actionLabel}
+                </button>
+                ${canEditLibraryItems ? `<button class="button" style="background:#0ea5e9;color:#fff;" onclick="openEditLibraryItem('${item._id}')">Bearbeiten</button>` : ''}
+                ${canEditLibraryItems ? `<button class="button" style="background:#dc2626;color:#fff; margin-left:6px;" onclick="confirmDeleteLibraryItem('${item._id}')">Löschen</button>` : ''}
+            </td>
+        </tr>`;
+        }).join('');
 
         const canLoadMoreRows = renderedCount < visibleItems.length;
         if (canLoadMoreRows) {
@@ -740,13 +744,6 @@
             loadMoreBtn.style.display = 'none';
             loadInfo.textContent = backgroundHint;
         }
-    }
-
-    // Confirm and call library item delete endpoint
-    function confirmDeleteLibraryItem(itemId) {
-        if (!itemId) return;
-        if (!confirm('Dieses Bibliotheksmedium revisionssicher löschen? Diese Aktion deaktiviert alle zugehörigen Exemplare und archiviert Medien.')) return;
-        deleteLibraryItem(itemId);
     }
 
     async function deleteLibraryItem(itemId) {
@@ -772,7 +769,6 @@
                 }
                 loadLibraryItems();
             } else {
-                // Server redirected to HTML (flash messages). Reload to show state.
                 location.reload();
             }
         } catch (e) {
@@ -783,92 +779,21 @@
         }
     }
 
-    // Filter toggle
-    document.getElementById('filterToggleBtn').addEventListener('click', () => {
-        filterPanelOpen = !filterPanelOpen;
-        const panel = document.getElementById('filterPanel');
-        const btn = document.getElementById('filterToggleBtn');
-        panel.classList.toggle('open');
-        btn.classList.toggle('active');
-    });
-
-    // Apply filters
-    document.getElementById('applyFilterBtn').addEventListener('click', () => {
-        activeFilters.author = document.getElementById('filterAuthor').value.toLowerCase();
-        activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
-        activeFilters.type = document.getElementById('filterType').value;
-        activeFilters.status = document.getElementById('filterStatus').value;
-        applyFiltersAndSearch(true);
-    });
-
-    // Clear filters
-    document.getElementById('clearFilterBtn').addEventListener('click', () => {
-        document.getElementById('filterAuthor').value = '';
-        document.getElementById('filterISBN').value = '';
-        document.getElementById('filterType').value = '';
-        document.getElementById('filterStatus').value = '';
-        activeFilters = { author: '', isbn: '', type: '', status: '' };
-        applyFiltersAndSearch(true);
-    });
-
-    // Search input
-    document.getElementById('librarySearch').addEventListener('input', (e) => {
-        currentSearchTerm = (e.target.value || '').toLowerCase();
-        applyFiltersAndSearch(true);
-    });
-
-    document.getElementById('loadMoreBtn').addEventListener('click', () => {
-        renderedCount = Math.min(renderedCount + RENDER_BATCH_COUNT, visibleItems.length);
-        renderItems();
-    });
-
-    // Helper functions
-    function getItemTypeLabel(type) {
-        const labels = { 'book': 'Buch', 'cd': 'CD', 'dvd': 'DVD', 'other': 'Sonstige' };
-        return labels[type] || type;
+    function confirmDeleteLibraryItem(itemId) {
+        if (!itemId) return;
+        if (!confirm('Dieses Bibliotheksmedium revisionssicher löschen? Diese Aktion deaktiviert alle zugehörigen Exemplare und archiviert Medien.')) return;
+        deleteLibraryItem(itemId);
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function showItemDetail(itemId) {
-        // Load and show detail modal
-        fetch(`/api/item_detail/${itemId}`)
-            .then(r => r.text())
-            .then(html => {
-                document.getElementById('detailContent').innerHTML = html;
-                document.getElementById('detailModal').style.display = 'flex';
-            })
-            .catch(err => console.error('Error loading detail:', err));
-    }
-
-    function closeDetailModal() {
-        document.getElementById('detailModal').style.display = 'none';
-    }
-
-    // Keep track of the scanner state globally/outer scope
-    let scannerRunning = false; // Maps directly to your 'isScanning' flag style
-    let activeScannerCallback = null; // Dynamically routes the scanned barcode to the caller
-    let lastScanValue = null;
-    let lastScanAt = 0;
-    let activeStudentCardId = ''; // Managed globally by your system
-    
     // =========================================================================
-    // 1. CORE SCANNER ROUTING ENGINE (QUAGGA2)
+    // 3. CORE SCANNER ROUTING ENGINE (QUAGGA2)
     // =========================================================================
-    
     function startScanner(targetCallback) {
-        // if (scannerRunning) return;
-    
         const readerWrap = document.getElementById('scanReaderWrap');
         const toggleBtn = document.getElementById('toggleScannerBtn');
         
-        // Store the custom action that should happen when a barcode is found
         activeScannerCallback = targetCallback;
-    
+
         if (readerWrap) readerWrap.style.display = 'block';
         setScanStatus('Initializing camera...', 'warn');
     
@@ -876,12 +801,11 @@
             inputStream: {
                 name: "Live",
                 type: "LiveStream",
-                // Targets your interior relative viewport box
                 target: document.querySelector('#library-scanner-container'), 
                 constraints: {
                     width: 640,
                     height: 480,
-                    facingMode: "environment" // Force rear camera
+                    facingMode: "environment" 
                 },
             },
             decoder: {
@@ -906,7 +830,6 @@
             Quagga.start();
             scannerRunning = true;
             
-            // Update the main toggle button text if no specific edit callback is provided
             if (!targetCallback && toggleBtn) {
                 toggleBtn.textContent = 'Scanner stoppen';
             }
@@ -921,56 +844,34 @@
         const toggleBtn = document.getElementById('toggleScannerBtn');
     
         Quagga.stop();
-    
         scannerRunning = false;
-        activeScannerCallback = null; // Clear out callback routing
+        activeScannerCallback = null; 
     
         if (readerWrap) readerWrap.style.display = 'none';
         if (toggleBtn) toggleBtn.textContent = 'Scanner starten';
         setScanStatus('Scanner gestoppt.', 'warn');
     }
     
-    // Unified global reader callback routing data based on who opened the scanner
     Quagga.onDetected(function(data) {
         if (!data || !data.codeResult || !data.codeResult.code) return;
         
         const barcode = String(data.codeResult.code || '').trim();
         console.log("Barcode detected:", barcode);
     
-        // Keep a local reference to the active callback before stopping the engine
         const currentCallback = activeScannerCallback;
-    
-        // Critical: Stop scanning immediately to prevent multiple triggers
         stopScanner();
     
-        // 1. If an explicit modal/edit function asked for the scan, route to it directly
         if (typeof currentCallback === "function") {
             currentCallback(barcode);
         } else {
-            // 2. Fallback Default: Pass it to your library dashboard's primary business processing
             handleScanSuccess(barcode);
         }
     });
-    
-    // Event Listener for the main standalone library processing scanner button
-    document.getElementById('toggleScannerBtn')?.addEventListener('click', async function() {
-        if (scannerRunning) {
-            await stopScanner();
-        } else {
-            await startScanner(null); // Passing null flags it to run default library processing
-        }
-    });
-    
-    
-    // =========================================================================
-    // 2. LIBRARY WORKFLOW AND MODAL IMPLEMENTATIONS
-    // =========================================================================
-    
+
     function handleScanSuccess(decodedText) {
         const scannedCode = normalizeScannedCode(decodedText);
         if (!scannedCode) return;
     
-        // Debounce checks
         const now = Date.now();
         if (scannedCode === lastScanValue && (now - lastScanAt) < 1500) {
             return;
@@ -987,7 +888,46 @@
     
         processQuickToggleScan(scannedCode);
     }
+
+    async function processQuickToggleScan(scannedCode) {
+        if (!activeStudentCardId) {
+            setActiveStudentCard(scannedCode);
+            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
+            return;
+        }
     
+        try {
+            setScanStatus('Verarbeite Mediencode...', 'warn');
+            const response = await fetch('/api/library_scan_action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    student_card_id: activeStudentCardId,
+                    item_code: scannedCode
+                })
+            });
+        
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                setScanStatus(result.message || 'Scan-Aktion fehlgeschlagen.', 'error');
+                return;
+            }
+        
+            if (result.action === 'borrowed') {
+                setScanStatus(`Ausgeliehen: ${result.item_name}`, 'ok');
+            } else if (result.action === 'returned') {
+                setScanStatus(`Zurückgegeben: ${result.item_name}`, 'ok');
+            } else {
+                setScanStatus(result.message || 'Aktion durchgeführt.', 'ok');
+            }
+        
+            await loadLibraryItems();
+        } catch (err) {
+            console.error('Quick scan action failed:', err);
+            setScanStatus('Fehler beim Verarbeiten des Scans.', 'error');
+        }
+    }
+
     function scanIntoEditCode() {
         const scanReaderWrap = document.getElementById('scanReaderWrap');
         const editCodeInput = document.getElementById('edit-code4');
@@ -996,7 +936,6 @@
             return;
         }
     
-        // Toggle close if it's already running
         if (scannerRunning && scanReaderWrap.style.display !== 'none') {
             stopScanner();
             scanEditBtn.textContent = 'Barcode scannen';
@@ -1005,14 +944,18 @@
     
         scanEditBtn.textContent = 'Scanner schließen';
     
-        // Launch the scanner with custom callback routing to the item edit fields
         startScanner(function(decodedText) {
             editCodeInput.value = decodedText;
-            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            if(typeof validateCodeField === "function") {
+                validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            }
             scanEditBtn.textContent = 'Barcode scannen';
         });
     }
-    
+
+    // =========================================================================
+    // 4. UI INTERACTIONS & UTILITIES
+    // =========================================================================
     function borrowItem(itemId) {
         const selectedItem = (libraryItems || []).find(item => item._id === itemId);
         if (selectedItem && selectedItem.LibraryDisplayStatus === 'damaged') {
@@ -1080,68 +1023,53 @@
         document.body.appendChild(form);
         form.submit();
     }
-    
+
     function setScanStatus(message, kind = '') {
         const el = document.getElementById('scanStatus');
         if (!el) return;
         el.textContent = message;
         el.classList.remove('ok', 'warn', 'error');
-        if (kind) {
-            el.classList.add(kind);
-        }
+        if (kind) el.classList.add(kind);
     }
     
     function setActiveStudentCard(cardId) {
         activeStudentCardId = (cardId || '').trim().toUpperCase();
         const input = document.getElementById('activeStudentCard');
-        if (input) {
-            input.value = activeStudentCardId;
-        }
+        if (input) input.value = activeStudentCardId;
     }
     
     function normalizeScannedCode(code) {
         return (code || '').trim();
     }
-    
-    async function processQuickToggleScan(scannedCode) {
-        if (!activeStudentCardId) {
-            setActiveStudentCard(scannedCode);
-            setScanStatus(`Ausweis gesetzt: ${activeStudentCardId}`, 'ok');
-            return;
-        }
-    
-        try {
-            setScanStatus('Verarbeite Mediencode...', 'warn');
-            const response = await fetch('/api/library_scan_action', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    student_card_id: activeStudentCardId,
-                    item_code: scannedCode
-                })
-            });
-        
-            const result = await response.json();
-            if (!response.ok || !result.ok) {
-                setScanStatus(result.message || 'Scan-Aktion fehlgeschlagen.', 'error');
-                return;
-            }
-        
-            if (result.action === 'borrowed') {
-                setScanStatus(`Ausgeliehen: ${result.item_name}`, 'ok');
-            } else if (result.action === 'returned') {
-                setScanStatus(`Zurückgegeben: ${result.item_name}`, 'ok');
-            } else {
-                setScanStatus(result.message || 'Aktion durchgeführt.', 'ok');
-            }
-        
-            await loadLibraryItems();
-        } catch (err) {
-            console.error('Quick scan action failed:', err);
-            setScanStatus('Fehler beim Verarbeiten des Scans.', 'error');
-        }
+
+    function getItemTypeLabel(type) {
+        const labels = { 'book': 'Buch', 'cd': 'CD', 'dvd': 'DVD', 'other': 'Sonstige' };
+        return labels[type] || type;
     }
-    
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showItemDetail(itemId) {
+        fetch(`/api/item_detail/${itemId}`)
+            .then(r => r.text())
+            .then(html => {
+                document.getElementById('detailContent').innerHTML = html;
+                document.getElementById('detailModal').style.display = 'flex';
+            })
+            .catch(err => console.error('Error loading detail:', err));
+    }
+
+    function closeDetailModal() {
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    // =========================================================================
+    // 5. EVENT LISTENERS INITIALIZATION & ON-LOAD INITIALIZER
+    // =========================================================================
     function wireScannerUi() {
         const toggleBtn = document.getElementById('toggleScannerBtn');
         const resetBtn = document.getElementById('resetCardBtn');
@@ -1169,83 +1097,50 @@
                 if (modeSelect.value === 'quick_toggle' && !activeStudentCardId) {
                     setScanStatus('Schnellmodus: zuerst Schülerausweis scannen.', 'warn');
                 } else if (modeSelect.value === 'card_only') {
-                    setScanStatus('Modus aktiv: Nur Ausweis erfassen.', 'warn');
-                } else {
-                    setScanStatus('Schnellmodus aktiv: jetzt Mediencode scannen.', 'warn');
+                    setScanStatus('Nur Ausweis-Modus aktiv.', 'warn');
                 }
             });
         }
     }
-    
-    function getLibraryItemById(itemId) {
-        return libraryItems.find(i => String(i._id) === String(itemId));
-    }
-    
-    function openEditLibraryItem(itemId) {
-        const item = getLibraryItemById(itemId);
-        if (!item) {
-            alert('Element nicht gefunden.');
-            return;
-        }
-    
-        const modal = document.getElementById('editLibraryModal');
-        document.getElementById('editLibraryItemId').value = item._id || '';
-        document.getElementById('editLibraryName').value = item.Name || '';
-        document.getElementById('editLibraryAuthor').value = item.Autor || item.Author || '';
-        document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
-        document.getElementById('editLibraryLocation').value = item.Ort || '';
-        document.getElementById('editLibraryIsbn').value = item.ISBN || '';
-        document.getElementById('editLibraryCode4').value = item.Code_4 || '';
-        document.getElementById('editLibraryType').value = (item.ItemType || 'book');
-        modal.style.display = 'flex';
-    }
-    
-    function closeEditLibraryModal() {
-        const modal = document.getElementById('editLibraryModal');
-        modal.style.display = 'none';
-    }
 
-    async function submitEditLibraryItem(event) {
-        event.preventDefault();
-        const itemId = document.getElementById('editLibraryItemId').value;
-        const payload = {
-            name: document.getElementById('editLibraryName').value,
-            autor: document.getElementById('editLibraryAuthor').value,
-            beschreibung: document.getElementById('editLibraryDescription').value,
-            ort: document.getElementById('editLibraryLocation').value,
-            isbn: document.getElementById('editLibraryIsbn').value,
-            code_4: document.getElementById('editLibraryCode4').value,
-            item_type: document.getElementById('editLibraryType').value
-        };
+    // Connect standard Filters and Search inputs
+    document.getElementById('filterToggleBtn').addEventListener('click', () => {
+        filterPanelOpen = !filterPanelOpen;
+        document.getElementById('filterPanel').classList.toggle('open');
+        document.getElementById('filterToggleBtn').classList.toggle('active');
+    });
 
-        try {
-            const response = await fetch(`/api/library_item/${itemId}/update`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const result = await response.json();
-            if (!response.ok || !result.ok) {
-                alert(result.message || 'Bearbeiten fehlgeschlagen.');
-                return;
-            }
-            closeEditLibraryModal();
-            await loadLibraryItems();
-            setScanStatus('Bibliotheksmedium aktualisiert.', 'ok');
-        } catch (err) {
-            console.error('Library edit failed:', err);
-            alert('Fehler beim Bearbeiten des Bibliotheksmediums.');
-        }
-    }
+    document.getElementById('applyFilterBtn').addEventListener('click', () => {
+        activeFilters.author = document.getElementById('filterAuthor').value.toLowerCase();
+        activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
+        activeFilters.type = document.getElementById('filterType').value;
+        activeFilters.status = document.getElementById('filterStatus').value;
+        applyFiltersAndSearch(true);
+    });
 
-    // Load on page init
+    document.getElementById('clearFilterBtn').addEventListener('click', () => {
+        document.getElementById('filterAuthor').value = '';
+        document.getElementById('filterISBN').value = '';
+        document.getElementById('filterType').value = '';
+        document.getElementById('filterStatus').value = '';
+        activeFilters = { author: '', isbn: '', type: '', status: '' };
+        applyFiltersAndSearch(true);
+    });
+
+    document.getElementById('librarySearch').addEventListener('input', (e) => {
+        currentSearchTerm = (e.target.value || '').toLowerCase();
+        applyFiltersAndSearch(true);
+    });
+
+    document.getElementById('loadMoreBtn').addEventListener('click', () => {
+        renderedCount = Math.min(renderedCount + RENDER_BATCH_COUNT, visibleItems.length);
+        renderItems();
+    });
+
+    // Run when DOM structure is entirely ready
     document.addEventListener('DOMContentLoaded', () => {
-        loadLibraryItems();
-        wireScannerUi();
-        const editForm = document.getElementById('editLibraryForm');
-        if (editForm) {
-            editForm.addEventListener('submit', submitEditLibraryItem);
-        }
+        wireScannerUi();       // Setup scanner control buttons 
+        loadLibraryItems();   // Fetch your database items right away!
     });
 </script>
 
