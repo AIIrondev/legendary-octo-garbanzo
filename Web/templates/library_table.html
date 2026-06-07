@@ -467,10 +467,6 @@
     <div id="filterPanel" class="library-filter-panel">
         <div class="filter-row">
             <div class="filter-item">
-                <label for="filterAuthor">Autor/Künstler:</label>
-                <input type="text" id="filterAuthor" placeholder="z.B. Goethe">
-            </div>
-            <div class="filter-item">
                 <label for="filterISBN">ISBN:</label>
                 <input type="text" id="filterISBN" placeholder="z.B. 978-3...">
             </div>
@@ -560,7 +556,6 @@
     let visibleItems = [];
     let currentSearchTerm = '';
     let activeFilters = {
-        author: '',
         isbn: '',
         type: '',
         status: ''
@@ -651,18 +646,16 @@
     }
 
     function filterItems(items) {
-        const author = activeFilters.author;
         const isbn = activeFilters.isbn;
         const type = activeFilters.type;
         const status = activeFilters.status;
 
         return items.filter(item => {
-            const authorMatch = !author || (item.Autor || item.Author || '').toLowerCase().includes(author);
             const isbnMatch = !isbn || (item.ISBN || item.Code_4 || item.Code4 || '').toLowerCase().includes(isbn);
             const typeMatch = !type || (item.ItemType || 'book') === type;
             const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
             const statusMatch = !status || statusKey === status;
-            return authorMatch && isbnMatch && typeMatch && statusMatch;
+            return isbnMatch && typeMatch && statusMatch;
         });
     }
 
@@ -670,7 +663,6 @@
         if (!currentSearchTerm) return items;
         return items.filter(item =>
             (item.Name || '').toLowerCase().includes(currentSearchTerm) ||
-            (item.Autor || item.Author || '').toLowerCase().includes(currentSearchTerm) ||
             (item.ISBN || item.Code_4 || item.Code4 || '').toLowerCase().includes(currentSearchTerm)
         );
     }
@@ -713,7 +705,6 @@
             return `
         <tr>
             <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
-            <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
             <td>${escapeHtml(item.ISBN || item.Code_4 || item.Code4 || '-')}</td>
             <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
             <td style="font-weight:600; text-align:center;">${item.Quantity || item.GroupedDisplayCount || 1}</td>
@@ -1111,7 +1102,6 @@
     });
 
     document.getElementById('applyFilterBtn').addEventListener('click', () => {
-        activeFilters.author = document.getElementById('filterAuthor').value.toLowerCase();
         activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
         activeFilters.type = document.getElementById('filterType').value;
         activeFilters.status = document.getElementById('filterStatus').value;
@@ -1119,11 +1109,10 @@
     });
 
     document.getElementById('clearFilterBtn').addEventListener('click', () => {
-        document.getElementById('filterAuthor').value = '';
         document.getElementById('filterISBN').value = '';
         document.getElementById('filterType').value = '';
         document.getElementById('filterStatus').value = '';
-        activeFilters = { author: '', isbn: '', type: '', status: '' };
+        activeFilters = { isbn: '', type: '', status: '' };
         applyFiltersAndSearch(true);
     });
 
@@ -1154,10 +1143,6 @@
                 <div class="full">
                     <label for="editLibraryName">Titel</label>
                     <input id="editLibraryName" required>
-                </div>
-                <div>
-                    <label for="editLibraryAuthor">Autor/Künstler</label>
-                    <input id="editLibraryAuthor">
                 </div>
                 <div>
                     <label for="editLibraryType">Medientyp</label>
