@@ -9376,17 +9376,137 @@ def search_word(word):
     except Exception as e:
         return jsonify({"success": False, "response": str(e)})
 
+def _fetch_from_google_books(clean_isbn):
+    """Source 1: Google Books API (Free, No Key required for basic use)"""
+    try:
+        url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}"
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            return None
+        
+        data = response.json()
+        if data.get('totalItems', 0) > 0 and data.get('items'):
+            book_info = data['items'][0].get('volumeInfo', {})
+            sale_info = data['items'][0].get('saleInfo', {})
+
+            price = None
+            retail_price = sale_info.get('retailPrice', {})
+            list_price = sale_info.get('listPrice', {})
+            if retail_price and 'amount' in retail_price:
+                price = f"{retail_price['amount']} {retail_price.get('currencyCode', '€')}"
+            elif list_price and 'amount' in list_price:
+                price = f"{list_price['amount']} {list_price.get('currencyCode', '€')}"
+
+            thumbnail = book_info.get('imageLinks', {}).get('thumbnail', '')
+            if thumbnail:
+                thumbnail = thumbnail.replace('http:', 'https:')
+
+            return {
+                "title": book_info.get('title', 'Unknown Title'),
+                "authors": ', '.join(book_info.get('authors', ['Unknown Author'])),
+                "publisher": book_info.get('publisher', 'Unknown Publisher'),
+                "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
+                "description": book_info.get('description', 'Keine Beschreibung verfügbar'),
+                "pageCount": book_info.get('pageCount', 'Unknown'),
+                "price": price,
+                "thumbnail": thumbnail,
+                "source": "google-books"
+            }
+    except Exception as e:
+        print(f"Google Books error: {e}")
+    return None
+
+
+def _fetch_from_lobid_germany(clean_isbn):
+    """
+    Source 2: Lobid.org (hbz Network)
+    The ultimate free, keyless fallback for German Schoolbooks and DACH literature.
+    """
+    try:
+        url = f"https://lobid.org/resources?q=isbn:{clean_isbn}&format=json"
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            return None
+            
+        data = response.json()
+        if 'member' in data and len(data['member']) > 0:
+            book = data['member'][0]
+            
+            # Extract Authors (Lobid uses a nested contribution array)
+            authors = []
+            for contrib in book.get('contribution', []):
+                if 'agent' in contrib and 'label' in contrib['agent']:
+                    authors.append(contrib['agent']['label'])
+            
+            # Extract Publishers
+            publishers = []
+            for pub in book.get('publication', []):
+                if 'publishedBy' in pub:
+                    # sometimes publishedBy is a list, sometimes a string
+                    pub_data = pub['publishedBy']
+                    if isinstance(pub_data, list):
+                        publishers.extend(pub_data)
+                    else:
+                        publishers.append(pub_data)
+            
+            # Extract Date
+            pub_date = 'Unknown Date'
+            if book.get('publication'):
+                pub_date = book['publication'][0].get('startDate', 'Unknown Date')
+                
+            # Extract Pages
+            pages = book.get('extent', ['Unknown'])[0] if 'extent' in book else 'Unknown'
+            
+            return {
+                "title": book.get('title', 'Unknown Title'),
+                "authors": ', '.join(authors) if authors else 'Unknown Author',
+                "publisher": ', '.join(publishers) if publishers else 'Unknown Publisher',
+                "publishedDate": str(pub_date),
+                "description": 'Keine Beschreibung verfügbar (Schulbuch / Fachliteratur)',
+                "pageCount": pages,
+                "price": None,
+                "thumbnail": "", # Lobid rarely has covers, we will fallback to OpenLibrary cover below
+                "source": "lobid-germany"
+            }
+    except Exception as e:
+        print(f"Lobid error: {e}")
+    return None
+
+
+def _fetch_from_open_library(clean_isbn):
+    """Source 3: Open Library Search API (Free, No Key required)"""
+    try:
+        url = f"https://openlibrary.org/search.json?isbn={clean_isbn}"
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            return None
+            
+        data = response.json()
+        if data.get('numFound', 0) > 0 and data.get('docs'):
+            book_info = data['docs'][0]
+            
+            return {
+                "title": book_info.get('title', 'Unknown Title'),
+                "authors": ', '.join(book_info.get('author_name', ['Unknown Author'])),
+                "publisher": ', '.join(book_info.get('publisher', ['Unknown Publisher'])),
+                "publishedDate": str(book_info.get('publish_date', ['Unknown Date'])[0]),
+                "description": 'Keine Beschreibung verfügbar',
+                "pageCount": book_info.get('number_of_pages_median', 'Unknown'),
+                "price": None,
+                "thumbnail": f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg",
+                "source": "openlibrary"
+            }
+    except Exception as e:
+        print(f"OpenLibrary Search error: {e}")
+    return None
+
 @app.route('/fetch_book_info/<isbn>')
 def fetch_book_info(isbn):
     """
-    API endpoint to fetch book information by ISBN using Google Books API
-    
-    Args:
-        isbn (str): ISBN to look up
-        
-    Returns:
-        dict: Book information or error message
+    API endpoint to fetch book information by ISBN using multiple open sources.
+    Optimized for global literature AND German educational books.
     """
+    # Authorization Checks
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({"error": "Not authorized"}), 403
 
@@ -9394,79 +9514,33 @@ def fetch_book_info(isbn):
         return jsonify({"error": "Bibliotheks-Modul ist deaktiviert."}), 403
 
     try:
+        # Validation
         clean_isbn = normalize_and_validate_isbn(isbn)
         if not clean_isbn:
             return jsonify({"error": "Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden."}), 400
 
-        # First source: Google Books
-        response = requests.get(
-            f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}",
-            timeout=10
-        )
+        # Define the Provider Chain (Order matters: General -> German/School -> Global Fallback)
+        providers = [
+            _fetch_from_google_books,
+            _fetch_from_lobid_germany,
+            _fetch_from_open_library
+        ]
 
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('totalItems', 0) > 0 and data.get('items'):
-                book_info = data['items'][0].get('volumeInfo', {})
-                sale_info = data['items'][0].get('saleInfo', {})
+        # Iterate through providers until a book is found
+        for provider in providers:
+            book_data = provider(clean_isbn)
+            
+            if book_data:
+                # Add the ISBN back into the response payload
+                book_data["isbn"] = clean_isbn
+                
+                # If a provider found the book but had no cover, assign a default OpenLibrary cover fallback
+                if not book_data.get("thumbnail"):
+                    book_data["thumbnail"] = f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg"
+                    
+                return jsonify(book_data)
 
-                price = None
-                retail_price = sale_info.get('retailPrice', {})
-                list_price = sale_info.get('listPrice', {})
-                if retail_price and 'amount' in retail_price:
-                    price = f"{retail_price['amount']} {retail_price.get('currencyCode', '€')}"
-                elif list_price and 'amount' in list_price:
-                    price = f"{list_price['amount']} {list_price.get('currencyCode', '€')}"
-
-                thumbnail = book_info.get('imageLinks', {}).get('thumbnail', '')
-                if thumbnail:
-                    thumbnail = thumbnail.replace('http:', 'https:')
-
-                return jsonify({
-                    "title": book_info.get('title', 'Unknown Title'),
-                    "authors": ', '.join(book_info.get('authors', ['Unknown Author'])),
-                    "publisher": book_info.get('publisher', 'Unknown Publisher'),
-                    "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
-                    "description": book_info.get('description', 'No description available'),
-                    "pageCount": book_info.get('pageCount', 'Unknown'),
-                    "price": price,
-                    "thumbnail": thumbnail,
-                    "isbn": clean_isbn,
-                    "source": "google-books"
-                })
-
-        # Fallback: OpenLibrary
-        ol_response = requests.get(
-            f"https://openlibrary.org/isbn/{clean_isbn}.json",
-            timeout=10
-        )
-        if ol_response.status_code == 200:
-            ol_data = ol_response.json()
-            author_names = []
-            for author_ref in ol_data.get('authors', []):
-                key = author_ref.get('key')
-                if not key:
-                    continue
-                try:
-                    author_resp = requests.get(f"https://openlibrary.org{key}.json", timeout=8)
-                    if author_resp.status_code == 200:
-                        author_names.append(author_resp.json().get('name'))
-                except Exception:
-                    continue
-
-            return jsonify({
-                "title": ol_data.get('title', 'Unknown Title'),
-                "authors": ', '.join([a for a in author_names if a]) if author_names else 'Unknown Author',
-                "publisher": ', '.join(ol_data.get('publishers', [])) if ol_data.get('publishers') else 'Unknown Publisher',
-                "publishedDate": ol_data.get('publish_date', 'Unknown Date'),
-                "description": (ol_data.get('description', {}).get('value') if isinstance(ol_data.get('description'), dict) else ol_data.get('description')) or 'No description available',
-                "pageCount": ol_data.get('number_of_pages', 'Unknown'),
-                "price": None,
-                "thumbnail": f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg",
-                "isbn": clean_isbn,
-                "source": "openlibrary"
-            })
-
+        # If all providers fail
         return jsonify({"error": f"Kein Buch zu dieser ISBN gefunden: {clean_isbn}"}), 404
         
     except Exception as e:
