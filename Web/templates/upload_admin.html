@@ -970,8 +970,7 @@
         document.getElementById('csv-help-modal').style.display = 'none';
     }
 </script>
-
-<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.js"></script>
 <script>
     const libraryModuleEnabled = {{ 'true' if library_module_enabled else 'false' }};
 
@@ -984,12 +983,12 @@
 
     // Global variable to store fetched book data
     let currentBookData = null;
-    let code4ScannerInstance = null;
-    let code4ScannerRunning = false;
+    
+    // Quagga2 engine state management properties
+    let scannerRunning = false;
+    let activeScannerCallback = null; // Dynamically handles routing data to the active caller field
     let code4LastScanned = '';
     let code4LastScannedAt = 0;
-    let isbnScannerInstance = null;
-    let isbnScannerRunning = false;
 
     function setCode4ScanStatus(message, isError = false) {
         const statusEl = document.getElementById('code4-scan-status');
@@ -1042,56 +1041,109 @@
         statusEl.style.color = '#b00020';
     }
 
+    // Centered Quagga2 Engine Initialization Pattern
+    function runEngineInitialization(targetSelector, activeCallback, completionMsg, errorStatusSetter) {
+        if (scannerRunning) {
+            Quagga.stop();
+            scannerRunning = false;
+        }
+
+        activeScannerCallback = activeCallback;
+
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector(targetSelector), 
+                constraints: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment" // Force rear camera lenses
+                },
+            },
+            decoder: {
+                readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+            } 
+        }, function(err) {
+            if (err) {
+                console.error("Initialization error:", err);
+                errorStatusSetter("Kamera konnte nicht gestartet werden.", true);
+                return;
+            }
+
+            Quagga.start();
+            scannerRunning = true;
+            errorStatusSetter(completionMsg, false);
+        });
+    }
+
+    function killScannerHardware() {
+        if (!scannerRunning) return;
+        Quagga.stop();
+        scannerRunning = false;
+        activeScannerCallback = null;
+    }
+
+    // Unified tracking capture listener
+    Quagga.onDetected(function(data) {
+        if (!data || !data.codeResult || !data.codeResult.code) return;
+        
+        const rawBarcode = String(data.codeResult.code || '').trim();
+        const currentTargetCallback = activeScannerCallback;
+
+        if (typeof currentTargetCallback === "function") {
+            currentTargetCallback(rawBarcode);
+        }
+    });
+
     function startCode4Scanner() {
         const scannerBox = document.getElementById('code4-scanner');
         const scanButton = document.getElementById('scan-code4-btn');
         const codeField = document.getElementById('code_4');
         if (!scannerBox || !scanButton || !codeField) return;
 
-        // Stop ISBN scanner if currently running to avoid camera conflicts.
-        if (isbnScannerRunning && isbnScannerInstance) {
-            isbnScannerInstance.clear().catch(() => {});
-            const isbnScannerBox = document.getElementById('isbn-scanner');
-            const isbnScanButton = document.getElementById('scan-isbn-btn');
+        // Automatically clean up running ISBN scanner to prevent track multi-binding
+        const isbnScannerBox = document.getElementById('isbn-scanner');
+        const isbnScanButton = document.getElementById('scan-isbn-btn');
+        if (isbnScannerBox && isbnScannerBox.style.display !== 'none') {
+            killScannerHardware();
             if (isbnScannerBox) isbnScannerBox.style.display = 'none';
             if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
-            isbnScannerRunning = false;
+            setIsbnScanStatus('Scanner gestoppt.');
         }
 
-        if (code4ScannerRunning && code4ScannerInstance) {
-            code4ScannerInstance.clear().catch(() => {});
+        if (scannerBox.style.display !== 'none') {
+            killScannerHardware();
             scannerBox.style.display = 'none';
             scanButton.textContent = 'Barcode scannen';
-            code4ScannerRunning = false;
             setCode4ScanStatus('Scanner gestoppt.');
             return;
         }
 
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
-        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { 
-            fps: 10, 
-            qrbox: 250,
-            rememberLastUsedCamera: true
-        });
-        code4ScannerRunning = true;
-        setCode4ScanStatus('Scanner läuft. Der Scan wird im Basis-Codefeld übernommen.');
 
-        code4ScannerInstance.render((decodedText) => {
-            const scannedCode = String(decodedText || '').trim();
-            if (!scannedCode) return;
+        runEngineInitialization(
+            '#code4-scanner', 
+            function(decodedText) {
+                const now = Date.now();
+                if (decodedText === code4LastScanned && (now - code4LastScannedAt) < 1500) {
+                    return;
+                }
+                code4LastScanned = decodedText;
+                code4LastScannedAt = now;
 
-            const now = Date.now();
-            if (scannedCode === code4LastScanned && (now - code4LastScannedAt) < 1500) {
-                return;
-            }
-            code4LastScanned = scannedCode;
-            code4LastScannedAt = now;
+                killScannerHardware();
+                scannerBox.style.display = 'none';
+                scanButton.textContent = 'Barcode scannen';
 
-            codeField.value = scannedCode;
-            validateCodeField(codeField);
-            setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
-        }, () => {});
+                codeField.value = decodedText;
+                validateCodeField(codeField);
+                setCode4ScanStatus(`Code_4 gesetzt: ${decodedText}`);
+            },
+            'Scanner läuft. Der Scan wird im Basis-Codefeld übernommen.',
+            setCode4ScanStatus
+        );
     }
 
     function startIsbnScanner() {
@@ -1104,59 +1156,49 @@
         const isbnField = document.getElementById('isbn');
         if (!scannerBox || !scanButton || !isbnField) return;
 
-        // Stop Code_4 scanner if currently running to avoid camera conflicts.
-        if (code4ScannerRunning && code4ScannerInstance) {
-            code4ScannerInstance.clear().catch(() => {});
-            const codeScannerBox = document.getElementById('code4-scanner');
-            const codeScanButton = document.getElementById('scan-code4-btn');
+        // Automatically clean up running Base Code_4 scanner to prevent track multi-binding
+        const codeScannerBox = document.getElementById('code4-scanner');
+        const codeScanButton = document.getElementById('scan-code4-btn');
+        if (codeScannerBox && codeScannerBox.style.display !== 'none') {
+            killScannerHardware();
             if (codeScannerBox) codeScannerBox.style.display = 'none';
             if (codeScanButton) codeScanButton.textContent = 'Barcode scannen';
-            code4ScannerRunning = false;
             setCode4ScanStatus('Scanner gestoppt.');
         }
 
-        if (isbnScannerRunning && isbnScannerInstance) {
-            isbnScannerInstance.clear().catch(() => {});
+        if (scannerBox.style.display !== 'none') {
+            killScannerHardware();
             scannerBox.style.display = 'none';
             scanButton.textContent = 'ISBN scannen';
-            isbnScannerRunning = false;
             setIsbnScanStatus('Scanner gestoppt.');
             return;
         }
 
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
-        isbnScannerInstance = new Html5QrcodeScanner('isbn-scanner', {
-            fps: 10,
-            qrbox: 250,
-            rememberLastUsedCamera: true
-        });
-        isbnScannerRunning = true;
-        setIsbnScanStatus('Scanner läuft. Bitte ISBN-Code erfassen.');
 
-        isbnScannerInstance.render((decodedText) => {
-            const scannedCode = String(decodedText || '').trim();
-            if (!scannedCode) return;
+        runEngineInitialization(
+            '#isbn-scanner',
+            function(decodedText) {
+                killScannerHardware();
+                scannerBox.style.display = 'none';
+                scanButton.textContent = 'ISBN scannen';
 
-            const normalizedIsbn = normalizeIsbnClient(scannedCode);
-            isbnField.value = normalizedIsbn || scannedCode;
-            updateIsbnLiveValidation();
-            if (normalizedIsbn) {
-                setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
-            } else {
-                setIsbnScanStatus('Kein gültiges ISBN-Format erkannt, der gescannte Wert bleibt aber im Feld.', true);
-            }
+                const normalizedIsbn = normalizeIsbnClient(decodedText);
+                isbnField.value = normalizedIsbn || decodedText;
+                updateIsbnLiveValidation();
 
-            isbnScannerInstance.clear().catch(() => {});
-            scannerBox.style.display = 'none';
-            scanButton.textContent = 'ISBN scannen';
-            isbnScannerRunning = false;
-
-            if (normalizedIsbn) {
-                // Automatically load book metadata after a valid ISBN scan.
-                fetchBookInfo('upload');
-            }
-        }, () => {});
+                if (normalizedIsbn) {
+                    setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
+                    // Automatically load book metadata after a valid ISBN scan.
+                    fetchBookInfo('upload');
+                } else {
+                    setIsbnScanStatus('Kein gültiges ISBN-Format erkannt, der gescannte Wert bleibt aber im Feld.', true);
+                }
+            },
+            'Scanner läuft. Bitte ISBN-Code erfassen.',
+            setIsbnScanStatus
+        );
     }
 
     // Load predefined filter values for dropdowns
@@ -1558,6 +1600,7 @@
         }, 10000);
     }
 
+    // Exported function for use within parent layout fields
     function validateCodeField(input, excludeId = null) {
         const code = input.value.trim();
         
@@ -1732,188 +1775,11 @@
             if (typeof duplicateData.images === 'string') {
                 try {
                     duplicateData.images = JSON.parse(duplicateData.images);
-                    console.log("Parsed images from string:", duplicateData.images);
                 } catch (e) {
-                    console.warn("Failed to parse images string, using as single item:", duplicateData.images);
-                    duplicateData.images = [duplicateData.images];
+                    console.error("Error parsing duplicate images array:", e);
                 }
             }
-            console.log(`Final duplicateData.images (${Array.isArray(duplicateData.images) ? 'array' : typeof duplicateData.images}):`, duplicateData.images);
-        }
-    }
-    
-    // Then check for sessionStorage data (takes priority)
-    const sessionData = sessionStorage.getItem('duplicateItemData');
-    if (sessionData) {
-        try {
-            duplicateData = JSON.parse(sessionData);
-            sessionStorage.removeItem('duplicateItemData'); // Clean up
-            console.log("Session storage duplicate data:", duplicateData);
-        } catch (e) {
-            console.error('Error parsing session duplicate data:', e);
-        }
-    }
-    
-    // Function to prefill form with duplicate data
-    function prefillFormWithDuplicateData() {
-        if (!duplicateData) return;
-        
-        // Fill basic fields
-        const nameField = document.getElementById('name');
-        if (nameField && duplicateData.name) nameField.value = duplicateData.name;
-        
-        const descField = document.getElementById('beschreibung');
-        if (descField && duplicateData.description) descField.value = duplicateData.description;
-        
-        const yearField = document.getElementById('anschaffungsjahr');
-        if (yearField && duplicateData.year) yearField.value = duplicateData.year;
-        
-        const costField = document.getElementById('anschaffungskosten');
-        if (costField && duplicateData.cost) costField.value = duplicateData.cost;
-        
-        // Fill location dropdown
-        const locationField = document.getElementById('ort');
-        if (locationField && duplicateData.location) {
-            // Wait for locations to load, then set value
-            setTimeout(() => {
-                locationField.value = duplicateData.location;
-            }, 100);
-        }
-        
-        // Fill filter arrays - handle up to 4 values per filter type
-        setTimeout(() => {
-            // Filter 1 (Unterrichtsfach)
-            if (duplicateData.filter1 && Array.isArray(duplicateData.filter1)) {
-                for (let j = 1; j <= Math.min(4, duplicateData.filter1.length); j++) {
-                    const filterField = document.getElementById(`filter1-${j}`);
-                    if (filterField && duplicateData.filter1[j-1]) {
-                        filterField.value = duplicateData.filter1[j-1];
-                    }
-                }
-            }
-            
-            // Filter 2 (Jahrgangsstufe)
-            if (duplicateData.filter2 && Array.isArray(duplicateData.filter2)) {
-                for (let j = 1; j <= Math.min(4, duplicateData.filter2.length); j++) {
-                    const filterField = document.getElementById(`filter2-${j}`);
-                    if (filterField && duplicateData.filter2[j-1]) {
-                        filterField.value = duplicateData.filter2[j-1];
-                    }
-                }
-            }
-            
-            // Filter 3 (Thema) - text inputs
-            if (duplicateData.filter3 && Array.isArray(duplicateData.filter3)) {
-                for (let j = 1; j <= Math.min(4, duplicateData.filter3.length); j++) {
-                    const filterField = document.getElementById(`filter3-${j}`);
-                    if (filterField && duplicateData.filter3[j-1]) {
-                        filterField.value = duplicateData.filter3[j-1];
-                    }
-                }
-            }
-        }, 200); // Wait for filter options to load
-        
-        // Handle images - add hidden inputs for duplicate images
-        if (duplicateData.images && duplicateData.images.length > 0) {
-            console.log("Duplicate images data:", duplicateData.images);
-            const form = document.querySelector('form[action*="upload_item"]');
-            if (form) {
-                // Add hidden field to indicate duplication
-                const isDuplicatingField = document.createElement('input');
-                isDuplicatingField.type = 'hidden';
-                isDuplicatingField.name = 'is_duplicating';
-                isDuplicatingField.value = 'true';
-                form.appendChild(isDuplicatingField);
-                
-                // Add each image as a duplicate image
-                const images = duplicateData.images || [];
-                console.log(`Adding ${images.length} images as hidden fields`);
-                
-                if (Array.isArray(images)) {
-                    images.forEach((imageName, index) => {
-                        if (imageName) {
-                            console.log(`Adding duplicate image ${index}: ${imageName}`);
-                            const imageField = document.createElement('input');
-                            imageField.type = 'hidden';
-                            imageField.name = 'duplicate_images';
-                            imageField.value = imageName;
-                            form.appendChild(imageField);
-                        }
-                    });
-                } else {
-                    console.warn("Images is not an array:", images);
-                    // Try to handle as single item if it's a string
-                    if (typeof images === 'string' && images) {
-                        console.log("Adding single image:", images);
-                        const imageField = document.createElement('input');
-                        imageField.type = 'hidden';
-                        imageField.name = 'duplicate_images';
-                        imageField.value = images;
-                        form.appendChild(imageField);
-                    }
-                }
-                
-                // Show image preview
-                showDuplicateImagePreview(duplicateData.images);
-            }
-        }
-    }
-    
-    // Function to show preview of duplicate images
-    function showDuplicateImagePreview(images) {
-        const previewContainer = document.getElementById('image-preview-container');
-        if (!previewContainer) return;
-        
-        console.log("showDuplicateImagePreview called with:", images);
-        
-        // Make sure images is treated as an array
-        if (!Array.isArray(images)) {
-            if (typeof images === 'string') {
-                // Try to parse if it's a JSON string
-                try {
-                    images = JSON.parse(images);
-                } catch (e) {
-                    // If parsing fails, wrap the single string in an array
-                    images = [images];
-                }
-            } else {
-                console.error("Invalid images data:", images);
-                return;
-            }
-        }
-        
-        previewContainer.innerHTML = '';
-        console.log(`Processing ${images.length} images for preview`);
-        
-        images.forEach((imageName, index) => {
-            console.log(`Processing image ${index}:`, imageName);
-            const preview = document.createElement('div');
-            preview.className = 'image-preview-item';
-            preview.innerHTML = `
-                <img src="/uploads/${imageName}" alt="Duplicate Image ${index + 1}" class="duplicate-image-preview">
-                <div class="image-controls">
-                    <span>Von Original übernommen</span>
-                    <button type="button" onclick="removeDuplicateImage('${imageName}', this)" class="remove-duplicate-image-button">Entfernen</button>
-                </div>
-            `;
-            previewContainer.appendChild(preview);
-        });
-    }
-    
-    // Function to remove a duplicate image
-    function removeDuplicateImage(imageName, button) {
-        // Remove the hidden input
-        const hiddenInputs = document.querySelectorAll('input[name="duplicate_images"]');
-        hiddenInputs.forEach(input => {
-            if (input.value === imageName) {
-                input.remove();
-            }
-        });
-        
-        // Remove the preview
-        const previewItem = button.closest('.image-preview-item');
-        if (previewItem) {
-            previewItem.remove();
+            console.log("Parsed duplicate images successfully.");
         }
     }
 </script>
