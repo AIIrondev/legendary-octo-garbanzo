@@ -1057,7 +1057,7 @@
         document.getElementById('detailModal').style.display = 'none';
     }
 
-    // =========================================================================
+// =========================================================================
     // 5. EVENT LISTENERS INITIALIZATION & ON-LOAD INITIALIZER
     // =========================================================================
     function wireScannerUi() {
@@ -1093,43 +1093,129 @@
         }
     }
 
-    // Connect standard Filters and Search inputs
-    document.getElementById('filterToggleBtn').addEventListener('click', () => {
-        filterPanelOpen = !filterPanelOpen;
-        document.getElementById('filterPanel').classList.toggle('open');
-        document.getElementById('filterToggleBtn').classList.toggle('active');
-    });
-
-    document.getElementById('applyFilterBtn').addEventListener('click', () => {
-        activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
-        activeFilters.type = document.getElementById('filterType').value;
-        activeFilters.status = document.getElementById('filterStatus').value;
-        applyFiltersAndSearch(true);
-    });
-
-    document.getElementById('clearFilterBtn').addEventListener('click', () => {
-        document.getElementById('filterISBN').value = '';
-        document.getElementById('filterType').value = '';
-        document.getElementById('filterStatus').value = '';
-        activeFilters = { isbn: '', type: '', status: '' };
-        applyFiltersAndSearch(true);
-    });
-
-    document.getElementById('librarySearch').addEventListener('input', (e) => {
-        currentSearchTerm = (e.target.value || '').toLowerCase();
-        applyFiltersAndSearch(true);
-    });
-
-    document.getElementById('loadMoreBtn').addEventListener('click', () => {
-        renderedCount = Math.min(renderedCount + RENDER_BATCH_COUNT, visibleItems.length);
-        renderItems();
-    });
-
     // Run when DOM structure is entirely ready
     document.addEventListener('DOMContentLoaded', () => {
         wireScannerUi();       // Setup scanner control buttons 
         loadLibraryItems();   // Fetch your database items right away!
+
+        // Safely connect standard Filters and Search inputs inside DOMContentLoaded
+        const filterToggleBtn = document.getElementById('filterToggleBtn');
+        if (filterToggleBtn) {
+            filterToggleBtn.addEventListener('click', () => {
+                filterPanelOpen = !filterPanelOpen;
+                document.getElementById('filterPanel').classList.toggle('open');
+                filterToggleBtn.classList.toggle('active');
+            });
+        }
+
+        const applyFilterBtn = document.getElementById('applyFilterBtn');
+        if (applyFilterBtn) {
+            applyFilterBtn.addEventListener('click', () => {
+                activeFilters.isbn = document.getElementById('filterISBN').value.toLowerCase();
+                activeFilters.type = document.getElementById('filterType').value;
+                activeFilters.status = document.getElementById('filterStatus').value;
+                applyFiltersAndSearch(true);
+            });
+        }
+
+        const clearFilterBtn = document.getElementById('clearFilterBtn');
+        if (clearFilterBtn) {
+            clearFilterBtn.addEventListener('click', () => {
+                document.getElementById('filterISBN').value = '';
+                document.getElementById('filterType').value = '';
+                document.getElementById('filterStatus').value = '';
+                activeFilters = { isbn: '', type: '', status: '' };
+                applyFiltersAndSearch(true);
+            });
+        }
+
+        const librarySearch = document.getElementById('librarySearch');
+        if (librarySearch) {
+            librarySearch.addEventListener('input', (e) => {
+                currentSearchTerm = (e.target.value || '').toLowerCase();
+                applyFiltersAndSearch(true);
+            });
+        }
+
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', () => {
+                renderedCount = Math.min(renderedCount + RENDER_BATCH_COUNT, visibleItems.length);
+                renderItems();
+            });
+        }
+
+        // Edit Modal Form processing
+        const editForm = document.getElementById('editLibraryForm');
+        if (editForm) {
+            editForm.addEventListener('submit', async function(e) {
+                e.preventDefault(); 
+
+                const itemId = document.getElementById('editLibraryItemId').value;
+
+                const updatedData = {
+                    name: document.getElementById('editLibraryName').value,
+                    item_type: document.getElementById('editLibraryType').value,
+                    isbn: document.getElementById('editLibraryIsbn').value,
+                    code_4: document.getElementById('editLibraryCode4').value, 
+                    ort: document.getElementById('editLibraryLocation').value,
+                    beschreibung: document.getElementById('editLibraryDescription').value
+                };
+
+                try {
+                    const response = await fetch(`/api/library_item/${itemId}/update`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}', 
+                            'X-CSRF-Token': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify(updatedData)
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.ok) {
+                        alert(result.message || 'Medium erfolgreich aktualisiert!');
+                        closeEditLibraryModal();
+
+                        pagingState.loading = false; 
+                        loadLibraryItems(); 
+                    } else {
+                        alert(result.message || 'Fehler beim Speichern der Änderungen.');
+                    }
+                } catch (error) {
+                    console.error('Update failed:', error);
+                    alert('Netzwerkfehler beim Aktualisieren des Mediums.');
+                }
+            });
+        }
     });
+
+    // Modal Control Functions (accessible globally from table buttons)
+    function openEditLibraryItem(itemId) {
+        const item = libraryItems.find(i => i._id === itemId);
+        
+        if (!item) {
+            alert('Fehler: Das Medium konnte nicht gefunden werden.');
+            return;
+        }
+
+        // Populate the form fields - Using correct German properties from MongoDB fields
+        document.getElementById('editLibraryItemId').value = item._id || '';
+        document.getElementById('editLibraryName').value = item.Name || '';
+        document.getElementById('editLibraryType').value = item.ItemType || 'book';
+        document.getElementById('editLibraryIsbn').value = item.ISBN || '';
+        document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
+        document.getElementById('editLibraryLocation').value = item.Ort || ''; 
+        document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
+
+        document.getElementById('editLibraryModal').style.display = 'block'; 
+    }
+
+    function closeEditLibraryModal() {
+        document.getElementById('editLibraryModal').style.display = 'none';
+    }
 </script>
 
 <div id="editLibraryModal" class="modal" style="display:none;">
