@@ -831,7 +831,7 @@
                             <!-- Options will be loaded by JavaScript -->
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="formupload_admin-group">
                         <label for="filter2-4">Wert 4:</label>
                         <select id="filter2-4" name="filter2" class="filter-dropdown-select">
                             <option value="">-- Optional --</option>
@@ -869,25 +869,41 @@
                 <label for="anschaffungskosten">Anschaffungskosten (€)</label>
                 <input id="anschaffungskosten" name="anschaffungskosten">
             </div>
-            <div class="form-group">
-                <label for="code_4">Code</label>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <input id="code_4" name="code_4">
-                    <button type="button" id="scan-code4-btn" class="fetch-isbn-button">Barcode scannen</button>
+           <div class="form-group">
+                <label for="scan_mode">Erfassungs-Modus:</label>
+                <select id="scan_mode" name="scan_mode" class="form-control" onchange="toggleScanMode()">
+                    <option value="single">Einzel-Code (Scanner stoppt nach 1 Scan)</option>
+                    <option value="continuous">Fortlaufend scannen (Mehrere Codes nacheinander)</option>
+                    <option value="range">Code-Bereich generieren (z.B. ABC-001 bis ABC-010)</option>
+                </select>
+            </div>
+
+            <div id="range_generator_group" class="form-group" style="display:none; background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 15px;">
+                <label style="font-weight: bold;">Code-Bereich automatisch generieren:</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                    <input type="text" id="range_prefix" placeholder="Präfix (z.B. IT-)" class="form-control" style="flex: 2;">
+                    <input type="number" id="range_start" placeholder="Start (z.B. 1)" class="form-control" style="flex: 1;">
+                    <span style="font-weight: bold;">bis</span>
+                    <input type="text" id="range_end" placeholder="Ende (z.B. 020)" class="form-control" style="flex: 1;">
                 </div>
-                <small style="display:block; color:#666;">Einzelcode manuell setzen oder per Scanner erfassen.</small>
-                <div id="code4-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
-                <small id="code4-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
+                <small style="display:block; color:#666; margin-bottom: 10px;">Tipp: Die Anzahl der Ziffern im "Ende"-Feld bestimmt die führenden Nullen (z.B. Ende "050" macht aus Start "1" einen "001").</small>
+                <button type="button" class="btn btn-secondary" onclick="generateCodeRange()">Bereich generieren & einfügen</button>
             </div>
-            <div class="form-group">
-                <label for="item_count">Anzahl dieser Sorte</label>
-                <input type="number" id="item_count" name="item_count" min="1" max="100" value="1">
-                <small style="display:block; color:#666;">Es werden eigene Items erstellt, aber in der Übersicht als ein Artikel gebündelt angezeigt.</small>
+
+            <div class="form-group" id="primary_code_group">
+                <label for="code_4">Basis-Code</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="code_4" name="code_4" class="form-control" placeholder="Haupt-Barcode" required>
+                    <button type="button" id="scan-code4-btn" class="btn btn-primary">Barcode scannen</button>
+                </div>
+                <div id="code4-scanner" style="display:none; margin-top: 10px;"></div>
+                <small id="code4-scan-status" class="form-text text-muted"></small>
             </div>
-            <div class="form-group">
-                <label for="individual_codes">Einzelcodes (optional, je Zeile ein Code)</label>
-                <textarea id="individual_codes" name="individual_codes" rows="4" placeholder="z.B.\nABC-001\nABC-002"></textarea>
-                <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Der Scanner setzt immer zuerst den Basis-Code im Feld oben; weitere Einzelcodes können hier bei Bedarf manuell ergänzt werden.</small>
+
+            <div class="form-group" id="individual_codes_group">
+                <label for="individual_codes">Weitere Einzelcodes (je Zeile ein Code)</label>
+                <textarea id="individual_codes" name="individual_codes" rows="6" placeholder="z.B.&#10;ABC-001&#10;ABC-002" class="form-control"></textarea>
+                <small style="display:block; color:#666; margin-top: 5px;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Der Scanner setzt immer zuerst den Basis-Code im Feld oben; weitere Einzelcodes werden hier angehängt.</small>
             </div>
             <!-- Image upload (hidden for library mode) -->
             <div class="form-group" {% if show_library_features %}style="display:none;"{% endif %}>
@@ -1096,55 +1112,184 @@
         }
     });
 
-    function startCode4Scanner() {
-        const scannerBox = document.getElementById('code4-scanner');
-        const scanButton = document.getElementById('scan-code4-btn');
-        const codeField = document.getElementById('code_4');
-        if (!scannerBox || !scanButton || !codeField) return;
+    // Globale Variablen für den Scanner-Status (falls nicht schon woanders definiert)
+let code4LastScanned = '';
+let code4LastScannedAt = 0;
 
-        // Automatically clean up running ISBN scanner to prevent track multi-binding
-        const isbnScannerBox = document.getElementById('isbn-scanner');
+/**
+ * Schaltet das UI basierend auf dem ausgewählten Modus um
+ */
+function toggleScanMode() {
+    const mode = document.getElementById('scan_mode').value;
+    const rangeGroup = document.getElementById('range_generator_group');
+    const scanButton = document.getElementById('scan-code4-btn');
+    const scannerBox = document.getElementById('code4-scanner');
+    
+    // Scanner stoppen, falls der Modus gewechselt wird und er noch läuft
+    if (scannerBox && scannerBox.style.display !== 'none') {
+        if (typeof killScannerHardware === 'function') killScannerHardware();
+        scannerBox.style.display = 'none';
+        if (scanButton) scanButton.textContent = 'Barcode scannen';
+    }
+
+    if (mode === 'range') {
+        rangeGroup.style.display = 'block';
+        if(scanButton) scanButton.style.display = 'none'; // Verstecke Scanner im Range-Modus
+    } else {
+        rangeGroup.style.display = 'none';
+        if(scanButton) scanButton.style.display = 'inline-block';
+    }
+}
+
+/**
+ * Generiert eine Liste von Codes basierend auf den Eingaben
+ */
+function generateCodeRange() {
+    const prefix = document.getElementById('range_prefix').value.trim();
+    const startStr = document.getElementById('range_start').value.trim();
+    const endStr = document.getElementById('range_end').value.trim();
+    
+    const start = parseInt(startStr, 10);
+    const end = parseInt(endStr, 10);
+    
+    // Die Länge des End-Wertes bestimmt das Padding (die führenden Nullen)
+    // Beispiel: Ende = "050" -> Länge 3 -> "001", "002", etc.
+    const paddingLength = endStr.length; 
+
+    if (isNaN(start) || isNaN(end) || start > end) {
+        alert("Bitte gültige Zahlen für Start und Ende eingeben. Der Startwert darf nicht größer als der Endwert sein.");
+        return;
+    }
+
+    let generatedCodes = [];
+    for (let i = start; i <= end; i++) {
+        // Nullen auffüllen
+        let numStr = i.toString().padStart(paddingLength, '0');
+        generatedCodes.push(`${prefix}${numStr}`);
+    }
+
+    const codeField = document.getElementById('code_4');
+    const individualCodesArea = document.getElementById('individual_codes');
+
+    if (generatedCodes.length > 0) {
+        // 1. Basis-Code setzen (falls leer oder wenn wir komplett neu generieren)
+        if (!codeField.value || confirm("Soll der aktuelle Basis-Code überschrieben werden?")) {
+            codeField.value = generatedCodes[0];
+            if (typeof validateCodeField === 'function') validateCodeField(codeField);
+            generatedCodes.shift(); // Den ersten aus dem Array entfernen, da er im Basis-Feld steht
+        }
+        
+        // 2. Den Rest in die Textarea einfügen
+        if (generatedCodes.length > 0) {
+            let existing = individualCodesArea.value.trim();
+            // Wenn schon was drin steht, machen wir einen Zeilenumbruch, sonst nicht
+            individualCodesArea.value = existing ? existing + '\n' + generatedCodes.join('\n') : generatedCodes.join('\n');
+        }
+        
+        // Visuelles Feedback
+        alert(`Bereich erfolgreich generiert! (${end - start + 1} Codes)`);
+    }
+}
+
+/**
+ * Scanner-Funktion (Single & Continuous Modus)
+ */
+function startCode4Scanner() {
+    const scannerBox = document.getElementById('code4-scanner');
+    const scanButton = document.getElementById('scan-code4-btn');
+    const codeField = document.getElementById('code_4');
+    const individualCodesArea = document.getElementById('individual_codes');
+    const scanMode = document.getElementById('scan_mode').value;
+
+    if (!scannerBox || !scanButton || !codeField) return;
+
+    // Beende evtl. laufenden ISBN Scanner
+    const isbnScannerBox = document.getElementById('isbn-scanner');
+    if (isbnScannerBox && isbnScannerBox.style.display !== 'none') {
+        if (typeof killScannerHardware === 'function') killScannerHardware();
+        isbnScannerBox.style.display = 'none';
         const isbnScanButton = document.getElementById('scan-isbn-btn');
-        if (isbnScannerBox && isbnScannerBox.style.display !== 'none') {
-            killScannerHardware();
-            if (isbnScannerBox) isbnScannerBox.style.display = 'none';
-            if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
-            setIsbnScanStatus('Scanner gestoppt.');
-        }
+        if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
+        if (typeof setIsbnScanStatus === 'function') setIsbnScanStatus('Scanner gestoppt.');
+    }
 
-        if (scannerBox.style.display !== 'none') {
-            killScannerHardware();
-            scannerBox.style.display = 'none';
-            scanButton.textContent = 'Barcode scannen';
-            setCode4ScanStatus('Scanner gestoppt.');
-            return;
-        }
+    // Scanner ausschalten, wenn er bereits läuft
+    if (scannerBox.style.display !== 'none') {
+        if (typeof killScannerHardware === 'function') killScannerHardware();
+        scannerBox.style.display = 'none';
+        scanButton.textContent = 'Barcode scannen';
+        if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus('Scanner gestoppt.');
+        return;
+    }
 
-        scannerBox.style.display = 'block';
-        scanButton.textContent = 'Scanner stoppen';
+    // Scanner starten
+    scannerBox.style.display = 'block';
+    scanButton.textContent = scanMode === 'continuous' ? 'Fortlaufenden Scan stoppen' : 'Scanner stoppen';
+    if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus('Scanner initialisiert. Richte die Kamera auf den Barcode...');
 
+    if (typeof runEngineInitialization === 'function') {
         runEngineInitialization(
             '#code4-scanner', 
             function(decodedText) {
                 const now = Date.now();
+                // Verhindere Doppel-Scans desselben Codes innerhalb von 1.5 Sekunden
                 if (decodedText === code4LastScanned && (now - code4LastScannedAt) < 1500) {
                     return;
                 }
                 code4LastScanned = decodedText;
                 code4LastScannedAt = now;
 
-                killScannerHardware();
-                scannerBox.style.display = 'none';
-                scanButton.textContent = 'Barcode scannen';
+                if (scanMode === 'single') {
+                    // VERHALTEN: Einzel-Scan
+                    if (typeof killScannerHardware === 'function') killScannerHardware();
+                    scannerBox.style.display = 'none';
+                    scanButton.textContent = 'Barcode scannen';
 
-                codeField.value = decodedText;
-                validateCodeField(codeField);
-                setCode4ScanStatus(`Code_4 gesetzt: ${decodedText}`);
+                    codeField.value = decodedText;
+                    if (typeof validateCodeField === 'function') validateCodeField(codeField);
+                    if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Code gesetzt: ${decodedText}`);
+                    
+                } else if (scanMode === 'continuous') {
+                    // VERHALTEN: Fortlaufender Scan
+                    let currentAreaCodes = individualCodesArea.value.split('\n').map(c => c.trim()).filter(c => c !== '');
+                    
+                    if (!codeField.value) {
+                        // Basis-Code setzen, falls noch leer
+                        codeField.value = decodedText;
+                        if (typeof validateCodeField === 'function') validateCodeField(codeField);
+                        if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Basis-Code gesetzt: ${decodedText}`);
+                    } else if (!currentAreaCodes.includes(decodedText) && codeField.value !== decodedText) {
+                        // In Textarea anhängen, falls Code noch nicht existiert
+                        individualCodesArea.value += (individualCodesArea.value ? '\n' : '') + decodedText;
+                        if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Zusatz-Code erfasst: ${decodedText}`);
+                        
+                        // Audio-Feedback für kontinuierliches Scannen (optional, aber sehr hilfreich)
+                        try {
+                            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const oscillator = audioCtx.createOscillator();
+                            const gainNode = audioCtx.createGain();
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+                            oscillator.type = 'sine';
+                            oscillator.frequency.value = 800; // Hoher Beep
+                            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                            oscillator.start();
+                            oscillator.stop(audioCtx.currentTime + 0.1);
+                        } catch (e) {
+                            console.log("Audio feedback not supported");
+                        }
+                    } else {
+                        if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Code ${decodedText} wurde bereits gescannt.`);
+                    }
+                }
             },
-            'Scanner läuft. Der Scan wird im Basis-Codefeld übernommen.',
+            'Scanner läuft. Richte die Kamera auf den Barcode.',
             setCode4ScanStatus
         );
+    } else {
+        console.error("runEngineInitialization is not defined. Ensure your scanner script is loaded.");
     }
+}
 
     function startIsbnScanner() {
         if (!libraryModuleEnabled) {
