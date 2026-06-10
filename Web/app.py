@@ -5207,55 +5207,87 @@ def upload_item():
             flash(error_msg, 'error')
             return redirect(url_for(success_redirect_endpoint))
 
-    # Check if base code is unique for single-item uploads
-    if code_4 and item_count == 1 and not it.is_code_unique(code_4[0]):
-        existing_item = it._get_items_collection().find_one({"code_4": code_4[0]})
-        if existing_item:
-            error_msg = 'Der Code wird bereits verwendet. Umleitung zum Eintrag.'
-            if is_mobile:
-                return jsonify({
-                    'success': False, 
-                    'message': error_msg,
-                    'existing_item_id': str(existing_item['_id']),
-                    'redirect_to_item': True
-                }), 400
-            
-            flash(error_msg, 'info')
-            return redirect(url_for(success_redirect_endpoint, open_item=str(existing_item['_id'])))
+    # -------------------------------------------------------------------
+    # 1. PARSE AND UNIFY CODES
+    # -------------------------------------------------------------------
+    # Assuming `code_4` might come in as a single string or a list depending on your form setup
+    primary_code_raw = request.form.get('code_4', '').strip()
+    individual_codes_raw = request.form.get('individual_codes', '').strip()
+    
+    all_item_codes = []
+    
+    if primary_code_raw:
+        all_item_codes.append(primary_code_raw)
+        
+    if individual_codes_raw:
+        # Split textarea by newlines, clean whitespace, and ignore empty lines
+        extra_codes = [c.strip() for c in individual_codes_raw.replace('\r', '').split('\n') if c.strip()]
+        
+        # Add to master list, ensuring no duplicates within the submitted list itself
+        for c in extra_codes:
+            if c not in all_item_codes:
+                all_item_codes.append(c)
+
+    # -------------------------------------------------------------------
+    # 2. OVERRIDE ITEM COUNT
+    # -------------------------------------------------------------------
+    # If the user scanned/generated codes, the amount of codes IS the item count.
+    # Otherwise, fallback to a manual item_count field if it exists.
+    if len(all_item_codes) > 0:
+        item_count = len(all_item_codes)
+    else:
+        try:
+            item_count = int(request.form.get('item_count', 1))
+        except ValueError:
+            item_count = 1
+
+    # -------------------------------------------------------------------
+    # 3. IMAGE VALIDATION
+    # -------------------------------------------------------------------
+    if upload_mode != 'library' and not is_duplicating and not images and not duplicate_images and not book_cover_image:
+        error_msg = 'Bitte laden Sie mindestens ein Bild hoch'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 400
         else:
-            error_msg = 'Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.'
+            flash(error_msg, 'error')
+            return redirect(url_for(success_redirect_endpoint))
+
+    # -------------------------------------------------------------------
+    # 4. UNIFIED DB UNIQUENESS VALIDATION
+    # -------------------------------------------------------------------
+    # Validate every code in our master list against the database
+    for code in all_item_codes:
+        if not it.is_code_unique(code):
+            
+            # Special case: If they only uploaded ONE item, redirect them to that existing item
+            if item_count == 1:
+                existing_item = it._get_items_collection().find_one({"code_4": code})
+                if existing_item:
+                    error_msg = 'Der Code wird bereits verwendet. Umleitung zum Eintrag.'
+                    if is_mobile:
+                        return jsonify({
+                            'success': False, 
+                            'message': error_msg,
+                            'existing_item_id': str(existing_item['_id']),
+                            'redirect_to_item': True
+                        }), 400
+                    
+                    flash(error_msg, 'info')
+                    return redirect(url_for(success_redirect_endpoint, open_item=str(existing_item['_id'])))
+            
+            # If multiple items are being uploaded, just throw a standard error
+            error_msg = f'Der Code "{code}" wird bereits von einem anderen Artikel verwendet. Bitte überprüfen Sie Ihre Eingaben.'
             if is_mobile:
                 return jsonify({'success': False, 'message': error_msg}), 400
             else:
                 flash(error_msg, 'error')
                 return redirect(url_for(success_redirect_endpoint))
 
-    # Validate optional per-item codes
-    if individual_codes:
-        if len(individual_codes) > item_count:
-            error_msg = f'Zu viele Einzelcodes angegeben ({len(individual_codes)}), erlaubt sind maximal {item_count}.'
-            if is_mobile:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'error')
-            return redirect(url_for(success_redirect_endpoint))
-
-        if len(set(individual_codes)) != len(individual_codes):
-            error_msg = 'Doppelte Einzelcodes erkannt. Bitte alle Codes eindeutig eintragen.'
-            if is_mobile:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'error')
-            return redirect(url_for(success_redirect_endpoint))
-
-        for specific_code in individual_codes:
-            if not it.is_code_unique(specific_code):
-                error_msg = f'Der Einzelcode "{specific_code}" wird bereits verwendet.'
-                if is_mobile:
-                    return jsonify({'success': False, 'message': error_msg}), 400
-                flash(error_msg, 'error')
-                return redirect(url_for(success_redirect_endpoint))
-
+    # -------------------------------------------------------------------
+    # 5. BATCH CODE GENERATOR (Remains mostly unchanged)
+    # -------------------------------------------------------------------
     def generate_unique_batch_code(base_code, position):
-        """Generate a unique code for every item in a batch."""
+        """Generate a unique code for every item in a batch if no specific code is provided."""
         if not base_code:
             return None
 
