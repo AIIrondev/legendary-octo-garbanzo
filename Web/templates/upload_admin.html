@@ -1024,8 +1024,8 @@
     // Quagga2 engine state management properties
     let scannerRunning = false;
     let activeScannerCallback = null; // Dynamically handles routing data to the active caller field
-    let code4LastScanned = '';
-    let code4LastScannedAt = 0;
+    var code4LastScanned = '';
+    var code4LastScannedAt = 0;
 
     function setCode4ScanStatus(message, isError = false) {
         const statusEl = document.getElementById('code4-scan-status');
@@ -1134,8 +1134,8 @@
     });
 
     // Globale Variablen für den Scanner-Status
-    let code4LastScanned = '';
-    let code4LastScannedAt = 0;
+    var code4LastScanned = '';
+    var code4LastScannedAt = 0;
 
     /**
      * Schaltet das UI basierend auf dem ausgewählten Modus um
