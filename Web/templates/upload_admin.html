@@ -155,6 +155,27 @@
         background-color: #1e7e34;
     }
 
+    /* Quagga Scanner Video Styles */
+    #code4-scanner video, #code4-scanner canvas,
+    #isbn-scanner video, #isbn-scanner canvas {
+        width: 100%;
+        max-width: 640px;
+        height: auto;
+        border-radius: 5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    #code4-scanner canvas, #isbn-scanner canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
+    #code4-scanner, #isbn-scanner {
+        position: relative;
+        overflow: hidden;
+    }
+
     /* ISBN input group styling */
     .isbn-input-group {
         display: flex;
@@ -1063,9 +1084,9 @@
             Quagga.stop();
             scannerRunning = false;
         }
-    
+
         activeScannerCallback = activeCallback;
-    
+
         Quagga.init({
             inputStream: {
                 name: "Live",
@@ -1086,36 +1107,36 @@
                 errorStatusSetter("Kamera konnte nicht gestartet werden.", true);
                 return;
             }
-        
+
             Quagga.start();
             scannerRunning = true;
             errorStatusSetter(completionMsg, false);
         });
     }
-    
+
     function killScannerHardware() {
         if (!scannerRunning) return;
         Quagga.stop();
         scannerRunning = false;
         activeScannerCallback = null;
     }
-    
+
     // Unified tracking capture listener
     Quagga.onDetected(function(data) {
         if (!data || !data.codeResult || !data.codeResult.code) return;
-        
+
         const rawBarcode = String(data.codeResult.code || '').trim();
         const currentTargetCallback = activeScannerCallback;
-    
+
         if (typeof currentTargetCallback === "function") {
             currentTargetCallback(rawBarcode);
         }
     });
-    
+
     // Globale Variablen für den Scanner-Status
     let code4LastScanned = '';
     let code4LastScannedAt = 0;
-    
+
     /**
      * Schaltet das UI basierend auf dem ausgewählten Modus um
      */
@@ -1125,7 +1146,6 @@
         const scanButton = document.getElementById('scan-code4-btn');
         const scannerBox = document.getElementById('code4-scanner');
         
-        // Scanner stoppen, falls der Modus gewechselt wird und er noch läuft
         if (scannerBox && scannerBox.style.display !== 'none') {
             if (typeof killScannerHardware === 'function') killScannerHardware();
             scannerBox.style.display = 'none';
@@ -1133,15 +1153,14 @@
         }
     
         if (mode === 'range') {
-            rangeGroup.style.display = 'block';
-            if(scanButton) scanButton.style.display = 'none'; // Verstecke Scanner im Range-Modus
+            if(rangeGroup) rangeGroup.style.display = 'block';
+            if(scanButton) scanButton.style.display = 'none'; 
         } else {
-            rangeGroup.style.none = 'none';
-            if(rangeGroup) rangeGroup.style.display = 'none';
+            if(rangeGroup) rangeGroup.style.display = 'none'; // Hier wurde der Fehler korrigiert
             if(scanButton) scanButton.style.display = 'inline-block';
         }
     }
-    
+
     /**
      * Generiert eine Liste von Codes basierend auf den Eingaben
      */
@@ -1149,42 +1168,42 @@
         const prefix = document.getElementById('range_prefix').value.trim();
         const startStr = document.getElementById('range_start').value.trim();
         const endStr = document.getElementById('range_end').value.trim();
-        
+
         const start = parseInt(startStr, 10);
         const end = parseInt(endStr, 10);
-        
+
         const paddingLength = endStr.length; 
-    
+
         if (isNaN(start) || isNaN(end) || start > end) {
             alert("Bitte gültige Zahlen für Start und Ende eingeben. Der Startwert darf nicht größer als der Endwert sein.");
             return;
         }
-    
+
         let generatedCodes = [];
         for (let i = start; i <= end; i++) {
             let numStr = i.toString().padStart(paddingLength, '0');
             generatedCodes.push(`${prefix}${numStr}`);
         }
-    
+
         const codeField = document.getElementById('code_4');
         const individualCodesArea = document.getElementById('individual_codes');
-    
+
         if (generatedCodes.length > 0) {
             if (!codeField.value || confirm("Soll der aktuelle Basis-Code überschrieben werden?")) {
                 codeField.value = generatedCodes[0];
                 if (typeof validateCodeField === 'function') validateCodeField(codeField);
                 generatedCodes.shift(); 
             }
-            
+
             if (generatedCodes.length > 0) {
                 let existing = individualCodesArea.value.trim();
                 individualCodesArea.value = existing ? existing + '\n' + generatedCodes.join('\n') : generatedCodes.join('\n');
             }
-            
+
             alert(`Bereich erfolgreich generiert! (${end - start + 1} Codes)`);
         }
     }
-    
+
     /**
      * Scanner-Funktion (Single & Continuous Modus)
      */
@@ -1194,9 +1213,9 @@
         const codeField = document.getElementById('code_4');
         const individualCodesArea = document.getElementById('individual_codes');
         const scanMode = document.getElementById('scan_mode').value;
-    
+
         if (!scannerBox || !scanButton || !codeField) return;
-    
+
         // Beende evtl. laufenden ISBN Scanner
         const isbnScannerBox = document.getElementById('isbn-scanner');
         if (isbnScannerBox && isbnScannerBox.style.display !== 'none') {
@@ -1206,7 +1225,7 @@
             if (isbnScanButton) isbnScanButton.textContent = 'Barcode scannen';
             if (typeof setIsbnScanStatus === 'function') setIsbnScanStatus('Scanner gestoppt.');
         }
-    
+
         // Scanner ausschalten, wenn er bereits läuft
         if (scannerBox.style.display !== 'none') {
             killScannerHardware();
@@ -1215,12 +1234,12 @@
             if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus('Scanner gestoppt.');
             return;
         }
-    
+
         // Scanner starten
         scannerBox.style.display = 'block';
         scanButton.textContent = scanMode === 'continuous' ? 'Fortlaufenden Scan stoppen' : 'Scanner stoppen';
         if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus('Scanner initialisiert. Richte die Kamera auf den Barcode...');
-    
+
         if (typeof runEngineInitialization === 'function') {
             runEngineInitialization(
                 '#code4-scanner', 
@@ -1240,10 +1259,10 @@
                         codeField.value = decodedText;
                         if (typeof validateCodeField === 'function') validateCodeField(codeField);
                         if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Code gesetzt: ${decodedText}`);
-                        
+
                     } else if (scanMode === 'continuous') {
                         let currentAreaCodes = individualCodesArea.value.split('\n').map(c => c.trim()).filter(c => c !== '');
-                        
+
                         if (!codeField.value) {
                             codeField.value = decodedText;
                             if (typeof validateCodeField === 'function') validateCodeField(codeField);
@@ -1251,7 +1270,7 @@
                         } else if (!currentAreaCodes.includes(decodedText) && codeField.value !== decodedText) {
                             individualCodesArea.value += (individualCodesArea.value ? '\n' : '') + decodedText;
                             if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus(`Zusatz-Code erfasst: ${decodedText}`);
-                            
+
                             try {
                                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                                 const oscillator = audioCtx.createOscillator();
@@ -1276,7 +1295,7 @@
             );
         }
     }
-    
+
     /**
      * ISBN Scanner-Funktion
      */
@@ -1289,7 +1308,7 @@
         const scanButton = document.getElementById('scan-isbn-btn');
         const isbnField = document.getElementById('isbn');
         if (!scannerBox || !scanButton || !isbnField) return;
-    
+
         const codeScannerBox = document.getElementById('code4-scanner');
         const codeScanButton = document.getElementById('scan-code4-btn');
         if (codeScannerBox && codeScannerBox.style.display !== 'none') {
@@ -1298,7 +1317,7 @@
             codeScanButton.textContent = 'Barcode scannen';
             if (typeof setCode4ScanStatus === 'function') setCode4ScanStatus('Scanner gestoppt.');
         }
-    
+
         if (scannerBox.style.display !== 'none') {
             killScannerHardware();
             scannerBox.style.display = 'none';
@@ -1306,21 +1325,21 @@
             if (typeof setIsbnScanStatus === 'function') setIsbnScanStatus('Scanner gestoppt.');
             return;
         }
-    
+
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
-    
+
         runEngineInitialization(
             '#isbn-scanner',
             function(decodedText) {
                 killScannerHardware();
                 scannerBox.style.display = 'none';
                 scanButton.textContent = 'Barcode scannen';
-            
+
                 const normalizedIsbn = typeof normalizeIsbnClient === 'function' ? normalizeIsbnClient(decodedText) : decodedText;
                 isbnField.value = normalizedIsbn || decodedText;
                 if (typeof updateIsbnLiveValidation === 'function') updateIsbnLiveValidation();
-            
+
                 if (normalizedIsbn) {
                     if (typeof setIsbnScanStatus === 'function') setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
                     if (typeof fetchBookInfo === 'function') fetchBookInfo('upload');
@@ -1332,7 +1351,7 @@
             setIsbnScanStatus
         );
     }
-    
+
     // --- WICHTIG: Event Listener Binden sobald DOM geladen ist ---
     document.addEventListener('DOMContentLoaded', function() {
         // 1. Basis-Code Scanner Button aktivieren
@@ -1340,19 +1359,19 @@
         if (scanCode4Btn) {
             scanCode4Btn.addEventListener('click', startCode4Scanner);
         }
-    
+
         // 2. ISBN Scanner Button aktivieren
         const scanIsbnBtn = document.getElementById('scan-isbn-btn');
         if (scanIsbnBtn) {
             scanIsbnBtn.addEventListener('click', startIsbnScanner);
         }
-    
+
         // 3. Dropdown-Modus Wechsel überwachen
         const scanModeSelect = document.getElementById('scan_mode');
         if (scanModeSelect) {
             scanModeSelect.addEventListener('change', toggleScanMode);
         }
-    
+
         // 4. ISBN Live-Validierung
         const isbnInput = document.getElementById('isbn');
         if (isbnInput && typeof updateIsbnLiveValidation === 'function') {
@@ -1882,16 +1901,6 @@
             codeField.addEventListener('blur', function() {
                 validateCodeField(this);
             });
-        }
-
-        const scanCodeBtn = document.getElementById('scan-code4-btn');
-        if (scanCodeBtn) {
-            scanCodeBtn.addEventListener('click', startCode4Scanner);
-        }
-
-        const scanIsbnBtn = document.getElementById('scan-isbn-btn');
-        if (scanIsbnBtn) {
-            scanIsbnBtn.addEventListener('click', startIsbnScanner);
         }
 
         const isbnField = document.getElementById('isbn');
