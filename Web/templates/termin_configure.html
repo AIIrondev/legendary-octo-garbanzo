@@ -68,11 +68,12 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label for="slot_length" class="form-label fw-semibold">Slot-Länge in Minuten</label>
-                                <input type="number" id="slot_length" name="slot_length" class="form-control" min="1" value="45">
+                                <input type="number" id="slot_length" name="slot_length" class="form-control form-control-lg" min="1" value="45">
                             </div>
                             <div class="col-12 col-md-6">
-                                <label for="slots_amounts" class="form-label fw-semibold text-primary">Automatisch berechnete Slots</label>
-                                <input type="number" id="slots_amounts" name="slots_amounts" class="form-control bg-light text-primary fw-bold" min="0" value="0" readonly>
+                                <label class="form-label fw-semibold text-primary">Automatisch berechnete Slots</label>
+                                <div id="slots_amounts_display" class="form-control form-control-lg bg-primary-subtle text-primary fw-bold d-flex align-items-center">0</div>
+                                <input type="hidden" id="slots_amounts" name="slots_amounts" value="0">
                                 <div class="form-text">Wird aus der gebuchten Zeit (abzüglich Pausen) und der Slot-Länge berechnet.</div>
                             </div>
                         </div>
@@ -139,6 +140,7 @@
     
     const slotLengthInput = document.getElementById('slot_length');
     const slotsAmountsInput = document.getElementById('slots_amounts');
+    const slotsAmountsDisplay = document.getElementById('slots_amounts_display'); // Neu: Anzeige-Element
 
     if (!startDateInput || !endDateInput || !buildButton || !daysContainer || !timeFrameTextarea) {
         return;
@@ -181,13 +183,18 @@
         return parts[0] * 60 + parts[1];
     }
 
+    function updateSlotsDisplay(totalSlots) {
+        if (slotsAmountsInput) slotsAmountsInput.value = totalSlots;
+        if (slotsAmountsDisplay) slotsAmountsDisplay.innerText = totalSlots + " Slots gesamt";
+    }
+
     // Berechnet die Slots basierend auf den konfigurierten Zeiten & Pausen
     function calculateSlots() {
         if (!slotLengthInput || !slotsAmountsInput) return;
         
         const slotLength = parseInt(slotLengthInput.value, 10);
         if (isNaN(slotLength) || slotLength <= 0) {
-            slotsAmountsInput.value = 0;
+            updateSlotsDisplay(0);
             return;
         }
 
@@ -227,7 +234,7 @@
             }
         });
 
-        slotsAmountsInput.value = totalSlots;
+        updateSlotsDisplay(totalSlots);
     }
 
     // Synchronisiert das Textfeld und fügt den Break-Cut hinzu
