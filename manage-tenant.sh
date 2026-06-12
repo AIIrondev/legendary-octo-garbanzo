@@ -213,6 +213,7 @@ existing['modules'] = {
     'library': {'enabled': True},
     'student_cards': {'enabled': True, 'default_borrow_days': 14, 'max_borrow_days': 365},
         'terminplan': {'enabled': True},
+    'mail': {'enabled': True},
 }
 existing['trial'] = trial_config
 

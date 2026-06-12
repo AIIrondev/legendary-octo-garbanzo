@@ -82,6 +82,7 @@ def build_calendar_ics(appointment_id: str) -> str | None:
     time_span = item.get('time_span', []) or []
     creator = item.get('user', 'Terminplaner')
     note = item.get('note', '') or ''
+    titel = item.get('title', '') or ''
     tenant_id = _current_tenant_id()
     try:
         link = url_for('terminplaner.client', appointment_id=str(appointment_id), tenant=tenant_id or None, _external=True)
@@ -108,6 +109,8 @@ def build_calendar_ics(appointment_id: str) -> str | None:
         description_lines.append('Zeitfenster: ' + '; '.join(str(entry) for entry in time_span))
     if note:
         description_lines.append('Notiz: ' + str(note))
+    if titel:
+        description_lines.append('Titel: ' + str(titel))
 
     ics_lines = [
         'BEGIN:VCALENDAR',
@@ -123,6 +126,7 @@ def build_calendar_ics(appointment_id: str) -> str | None:
         f'URL:{_escape_ics_text(link)}',
         f'DTSTART;VALUE=DATE:{_format_ics_date(start_date)}',
         f'DTEND;VALUE=DATE:{_format_ics_date(end_date + timedelta(days=1))}',
+        f'Titel:{_escape_ics_text(titel)}',
         'END:VEVENT',
         'END:VCALENDAR',
         '',
@@ -159,7 +163,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
         if tenant_id:
             link += f'?tenant={tenant_id}'
 
-    title_name = str(client_name or '').strip() or 'Termin'
+    title_name = item.get('title') or f"Terminbuchung mit {client_name}" if client_name else "Terminbuchung"
     summary = f"{title_name} - Terminbuchung"
     description_lines = [
         f"Buchungslink: {link}",
@@ -185,6 +189,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
         f'URL:{_escape_ics_text(link)}',
         f'DTSTART:{dt_start}',
         f'DTEND:{dt_end}',
+        f'Titel:{_escape_ics_text(summary)}',
         'END:VEVENT',
         'END:VCALENDAR',
         '',
@@ -192,7 +197,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     return '\r\n'.join(ics_lines)
 
 
-def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False) -> dict:
+def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False, title: str="") -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
     
@@ -208,7 +213,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     """
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail)
-    id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled)
+    id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title)
     id_str = str(id)
     tenant_id = _current_tenant_id()
 
@@ -219,7 +224,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
         link = host + "/terminplaner/client/" + id_str
         if tenant_id:
             link += f"?tenant={tenant_id}"
-    subject = f"Terminanfrage von {user}"
+    subject = f"{title} - Bitte Termin vereinbaren" if title else f"Terminanfrage von {user} - Bitte Termin vereinbaren"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
     calendar_link = None
     if calendar_enabled:
@@ -459,6 +464,7 @@ def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
                 'note': str(item.get('note') or ''),
                 'link': link,
                 'calendar_link': calendar_link if item.get('calendar_enabled') else None,
+                'title': str(item.get('title') or ''),
             }
         )
 

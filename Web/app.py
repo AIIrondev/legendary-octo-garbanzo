@@ -1268,7 +1268,8 @@ def inject_version():
         'inventory_module_enabled': cfg.MODULES.is_enabled('inventory'),
         'terminplan_module_enabled': cfg.MODULES.is_enabled('terminplan'),
         'library_module_enabled': cfg.MODULES.is_enabled('library'),
-        'student_cards_module_enabled': cfg.MODULES.is_enabled('student_cards'),
+        'student_cards_module_enabled': cfg.MODULES.is_enabled('student_cards'),#
+        'mail_module_enabled': cfg.MODULES.is_enabled('mail'),
         'is_admin': is_admin,
         'unread_notification_count': unread_notification_count,
         'current_permissions': current_permissions,
@@ -2885,6 +2886,7 @@ def home():
             username=session['username'],
             library_module_enabled=cfg.MODULES.is_enabled('library'),
             student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+            mail_module_enabled=cfg.MODULES.is_enabled('mail'),
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
             open_item=request.args.get('open_item')
@@ -2927,6 +2929,7 @@ def home_admin():
         username=session['username'],
         library_module_enabled=cfg.MODULES.is_enabled('library'),
         student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        mail_module_enabled=cfg.MODULES.is_enabled('mail'),
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS,
         school_info=_get_school_info_for_export(),
@@ -2947,6 +2950,7 @@ def tutorial_page():
         is_admin=us.check_admin(session['username']),
         library_module_enabled=cfg.MODULES.is_enabled('library'),
         student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        mail_module_enabled=cfg.MODULES.is_enabled('mail'),
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
@@ -7980,7 +7984,8 @@ def admin_borrowings():
         'admin_borrowings.html',
         entries=entries,
         library_module_enabled=cfg.MODULES.is_enabled('library'),
-        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards')
+        student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+        mail_module_enabled=cfg.MODULES.is_enabled('mail')
     )
 
 """-----------------------------------------------------------Audit Routes-------------------------------------------------------"""
@@ -8043,6 +8048,7 @@ def admin_audit_dashboard():
             audit_rows=audit_rows,
             library_module_enabled=cfg.MODULES.is_enabled('library'),
             student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+            mail_module_enabled=cfg.MODULES.is_enabled('mail'),
         )
     except Exception as exc:
         app.logger.error(f"Error loading audit dashboard: {exc}")
@@ -8858,6 +8864,7 @@ def library_item_invoices(item_id):
             invoices=entries,
             library_module_enabled=cfg.MODULES.is_enabled('library'),
             student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+            mail_module_enabled=cfg.MODULES.is_enabled('mail')
         )
     except Exception as e:
         app.logger.error(f"Error loading invoice history for item {item_id}: {e}")
@@ -10192,6 +10199,7 @@ def admin_damaged_items():
             damaged_items=damaged_rows,
             library_module_enabled=cfg.MODULES.is_enabled('library'),
             student_cards_module_enabled=cfg.MODULES.is_enabled('student_cards'),
+            mail_module_enabled=cfg.MODULES.is_enabled('mail')
         )
     except Exception as exc:
         app.logger.error(f"Error loading damaged-items admin view: {exc}")

@@ -173,8 +173,9 @@ def configure():
         mail = request.form.get('mail', '')
         note = request.form.get('note', '')
         add_to_calendar = request.form.get('add_to_calendar') == 'on'
+        titel = request.form.get('titel', '').strip()
 
-        if not start or not end or not time or not slots_amount or not slot_lenght:
+        if not start or not end or not time or not slots_amount or not slot_lenght or not titel:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
             return render_template(
                 'termin_configure.html',
@@ -183,7 +184,7 @@ def configure():
                 email_service_enabled=cfg.EMAIL_ENABLED,
             )
 
-        result = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note, calendar_enabled=add_to_calendar)
+        result = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note, calendar_enabled=add_to_calendar, title=titel)
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
@@ -192,6 +193,7 @@ def configure():
             calendar_link=result.get('calendar_link'),
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
+            title=titel,
         )
     elif request.method == "GET":
         return render_template(
@@ -201,6 +203,7 @@ def configure():
             calendar_link=None,
             add_to_calendar=False,
             email_service_enabled=cfg.EMAIL_ENABLED,
+            title=None,
         )
 
 
@@ -214,8 +217,10 @@ def calendar_export(appointment_id):
     if not ics_content:
         return _appointment_not_found_response()
 
+    title = str(request.args.get('title', '') or '').strip() or appointment_id
+
     response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
-    response.headers['Content-Disposition'] = f'attachment; filename=terminplan-{appointment_id}.ics'
+    response.headers['Content-Disposition'] = f'attachment; filename=terminplan-{title}-{appointment_id}.ics'
     return response
 
 
@@ -231,8 +236,10 @@ def client_slot_calendar_export(appointment_id):
     if not ics_content:
         return _appointment_not_found_response()
 
+    title = str(request.args.get('title', '') or '').strip() or appointment_id
+
     response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
-    response.headers['Content-Disposition'] = f'attachment; filename=termin-{appointment_id}-{slot_start.replace(" ", "_").replace(":", "")}.ics'
+    response.headers['Content-Disposition'] = f'attachment; filename=termin-{title}-{appointment_id}-{slot_start.replace(" ", "_").replace(":", "")}.ics'
     return response
 
 @appoint_bp.route('/')
