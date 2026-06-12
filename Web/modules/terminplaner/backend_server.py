@@ -146,9 +146,10 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
         return None
 
     try:
-        slot_minutes = int(item.get('slot_lenght') or 0)
+        slot_minutes = int(item.get('slot_length') or item.get('slot_lenght') or 0)
     except Exception:
         slot_minutes = 0
+        
     if slot_minutes <= 0:
         slot_minutes = 45
 
@@ -197,23 +198,24 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     return '\r\n'.join(ics_lines)
 
 
-def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False, title: str="") -> dict:
+def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="") -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
-    
-    Input:
-    - date_start: start of the time frae area
-    - date_end: end of the time frame area
-    - time_span: Time window for the days as a list [(first day Time Frame), (second day Time frame), (third etc.)]
-    - slots: amount of slots that are available
-    - slot_lenght: the lenght of a slot in minutes
-
-    Output:
-    - link: The link for the user to send to the clients
     """
+    try:
+        slots_int = int(slots)
+    except (ValueError, TypeError):
+        slots_int = 0
+        
+    try:
+        slot_length_int = int(slot_length)
+    except (ValueError, TypeError):
+        slot_length_int = 45
+
     normalized_time_span = _normalize_time_span(time_span)
-    normalized_mail = _normalize_mail_list(mail)
-    id = termin.add(date_start, date_end, normalized_time_span, slots, slot_lenght, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title)
+    normalized_mail = _normalize_mail_list(mail or [])
+    
+    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title)
     id_str = str(id)
     tenant_id = _current_tenant_id()
 
@@ -224,9 +226,11 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
         link = host + "/terminplaner/client/" + id_str
         if tenant_id:
             link += f"?tenant={tenant_id}"
+            
     subject = f"{title} - Bitte Termin vereinbaren" if title else f"Terminanfrage von {user} - Bitte Termin vereinbaren"
     note_link = note + f"Bitte klicken sie auf den folgenden Link um einen Termin zu vereinbaren: {link}"
     calendar_link = None
+    
     if calendar_enabled:
         try:
             calendar_link = url_for('terminplaner.calendar_export', appointment_id=id_str, tenant=tenant_id or None, _external=True)
@@ -251,19 +255,7 @@ def new(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
     
         
 def book_slot(id, date_start_time, name):
-    """
-    Updates slot for the booking per a id
-
-    Input:
-    - id: the id is the id you get from the
-    - date_start_time: the date of the booking that was selected with date and time
-    - name: name that the client gave himself
-    
-    Output:
-    - bool: if worked or not
-    """
     try:
-        # Retrieve the current appointment
         item = termin.get_item(id)
         if not item:
             return False
@@ -281,10 +273,7 @@ def book_slot(id, date_start_time, name):
                 if existing[0] == date_start_time and existing[1] == name:
                     return False
 
-        # Append the new booking as a tuple (start_time, name)
         slots.append((date_start_time, name))
-
-        # Update the appointment in the database
         success = termin.update(id, slots)
         return bool(success)
     except Exception as e:
@@ -293,19 +282,12 @@ def book_slot(id, date_start_time, name):
 
 
 def remove_slot(id, date_start_time, name):
-    """
-    Remove a booked slot for an appointment.
-
-    Returns True if the removal succeeded, False otherwise.
-    """
     try:
-        # Prefer DB-level remove if available
         if hasattr(termin, 'remove_slot'):
             removed = termin.remove_slot(id, date_start_time, name)
             if removed:
                 return True
 
-        # Fallback: fetch, filter, and replace the slot list
         item = termin.get_item(id)
         if not item:
             return False
@@ -314,7 +296,6 @@ def remove_slot(id, date_start_time, name):
         new_slots = []
         for s in slots:
             try:
-                # s may be list or tuple like [start_time, name]
                 if isinstance(s, (list, tuple)) and len(s) >= 2 and s[0] == date_start_time and s[1] == name:
                     continue
             except Exception:
@@ -329,9 +310,6 @@ def remove_slot(id, date_start_time, name):
 
 
 def remove_appointment(id):
-    """
-    Remove an entire appointment by id.
-    """
     try:
         return bool(termin.remove(id))
     except Exception as e:
@@ -339,17 +317,6 @@ def remove_appointment(id):
         return False
 
 def get_available(id):
-    """
-    Gets the available time slots -> more over it returns the time frame and the allready booked slots also the lenght.
-    And checks if there are slots left.
-
-    Input:
-    - id: id of the appointment
-
-    Output:
-    - dict: all the needet information -> [Start_date, End_date, (first day Time Frame, 
-    second day Time frame, third etc.), slot lenght, (bookedslots -> list)]
-    """
     try:
         termin_range = termin.get_item(id)
         if not termin_range:
@@ -358,22 +325,19 @@ def get_available(id):
         date_start = termin_range.get('date_start')
         date_end = termin_range.get('date_end')
         time_span = termin_range.get('time_span', [])
-        slot_lenght = termin_range.get('slot_lenght')
-        total_slots = termin_range.get('slots', 0)
-        # Ensure numeric fields are cast to int when stored as strings
+        
         try:
             total_slots = int(termin_range.get('slots', 0) or 0)
         except Exception:
             total_slots = 0
 
         try:
-            slot_lenght = int(termin_range.get('slot_lenght') or 0)
+            slot_length = int(termin_range.get('slot_length') or termin_range.get('slot_lenght') or 0)
         except Exception:
-            slot_lenght = termin_range.get('slot_lenght')
+            slot_length = termin_range.get('slot_length') or termin_range.get('slot_lenght')
 
         booked = termin_range.get('slots_booked', []) or []
 
-        # Normalize booked entries to dicts for easier consumption
         normalized = []
         for s in booked:
             if isinstance(s, (list, tuple)) and len(s) >= 2:
@@ -393,7 +357,8 @@ def get_available(id):
             'date_start': date_start,
             'date_end': date_end,
             'time_span': time_span,
-            'slot_lenght': slot_lenght,
+            'slot_length': slot_length,
+            'slot_lenght': slot_length,
             'slots_total': total_slots,
             'slots_booked': normalized,
             'slots_left': slots_left,
@@ -403,22 +368,10 @@ def get_available(id):
         return {}
 
 def get_available_user(id):
-    """
-    Gets the available time slots -> more over it returns the time frame and the allready booked slots also the lenght.
-    And checks if there are slots left.
-
-    Input:
-    - id: id of the appointment
-
-    Output:
-    - dict: all the needet information -> [Start_date, End_date, (first day Time Frame, 
-    second day Time frame, third etc.), slot lenght, (bookedslots -> list)]
-    """
     return get_available(id)
 
 
 def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
-    """Return upcoming appointment plans for overview display."""
     user_name = str(user or '').strip()
     if not user_name:
         return []
