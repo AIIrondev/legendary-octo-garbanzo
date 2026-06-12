@@ -169,13 +169,14 @@ def configure():
         end = request.form.get('end_date')
         time = request.form.get('time_frame')
         slots_amount = request.form.get('slots_amounts')
-        slot_lenght = request.form.get('slot_lenght')
+        slot_length = request.form.get('slot_length') # Korrigiert: slot_length
         mail = request.form.get('mail', '')
         note = request.form.get('note', '')
         add_to_calendar = request.form.get('add_to_calendar') == 'on'
-        titel = request.form.get('titel', '').strip()
+        title = request.form.get('title', '').strip() # Korrigiert: title statt titel
 
-        if not start or not end or not time or not slots_amount or not slot_lenght or not titel:
+        # Abfrage ebenfalls auf title und slot_length angepasst
+        if not start or not end or not time or not slots_amount or not slot_length or not title:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
             return render_template(
                 'termin_configure.html',
@@ -184,7 +185,8 @@ def configure():
                 email_service_enabled=cfg.EMAIL_ENABLED,
             )
 
-        result = appointment_service.new(start, end, time, slots_amount, slot_lenght, session["username"], mail, note, calendar_enabled=add_to_calendar, title=titel)
+        # Variablen im Funktionsaufruf aktualisiert
+        result = appointment_service.new(start, end, time, slots_amount, slot_length, session["username"], mail, note, calendar_enabled=add_to_calendar, title=title)
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
@@ -193,7 +195,7 @@ def configure():
             calendar_link=result.get('calendar_link'),
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
-            title=titel,
+            title=title,
         )
     elif request.method == "GET":
         return render_template(
