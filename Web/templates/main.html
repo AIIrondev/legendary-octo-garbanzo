@@ -373,7 +373,7 @@
             
             <div class="filter-group">
                 <div class="filter-header">
-                    <label>Thema:</label>
+                    <label>Schlagwort:</label>
                     <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
                     <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
                 </div>
@@ -420,7 +420,7 @@
             <span>Ort</span>
             <span>Unterrichtsfach</span>
             <span>Jahrgangsstufe</span>
-            <span>Thema</span>
+            <span>Schlagwort</span>
             <span>Barcode</span>
         </div>
         <div id="items-container" class="items-container">
@@ -1057,7 +1057,7 @@
                                 <p class="item-col-location"><strong>Ort:</strong> ${item.Ort || '-'}</p>
                                 <p class="item-col-filter1"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
                                 <p class="item-col-filter2"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
-                                <p class="item-col-filter3"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-col-filter3"><strong>Schlagwort:</strong> ${filter3Display}${filter3More}</p>
                                 <p class="item-col-code"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <p class="item-col-count"><strong>Anzahl:</strong> ${groupedCount}</p>
                                 ${isGroupedItem ? `<p class="item-col-count"><strong>Verfügbar:</strong> ${availableGroupedCount}</p>` : ''}
@@ -1682,7 +1682,7 @@
                 </div>
                 
                 <div class="detail-group">
-                    <div class="detail-label">Thema:</div>
+                    <div class="detail-label">Schlagwort:</div>
                     <div class="detail-value">${filter3Array.join(', ') || '-'}</div>
                 </div>
                 

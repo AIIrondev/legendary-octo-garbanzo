@@ -2395,7 +2395,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             
             <div class="filter-group">
                 <div class="filter-header">
-                    <label>Thema:</label>
+                    <label>Schlagwort:</label>
                     <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
                     <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
                 </div>
@@ -2446,7 +2446,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <span>Ort</span>
             <span>Unterrichtsfach</span>
             <span>Jahrgangsstufe</span>
-            <span>Thema</span>
+            <span>Schlagwort</span>
             <span>Barcode</span>
             <span>Anzahl</span>
         </div>
@@ -2567,7 +2567,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         </div>
                     </div>
                     
-                    <h3>Thema:</h3>
+                    <h3>Schlagwort:</h3>
                     <div class="multi-filter">
                         <div class="form-group">
                             <label for="edit-filter3-1">Wert 1:</label>
@@ -3686,7 +3686,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <p class="item-col-location"><strong>Ort:</strong> ${item.Ort || '-'}</p>
                                 <p class="item-col-filter1"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
                                 <p class="item-col-filter2"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
-                                <p class="item-col-filter3"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-col-filter3"><strong>Schlagwort:</strong> ${filter3Display}${filter3More}</p>
                                 <p class="item-col-code"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <p class="item-col-count"><strong>Anzahl:</strong> ${groupedCount}</p>
                                 ${hasDamage ? `<div class="damage-badge">${damageCount > 0 ? `Schäden gemeldet: ${damageCount}` : 'Schäden gemeldet'}</div>` : ''}
@@ -4229,7 +4229,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 document.getElementById('edit-filter2-3').value = filter2Array[2] || '';
                 document.getElementById('edit-filter2-4').value = filter2Array[3] || '';
 
-                // Fill in filter 3 (Thema)
+                // Fill in filter 3 (Schlagwort)
                 const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
                 document.getElementById('edit-filter3-1').value = filter3Array[0] || '';
                 document.getElementById('edit-filter3-2').value = filter3Array[1] || '';
@@ -4543,7 +4543,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 </div>
                 
                 <div class="detail-group">
-                    <div class="detail-label">Thema:</div>
+                    <div class="detail-label">Schlagwort:</div>
                     <div class="detail-value">${filter3Array.join(', ') || '-'}</div>
                 </div>
                 
