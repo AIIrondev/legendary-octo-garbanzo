@@ -1,5 +1,5 @@
 {
-    "dbg": false,
+    "dbg": true,
     "key": "InventarsystemSecureKey2026XYZ789abcdef012",
     "ver": "0.7.20",
     "host": "0.0.0.0",
