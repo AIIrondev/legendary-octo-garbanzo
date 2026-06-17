@@ -25,6 +25,8 @@ from werkzeug.routing import BuildError
 from jinja2 import TemplateNotFound
 import os
 import sys
+from bs4 import BeautifulSoup
+import requests
 
 # Ensure imports work regardless of whether gunicorn starts in /app or /app/Web.
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9539,6 +9541,79 @@ def _fetch_from_open_library(clean_isbn):
         print(f"OpenLibrary Search error: {e}")
     return None
 
+def _fetch_from_isbn_de(clean_isbn):
+    """
+    Source 4: isbn.de (Web Scraping für deutsche Schulbücher)
+    Sehr gute Trefferquote für Klett, Cornelsen, Westermann etc.
+    """
+    try:
+        # Die URL leitet meist automatisch auf den richtigen Buch-Slug weiter
+        url = f"https://www.isbn.de/buch/{clean_isbn}"
+        
+        # Ein User-Agent ist wichtig, da Webseiten simple Python-Scripte oft blockieren
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=5)
+        
+        if response.status_code != 200:
+            return None
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Prüfen, ob wirklich ein Buch gefunden wurde
+        # (isbn.de wirft manchmal keinen 404, sondern zeigt eine Suchseite ohne Treffer)
+        title_elem = soup.find('h1')
+        if not title_elem or "nicht gefunden" in title_elem.text.lower() or "Suche" in title_elem.text:
+            return None
+            
+        title = title_elem.text.strip()
+        
+        # isbn.de nutzt oft Schema.org Tags (itemprop), was das Auslesen sehr sicher macht
+        authors = "Unknown Author"
+        author_elem = soup.find(itemprop="author")
+        if author_elem:
+            authors = author_elem.text.strip()
+            
+        publisher = "Unknown Publisher"
+        publisher_elem = soup.find(itemprop="publisher")
+        if publisher_elem:
+            publisher = publisher_elem.text.strip()
+            
+        pub_date = "Unknown Date"
+        date_elem = soup.find(itemprop="datePublished")
+        if date_elem:
+            pub_date = date_elem.text.strip()
+            
+        description = "Keine Beschreibung verfügbar"
+        desc_elem = soup.find(itemprop="description")
+        if desc_elem:
+            description = desc_elem.text.strip()
+            
+        thumbnail = ""
+        img_elem = soup.find('img', itemprop="image")
+        if img_elem and 'src' in img_elem.attrs:
+            thumbnail = img_elem['src']
+            # Falls der Link relativ ist (z.B. /cover/...)
+            if thumbnail.startswith('/'):
+                thumbnail = "https://www.isbn.de" + thumbnail
+
+        return {
+            "title": title,
+            "authors": authors,
+            "publisher": publisher,
+            "publishedDate": pub_date,
+            "description": description,
+            "pageCount": "Unknown", # Seitenanzahl ist oft nicht standardisiert hinterlegt
+            "price": None,          
+            "thumbnail": thumbnail,
+            "source": "isbn-de"
+        }
+    except Exception as e:
+        print(f"isbn.de Scraping error: {e}")
+    return None
+
 @app.route('/fetch_book_info/<isbn>')
 def fetch_book_info(isbn):
     """
@@ -9562,6 +9637,7 @@ def fetch_book_info(isbn):
         providers = [
             _fetch_from_google_books,
             _fetch_from_lobid_germany,
+            _fetch_from_isbn_de,
             _fetch_from_open_library
         ]
 
