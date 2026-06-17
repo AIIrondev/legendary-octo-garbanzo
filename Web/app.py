@@ -9542,8 +9542,8 @@ def _fetch_from_open_library(clean_isbn):
 
 def _fetch_from_isbn_de(clean_isbn):
     """
-    Source 4: isbn.de (Web Scraping für deutsche Schulbücher)
-    Robuste Version mit Fallbacks für Meta-Tags und Tabellendaten.
+    Source 4: isbn.de (Maßgeschneidertes Scraping basierend auf realer HTML-Struktur)
+    Nutzt Open-Graph Meta-Tags und durchsucht die .infotab-Struktur der Sidebar.
     """
     try:
         url = f"https://www.isbn.de/buch/{clean_isbn}"
@@ -9552,91 +9552,93 @@ def _fetch_from_isbn_de(clean_isbn):
         }
         
         response = requests.get(url, headers=headers, timeout=5)
-        
         if response.status_code != 200:
             return None
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 1. Titel prüfen
-        title_elem = soup.find('h1')
-        if not title_elem or "nicht gefunden" in title_elem.text.lower() or "Suche" in title_elem.text:
-            return None
-        title = title_elem.text.strip()
+        # 1. Titel aus den Meta-Tags extrahieren (extrem zuverlässig)
+        title_meta = soup.find('meta', property='og:title')
+        title = title_meta.get('content', '').strip() if title_meta else None
+        if not title:
+            h1_elem = soup.find('h1')
+            title = h1_elem.text.strip() if h1_elem else "Unknown Title"
 
-        # --- Hilfsfunktion für unstrukturierte HTML-Tabellen ---
-        def get_detail_by_keyword(keywords):
-            """Sucht nach Schlagwörtern (z.B. 'Verlag') und gibt den angrenzenden Wert zurück."""
-            for tag in soup.find_all(['th', 'td', 'strong', 'b', 'span']):
-                text = tag.text.strip().lower()
-                if any(kw in text for kw in keywords):
-                    # Wenn es eine Tabellenzelle (th/td) ist, nimm das nächste Geschwister-Element
-                    if tag.name in ['th', 'td']:
-                        sibling = tag.find_next_sibling('td')
-                        if sibling:
-                            return sibling.text.strip()
-                    # Wenn es ein Label in einem Listen- oder Absatz-Element ist
-                    parent = tag.parent
-                    if parent and parent.name in ['li', 'p', 'div']:
-                        return parent.text.replace(tag.text, '').strip()
+        # Falls wir auf einer Fehler-/Suchseite landen
+        if "nicht gefunden" in title.lower() or "suche" in title.lower():
             return None
 
-        # --- Hilfsfunktion für Schema.org (itemprop) ---
-        def get_itemprop(prop_name):
-            elem = soup.find(attrs={"itemprop": prop_name})
-            if elem:
-                return elem.get('content') or elem.text.strip()
+        # --- Hilfsfunktion zum Parsen der .infotab-Sidebar-Struktur ---
+        # Jede Zeile dort ist aufgebaut als: <div><div>Label</div>Wert</div>
+        def get_sidebar_value(keyword):
+            infotab = soup.find(class_='infotab')
+            if infotab:
+                for d in infotab.find_all('div'):
+                    # Prüfe, ob der Text im inneren Label-Div mit dem Keyword übereinstimmt
+                    if d.text.strip().lower() == keyword.lower():
+                        parent = d.parent
+                        # Ziehe das Label vom Gesamttext ab, um nur den Wert zu erhalten
+                        return parent.text.replace(d.text, '', 1).strip()
             return None
 
-        authors = get_itemprop("author")
-        if not authors:
-            authors = get_detail_by_keyword(['autor', 'herausgeber', 'von:'])
-        authors = authors if authors else "Unknown Author"
-
-        publisher = get_itemprop("publisher")
+        # 2. Verlag holen
+        publisher = get_sidebar_value('verlag')
         if not publisher:
-            publisher = get_detail_by_keyword(['verlag'])
-        publisher = publisher if publisher else "Unknown Publisher"
+            publisher = "Unknown Publisher"
 
-        pub_date = get_itemprop("datePublished")
-        if not pub_date:
-            pub_date = get_detail_by_keyword(['erscheinungsjahr', 'erschienen', 'datum'])
-        pub_date = pub_date if pub_date else "Unknown Date"
+        # 3. Erscheinungsdatum (Aus Meta-Tag oder Sidebar)
+        date_meta = soup.find('meta', property='og:book:release_date')
+        if date_meta and date_meta.get('content'):
+            published_date = date_meta.get('content', '').strip()
+        else:
+            published_date = get_sidebar_value('erschienen am')
+        
+        if not published_date:
+            published_date = "Unknown Date"
 
-        page_count = get_itemprop("numberOfPages")
-        if not page_count:
-            page_count = get_detail_by_keyword(['seiten', 'umfang'])
-            
+        # 4. Autor (Schulbücher haben oft keinen Einzelautor, daher kluger Fallback)
+        author_meta = soup.find('meta', property='og:book:author')
+        author = author_meta.get('content', '').strip() if author_meta else ""
+        if not author:
+            author = get_sidebar_value('autor') or get_sidebar_value('herausgeber')
+        
+        if not author:
+            # Wenn kein Autor existiert, ist es eine Verlagsredaktion (z.B. "Klett Redaktion")
+            author = f"{publisher} Redaktion" if publisher != "Unknown Publisher" else "Unknown Author"
+
+        # 5. Seitenanzahl
+        page_count = get_sidebar_value('seiten') or get_sidebar_value('umfang')
         if page_count:
             match = re.search(r'\d+', page_count)
             page_count = match.group(0) if match else "Unknown"
         else:
             page_count = "Unknown"
 
-        description = get_itemprop("description")
-        if not description:
-            for class_name in ['description', 'zusammenfassung', 'klappentext', 'buch-beschreibung']:
-                fallback_desc = soup.find('div', class_=re.compile(class_name, re.IGNORECASE))
-                if fallback_desc:
-                    description = fallback_desc.text.strip()
-                    break
-        description = description if description else "Keine Beschreibung verfügbar"
+        # 6. Beschreibung aus dem zentralen Textfeld holen und Whitespace bereinigen
+        description = "Keine Beschreibung verfügbar"
+        desc_div = soup.find(id='bookdesc')
+        if desc_div:
+            # Kombiniert <p> und <ul>-Inhalte zu sauberem Fließtext ohne Zeilenumbruch-Chaos
+            description = " ".join(desc_div.text.split())
 
+        # 7. Cover-Bild (Nutzt den direkten Link zum hochauflösenden Bild aus den Metas)
         thumbnail = ""
-        img_elem = soup.find('img', itemprop="image")
-        if not img_elem:
-            img_elem = soup.find('img', class_=lambda c: c and 'cover' in str(c).lower())
-            
-        if img_elem and 'src' in img_elem.attrs:
-            thumbnail = img_elem['src']
-            if thumbnail.startswith('/'):
-                thumbnail = "https://www.isbn.de" + thumbnail
+        img_meta = soup.find('meta', property='og:image')
+        if img_meta:
+            thumbnail = img_meta.get('content', '').strip()
+        else:
+            img_tag = soup.find('img', id='ISBNcover')
+            if img_tag:
+                thumbnail = img_tag.get('data-big') or img_tag.get('src')
+                
+        if thumbnail and thumbnail.startswith('/'):
+            thumbnail = "https://www.isbn.de" + thumbnail
 
         return {
             "title": title,
-            "authors": authors,
+            "authors": author,
             "publisher": publisher,
-            "publishedDate": pub_date,
+            "publishedDate": published_date,
             "description": description,
             "pageCount": page_count,
             "price": None,
