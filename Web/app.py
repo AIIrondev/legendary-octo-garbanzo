@@ -26,7 +26,6 @@ from jinja2 import TemplateNotFound
 import os
 import sys
 from bs4 import BeautifulSoup
-import requests
 
 # Ensure imports work regardless of whether gunicorn starts in /app or /app/Web.
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9544,13 +9543,10 @@ def _fetch_from_open_library(clean_isbn):
 def _fetch_from_isbn_de(clean_isbn):
     """
     Source 4: isbn.de (Web Scraping für deutsche Schulbücher)
-    Sehr gute Trefferquote für Klett, Cornelsen, Westermann etc.
+    Robuste Version mit Fallbacks für Meta-Tags und Tabellendaten.
     """
     try:
-        # Die URL leitet meist automatisch auf den richtigen Buch-Slug weiter
         url = f"https://www.isbn.de/buch/{clean_isbn}"
-        
-        # Ein User-Agent ist wichtig, da Webseiten simple Python-Scripte oft blockieren
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
@@ -9562,40 +9558,77 @@ def _fetch_from_isbn_de(clean_isbn):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Prüfen, ob wirklich ein Buch gefunden wurde
-        # (isbn.de wirft manchmal keinen 404, sondern zeigt eine Suchseite ohne Treffer)
+        # 1. Titel prüfen
         title_elem = soup.find('h1')
         if not title_elem or "nicht gefunden" in title_elem.text.lower() or "Suche" in title_elem.text:
             return None
-            
         title = title_elem.text.strip()
-        
-        # isbn.de nutzt oft Schema.org Tags (itemprop), was das Auslesen sehr sicher macht
-        authors = "Unknown Author"
-        author_elem = soup.find(itemprop="author")
-        if author_elem:
-            authors = author_elem.text.strip()
+
+        # --- Hilfsfunktion für unstrukturierte HTML-Tabellen ---
+        def get_detail_by_keyword(keywords):
+            """Sucht nach Schlagwörtern (z.B. 'Verlag') und gibt den angrenzenden Wert zurück."""
+            for tag in soup.find_all(['th', 'td', 'strong', 'b', 'span']):
+                text = tag.text.strip().lower()
+                if any(kw in text for kw in keywords):
+                    # Wenn es eine Tabellenzelle (th/td) ist, nimm das nächste Geschwister-Element
+                    if tag.name in ['th', 'td']:
+                        sibling = tag.find_next_sibling('td')
+                        if sibling:
+                            return sibling.text.strip()
+                    # Wenn es ein Label in einem Listen- oder Absatz-Element ist
+                    parent = tag.parent
+                    if parent and parent.name in ['li', 'p', 'div']:
+                        return parent.text.replace(tag.text, '').strip()
+            return None
+
+        # --- Hilfsfunktion für Schema.org (itemprop) ---
+        def get_itemprop(prop_name):
+            elem = soup.find(attrs={"itemprop": prop_name})
+            if elem:
+                return elem.get('content') or elem.text.strip()
+            return None
+
+        authors = get_itemprop("author")
+        if not authors:
+            authors = get_detail_by_keyword(['autor', 'herausgeber', 'von:'])
+        authors = authors if authors else "Unknown Author"
+
+        publisher = get_itemprop("publisher")
+        if not publisher:
+            publisher = get_detail_by_keyword(['verlag'])
+        publisher = publisher if publisher else "Unknown Publisher"
+
+        pub_date = get_itemprop("datePublished")
+        if not pub_date:
+            pub_date = get_detail_by_keyword(['erscheinungsjahr', 'erschienen', 'datum'])
+        pub_date = pub_date if pub_date else "Unknown Date"
+
+        page_count = get_itemprop("numberOfPages")
+        if not page_count:
+            page_count = get_detail_by_keyword(['seiten', 'umfang'])
             
-        publisher = "Unknown Publisher"
-        publisher_elem = soup.find(itemprop="publisher")
-        if publisher_elem:
-            publisher = publisher_elem.text.strip()
-            
-        pub_date = "Unknown Date"
-        date_elem = soup.find(itemprop="datePublished")
-        if date_elem:
-            pub_date = date_elem.text.strip()
-            
-        description = "Keine Beschreibung verfügbar"
-        desc_elem = soup.find(itemprop="description")
-        if desc_elem:
-            description = desc_elem.text.strip()
-            
+        if page_count:
+            match = re.search(r'\d+', page_count)
+            page_count = match.group(0) if match else "Unknown"
+        else:
+            page_count = "Unknown"
+
+        description = get_itemprop("description")
+        if not description:
+            for class_name in ['description', 'zusammenfassung', 'klappentext', 'buch-beschreibung']:
+                fallback_desc = soup.find('div', class_=re.compile(class_name, re.IGNORECASE))
+                if fallback_desc:
+                    description = fallback_desc.text.strip()
+                    break
+        description = description if description else "Keine Beschreibung verfügbar"
+
         thumbnail = ""
         img_elem = soup.find('img', itemprop="image")
+        if not img_elem:
+            img_elem = soup.find('img', class_=lambda c: c and 'cover' in str(c).lower())
+            
         if img_elem and 'src' in img_elem.attrs:
             thumbnail = img_elem['src']
-            # Falls der Link relativ ist (z.B. /cover/...)
             if thumbnail.startswith('/'):
                 thumbnail = "https://www.isbn.de" + thumbnail
 
@@ -9605,8 +9638,8 @@ def _fetch_from_isbn_de(clean_isbn):
             "publisher": publisher,
             "publishedDate": pub_date,
             "description": description,
-            "pageCount": "Unknown", # Seitenanzahl ist oft nicht standardisiert hinterlegt
-            "price": None,          
+            "pageCount": page_count,
+            "price": None,
             "thumbnail": thumbnail,
             "source": "isbn-de"
         }
