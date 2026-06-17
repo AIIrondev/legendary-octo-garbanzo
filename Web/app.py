@@ -9542,8 +9542,8 @@ def _fetch_from_open_library(clean_isbn):
 
 def _fetch_from_isbn_de(clean_isbn):
     """
-    Source 4: isbn.de (Maßgeschneidertes Scraping basierend auf realer HTML-Struktur)
-    Nutzt Open-Graph Meta-Tags und durchsucht die .infotab-Struktur der Sidebar.
+    Source 4: isbn.de (Maßgeschneidertes Scraping basierend auf realem HTML)
+    Extrahiert alle Buchdaten inklusive Preise aus den Meta-Tags und der Sidebar.
     """
     try:
         url = f"https://www.isbn.de/buch/{clean_isbn}"
@@ -9557,27 +9557,25 @@ def _fetch_from_isbn_de(clean_isbn):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 1. Titel aus den Meta-Tags extrahieren (extrem zuverlässig)
+        # 1. Titel aus Meta-Tags extrahieren (extrem zuverlässig)
         title_meta = soup.find('meta', property='og:title')
         title = title_meta.get('content', '').strip() if title_meta else None
         if not title:
             h1_elem = soup.find('h1')
             title = h1_elem.text.strip() if h1_elem else "Unknown Title"
 
-        # Falls wir auf einer Fehler-/Suchseite landen
+        # Falls Fehler- oder Suchseite
         if "nicht gefunden" in title.lower() or "suche" in title.lower():
             return None
 
         # --- Hilfsfunktion zum Parsen der .infotab-Sidebar-Struktur ---
-        # Jede Zeile dort ist aufgebaut als: <div><div>Label</div>Wert</div>
         def get_sidebar_value(keyword):
             infotab = soup.find(class_='infotab')
             if infotab:
                 for d in infotab.find_all('div'):
-                    # Prüfe, ob der Text im inneren Label-Div mit dem Keyword übereinstimmt
                     if d.text.strip().lower() == keyword.lower():
                         parent = d.parent
-                        # Ziehe das Label vom Gesamttext ab, um nur den Wert zu erhalten
+                        # Label vom Gesamttext abziehen, um nur den Wert zu erhalten
                         return parent.text.replace(d.text, '', 1).strip()
             return None
 
@@ -9596,14 +9594,13 @@ def _fetch_from_isbn_de(clean_isbn):
         if not published_date:
             published_date = "Unknown Date"
 
-        # 4. Autor (Schulbücher haben oft keinen Einzelautor, daher kluger Fallback)
+        # 4. Autor (Da Schulbuch-Workbooks oft keinen Einzelautor haben, kluger Fallback)
         author_meta = soup.find('meta', property='og:book:author')
         author = author_meta.get('content', '').strip() if author_meta else ""
         if not author:
             author = get_sidebar_value('autor') or get_sidebar_value('herausgeber')
         
         if not author:
-            # Wenn kein Autor existiert, ist es eine Verlagsredaktion (z.B. "Klett Redaktion")
             author = f"{publisher} Redaktion" if publisher != "Unknown Publisher" else "Unknown Author"
 
         # 5. Seitenanzahl
@@ -9614,14 +9611,14 @@ def _fetch_from_isbn_de(clean_isbn):
         else:
             page_count = "Unknown"
 
-        # 6. Beschreibung aus dem zentralen Textfeld holen und Whitespace bereinigen
+        # 6. Beschreibung aus ID 'bookdesc' holen und Whitespace-Fluss säubern
         description = "Keine Beschreibung verfügbar"
         desc_div = soup.find(id='bookdesc')
         if desc_div:
-            # Kombiniert <p> und <ul>-Inhalte zu sauberem Fließtext ohne Zeilenumbruch-Chaos
+            # Holt den Text inklusive aller Listenpunkte (li) und formatiert ihn sauber
             description = " ".join(desc_div.text.split())
 
-        # 7. Cover-Bild (Nutzt den direkten Link zum hochauflösenden Bild aus den Metas)
+        # 7. Cover-Bild (Nutzt hochauflösenden Link aus den Metas)
         thumbnail = ""
         img_meta = soup.find('meta', property='og:image')
         if img_meta:
@@ -9634,6 +9631,28 @@ def _fetch_from_isbn_de(clean_isbn):
         if thumbnail and thumbnail.startswith('/'):
             thumbnail = "https://www.isbn.de" + thumbnail
 
+        # 8. PREIS EXTRAHIEREN (Neu integriert)
+        price = None
+        # Option A: Aus dem standardisierten Meta-Tag extrahieren (Ergibt z.B. 12.25)
+        price_meta = soup.find('meta', property='product:price:amount')
+        if price_meta and price_meta.get('content'):
+            try:
+                price = float(price_meta.get('content').strip())
+            except ValueError:
+                pass
+                
+        # Option B: Fallback über die Infotab-Sidebar (Falls Meta fehlt, filtert "12,25 €*" zu Float)
+        if price is None:
+            price_str = get_sidebar_value('preis')
+            if price_str:
+                # Findet Zahlen wie "12,25" oder "12.25"
+                match = re.search(r'\d+([.,]\d+)?', price_str)
+                if match:
+                    try:
+                        price = float(match.group(0).replace(',', '.'))
+                    except ValueError:
+                        pass
+
         return {
             "title": title,
             "authors": author,
@@ -9641,7 +9660,7 @@ def _fetch_from_isbn_de(clean_isbn):
             "publishedDate": published_date,
             "description": description,
             "pageCount": page_count,
-            "price": None,
+            "price": price, # Gibt nun z.B. 12.25 als float zurück
             "thumbnail": thumbnail,
             "source": "isbn-de"
         }
