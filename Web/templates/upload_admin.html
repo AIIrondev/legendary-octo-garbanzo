@@ -1563,6 +1563,7 @@
         // Get form fields
         const nameField = document.getElementById('name');
         const descriptionField = document.getElementById('beschreibung');
+        const priceField = document.getElementById('anschaffungskosten'); // <-- NEU
         
         if (!nameField || !descriptionField) {
             alert('Fehler: Formularfelder nicht gefunden.');
@@ -1600,6 +1601,13 @@
         nameField.value = bookTitle;
         descriptionField.value = description;
         
+        // Preis in das Formularfeld eintragen
+        if (priceField && currentBookData.price !== null && currentBookData.price !== undefined) {
+            // Wandelt den Float (z.B. 12.25) in einen String mit Komma (12,25) um
+            let formattedPrice = currentBookData.price.toString().replace('.', ',');
+            priceField.value = formattedPrice;
+        }
+
         // Download and import book cover image if available
         if (currentBookData.thumbnail) {
             downloadBookCover(currentBookData.thumbnail);
