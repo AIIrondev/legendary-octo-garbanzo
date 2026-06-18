@@ -4124,10 +4124,13 @@ def student_card_barcode_download():
             c.setLineWidth(2)
             c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
             
+
+            school_name = cfg.get_school_info()
+            school_name = school_name["name"]
             # "SCHÜLERAUSWEIS" text in header
             c.setFont("Helvetica-Bold", 9)
             c.setFillColor(white)
-            c.drawString(x_pos + 3*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+            c.drawString(x_pos + 3*mm, y_pos - 6.5*mm, f"SCHÜLERAUSWEIS - {str(school_name)}")
             
             # Student name - large and bold
             c.setFillColor(text_dark)
@@ -4151,7 +4154,7 @@ def student_card_barcode_download():
                 c.setFillColor(text_dark)
                 c.setFont("Helvetica-Bold", 9)
                 c.drawString(x_pos + 3*mm, y_pos - 28*mm, card['Klasse'])
-            
+
             # Right barcode section with border highlight
             barcode_x_start = x_pos + info_width + 1*mm
             c.setFillColor(accent_color)
