@@ -4294,10 +4294,12 @@ def student_card_single_barcode_download(card_id):
         c.setLineWidth(2.5)
         c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
         
+        school_name = cfg.get_school_info()
+        school_name = school_name["name"]
         # "SCHÜLERAUSWEIS" text in header
         c.setFont("Helvetica-Bold", 11)
         c.setFillColor(white)
-        c.drawString(x_pos + 4*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+        c.drawString(x_pos + 4*mm, y_pos - 6.5*mm, f"SCHÜLERAUSWEIS - {str(school_name)}")
         
         # Student name - large and prominent
         c.setFillColor(text_dark)
