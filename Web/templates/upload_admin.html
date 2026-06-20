@@ -788,12 +788,7 @@
             {% if show_library_features %}
             <!-- Library Mode: Single Customizable Filter -->
             <div class="filter-inputs">
-                <h3>Kategorie/Typ (customisierbar):</h3>
-                <div class="form-group">
-                    <input type="text" name="library_category" id="library_category" placeholder="z.B. Belletristik, Sachbücher, Nachschlagewerke, etc.">
-                    <small style="display:block; color:#666;">Geben Sie hier eine beliebige Kategorie ein zur freien Klassifizierung.</small>
-                </div>
-                <h3>Typ</h3>
+                <h3>Medientyp</h3>
                 <div class="form-group">
                     <select name="item_type_input" id="item_type_input">
                         <option value="" disabled selected>Medientyp auswählen...</option>
@@ -804,6 +799,11 @@
                         <option value="Sonstiges">Sonstiges</option>
                     </select>
                     <small style="display:block; color:#666;">Wählen Sie einen Medientyp aus zur Klassifizierung.</small>
+                </div>
+                <h3>Kategorie/Typ:</h3>
+                <div class="form-group">
+                    <input type="text" name="library_category" id="library_category" placeholder="z.B. Belletristik, Sachbücher, Nachschlagewerke, etc.">
+                    <small style="display:block; color:#666;">Geben Sie hier eine beliebige Kategorie ein zur freien Klassifizierung.</small>
                 </div>
             </div>
             {% else %}

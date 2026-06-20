@@ -4154,6 +4154,10 @@ def student_card_barcode_download():
                 c.setFillColor(text_dark)
                 c.setFont("Helvetica-Bold", 9)
                 c.drawString(x_pos + 3*mm, y_pos - 28*mm, card['Klasse'])
+                c.drawString(x_pos + 3*mm, y_pos - 31*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 34*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 37*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 40*mm, "-")
 
             # Right barcode section with border highlight
             barcode_x_start = x_pos + info_width + 1*mm
