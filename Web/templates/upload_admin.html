@@ -793,6 +793,18 @@
                     <input type="text" name="library_category" id="library_category" placeholder="z.B. Belletristik, Sachbücher, Nachschlagewerke, etc.">
                     <small style="display:block; color:#666;">Geben Sie hier eine beliebige Kategorie ein zur freien Klassifizierung.</small>
                 </div>
+                <h3>Typ</h3>
+                <div class="form-group">
+                    <select name="item_type_input" id="item_type_input">
+                        <option value="" disabled selected>Medientyp auswählen...</option>
+                        <option value="Buch">Buch</option>
+                        <option value="Schulbuch">Schulbuch</option>
+                        <option value="CD">CD</option>
+                        <option value="DVD">DVD</option>
+                        <option value="Sonstiges">Sonstiges</option>
+                    </select>
+                    <small style="display:block; color:#666;">Wählen Sie einen Medientyp aus zur Klassifizierung.</small>
+                </div>
             </div>
             {% else %}
             <!-- Normal Item Mode: Standard Filters -->

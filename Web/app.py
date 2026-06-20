@@ -1996,7 +1996,7 @@ def _upload_student_cards_excel():
     synonyms = {
         'ausweis_id': ['ausweis_id', 'ausweisid', 'ausweis-id', 'karte', 'kartennummer', 'card_id', 'id'],
         'student_name': ['student_name', 'schuelername', 'schülername', 'schueler', 'schüler', 'name', 'vollname', 'vorname_nachname', 'nachname_vorname'],
-        'first_name': ['vorname', 'first_name', 'firstname'],
+        'first_name': ['vorname', 'first_name', 'firstname', 'rufname'],
         'last_name': ['nachname', 'last_name', 'lastname'],
         'class_name': ['klasse', 'class', 'class_name', 'jahrgang', 'jahrgangsstufe', 'stufe', 'gruppe', 'asv_klasse'],
         'notes': ['notizen', 'notes', 'bemerkungen', 'bemerkung', 'hinweis', 'hinweise'],
@@ -5112,6 +5112,7 @@ def upload_item():
         upload_mode = sanitize_form_value(request.form.get('upload_mode', 'item'))
         individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))
         item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
+        item_type_input = sanitize_form_value(request.form.get('item_type_input', ''))
 
         try:
             item_count = int(item_count_raw) if item_count_raw else 1
@@ -5191,6 +5192,8 @@ def upload_item():
             item_isbn = isbn_raw
             if upload_mode == 'library':
                 item_type = 'book'
+        if item_type_input != "":
+            item_type = item_type_input
 
     if upload_mode == 'library':
         if not cfg.MODULES.is_enabled('library'):
