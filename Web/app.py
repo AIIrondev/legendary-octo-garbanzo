@@ -1996,7 +1996,7 @@ def _upload_student_cards_excel():
     synonyms = {
         'ausweis_id': ['ausweis_id', 'ausweisid', 'ausweis-id', 'karte', 'kartennummer', 'card_id', 'id'],
         'student_name': ['student_name', 'schuelername', 'schülername', 'schueler', 'schüler', 'name', 'vollname', 'vorname_nachname', 'nachname_vorname'],
-        'first_name': ['vorname', 'first_name', 'firstname'],
+        'first_name': ['vorname', 'first_name', 'firstname', 'rufname'],
         'last_name': ['nachname', 'last_name', 'lastname'],
         'class_name': ['klasse', 'class', 'class_name', 'jahrgang', 'jahrgangsstufe', 'stufe', 'gruppe', 'asv_klasse'],
         'notes': ['notizen', 'notes', 'bemerkungen', 'bemerkung', 'hinweis', 'hinweise'],
@@ -4124,10 +4124,13 @@ def student_card_barcode_download():
             c.setLineWidth(2)
             c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
             
+
+            school_name = cfg.get_school_info()
+            school_name = school_name["name"]
             # "SCHÜLERAUSWEIS" text in header
             c.setFont("Helvetica-Bold", 9)
             c.setFillColor(white)
-            c.drawString(x_pos + 3*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+            c.drawString(x_pos + 3*mm, y_pos - 6.5*mm, f"SCHÜLERAUSWEIS - {str(school_name)}")
             
             # Student name - large and bold
             c.setFillColor(text_dark)
@@ -4151,7 +4154,11 @@ def student_card_barcode_download():
                 c.setFillColor(text_dark)
                 c.setFont("Helvetica-Bold", 9)
                 c.drawString(x_pos + 3*mm, y_pos - 28*mm, card['Klasse'])
-            
+                c.drawString(x_pos + 3*mm, y_pos - 31*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 34*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 37*mm, "-")
+                c.drawString(x_pos + 3*mm, y_pos - 40*mm, "-")
+
             # Right barcode section with border highlight
             barcode_x_start = x_pos + info_width + 1*mm
             c.setFillColor(accent_color)
@@ -4291,10 +4298,12 @@ def student_card_single_barcode_download(card_id):
         c.setLineWidth(2.5)
         c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
         
+        school_name = cfg.get_school_info()
+        school_name = school_name["name"]
         # "SCHÜLERAUSWEIS" text in header
         c.setFont("Helvetica-Bold", 11)
         c.setFillColor(white)
-        c.drawString(x_pos + 4*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+        c.drawString(x_pos + 4*mm, y_pos - 6.5*mm, f"SCHÜLERAUSWEIS - {str(school_name)}")
         
         # Student name - large and prominent
         c.setFillColor(text_dark)
@@ -5107,6 +5116,7 @@ def upload_item():
         upload_mode = sanitize_form_value(request.form.get('upload_mode', 'item'))
         individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))
         item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
+        item_type_input = sanitize_form_value(request.form.get('item_type_input', ''))
 
         try:
             item_count = int(item_count_raw) if item_count_raw else 1
@@ -5186,6 +5196,8 @@ def upload_item():
             item_isbn = isbn_raw
             if upload_mode == 'library':
                 item_type = 'book'
+        if item_type_input != "":
+            item_type = item_type_input
 
     if upload_mode == 'library':
         if not cfg.MODULES.is_enabled('library'):
