@@ -432,7 +432,7 @@ def check_password_strength(password):
 
 def hashing(password):
     """
-    Hash a password using SHA-512.
+    Hash a password using scrypt.
     
     Args:
         password (str): Password to hash
@@ -440,7 +440,8 @@ def hashing(password):
     Returns:
         str: Hexadecimal digest of the hashed password
     """
-    return hashlib.sha512(password.encode()).hexdigest()
+    hashed = hashlib.scrypt(password.encode(), salt=b'some_salt', n=16384, r=8, p=1)
+    return hashed.hex()
 
 
 def check_nm_pwd(username, password):
