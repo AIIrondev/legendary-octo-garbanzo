@@ -1320,8 +1320,8 @@
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
                                 {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
                                 <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
-                                {% if current_permissions.pages.get('library_loans_admin', True) %}
-                                <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
+                                {% if current_permissions.pages.get('admin_borrowings', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
                                 {% endif %}
                                 {% if current_permissions.pages.get('admin_damaged_items', True) %}
                                 <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
