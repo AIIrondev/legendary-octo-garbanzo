@@ -566,6 +566,55 @@ remove_runtime_port() {
     fi
 }
 
+show_help() {
+    local script_name
+    script_name="$(basename "$0")"
+
+    echo "=== MULTI-TENANT INVENTAR MANAGER ==="
+    echo ""
+    echo "NUTZUNG:"
+    echo "  ./$script_name <befehl> [tenant_id] [optionen]"
+    echo ""
+    echo "VERFÜGBARE BEFEHLE:"
+    echo "  add <tenant_id> [port]"
+    echo "      Legt einen neuen Tenant an, registriert den Port und initialisiert"
+    echo "      die MongoDB-Datenbank mit einem Standard-Admin (admin / admin123)."
+    echo ""
+    echo "  trial <tenant_id> [port] [tage]"
+    echo "      Erstellt einen temporären Test-Tenant (Standardlaufzeit: 7 Tage)."
+    echo "      Dieser läuft nach der festgelegten Zeit ab und wird automatisch gelöscht."
+    echo ""
+    echo "  remove [-y|--yes] <tenant_id>"
+    echo "      Löscht einen Tenant komplett (Konfiguration, Ports und Datenbank)."
+    echo "      Nutze -y oder --yes, um die Bestätigungsabfrage zu überspringen."
+    echo ""
+    echo "  restart-tenant <tenant_id>"
+    echo "      Startet einen spezifischen Tenant neu, indem alle aktiven Sessions"
+    echo "      und der Cache in der MongoDB geleert werden (Sitzungs-Reset)."
+    echo ""
+    echo "  restart-all"
+    echo "      Führt einen Zero-Downtime Rolling-Restart für alle App-Container durch."
+    echo ""
+    echo "  list"
+    echo "      Listet alle registrierten Tenants (aus der config.json) sowie alle"
+    echo "      aktiven Tenant-Datenbanken (aus der MongoDB) übersichtlich auf."
+    echo ""
+    echo "  module <tenant_id> <modulname>=<on|off> [...]"
+    echo "      Aktiviert oder deaktiviert bestimmte Features/Module für einen Tenant."
+    echo "      Es können mehrere Module gleichzeitig konfiguriert werden."
+    echo ""
+    echo "GLOBALE OPTIONEN:"
+    echo "  -h, --help"
+    echo "      Zeigt dieses Hilfemenü an."
+    echo ""
+    echo "BEISPIELE:"
+    echo "  ./$script_name add schule_muenchen 8081"
+    echo "  ./$script_name trial test_user 8082 14"
+    echo "  ./$script_name module schule_muenchen inventory=on mail=off"
+    echo "  ./$script_name remove --yes test_user"
+    echo ""
+}
+
 if [ -z "${1:-}" ]; then
     show_help
 fi
@@ -690,7 +739,7 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         ;;
     
     remove)
-        FORCE_REMOVE=false
+        FORCE_REMOVE=true
         if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then
             FORCE_REMOVE=true
             TENANT_ID="${3:-}"
