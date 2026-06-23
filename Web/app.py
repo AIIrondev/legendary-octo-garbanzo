@@ -1736,7 +1736,6 @@ def is_valid_isbn13(isbn13):
     check_digit = (10 - (checksum % 10)) % 10
     return check_digit == int(isbn13[12])
 
-
 def normalize_and_validate_isbn(isbn_raw):
     """Normalize ISBN and return a valid canonical ISBN-13/10 or empty string."""
     isbn = normalize_isbn(isbn_raw)
@@ -10272,9 +10271,15 @@ def notifications_unread_status():
 @app.route('/admin/damaged_items')
 def admin_damaged_items():
     """Dedicated admin management window for damaged items."""
-    if 'username' not in session or not us.check_admin(session['username']):
+    if 'username' not in session:
         flash('Administratorrechte erforderlich.', 'error')
         return redirect(url_for('login'))
+
+    permissions = _get_current_user_permissions()
+    if not _action_access_allowed(permissions, 'can_manage_settings'):
+        flash('Sie haben keine Berechtigung, die Schulstammdaten zu ändern.', 'error')
+        if cfg.MODULES.is_enabled('library'):
+            return redirect(url_for('library_admin'))
 
     client = None
     try:
