@@ -772,16 +772,34 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
             echo "Warning: tenant '$TENANT_ID' was not found in config.json."
         fi
 
+        # 2. Dann die Datenbank via Container hart über PyMongo löschen
         if [ -n "$APP_CONTAINER" ]; then
             docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
-import sys
+import sys, re
 sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/Web')
-from tenant import delete_tenant
+from Web.modules.database import settings
+from pymongo import MongoClient
 
-tenant_id = sys.argv[1]
-if not delete_tenant(tenant_id):
-    print(f'Error: failed to delete tenant {tenant_id} database', file=sys.stderr)
+tenant_id = sys.argv[1].lower()
+# Den genauen Datenbanknamen rekonstruieren (wie beim 'add' Befehl)
+sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
+db_name = f"inventar_{sanitized}"
+
+try:
+    # Direkte Verbindung zur Datenbank herstellen und komplett löschen
+    client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
+    client.drop_database(db_name)
+    print(f"MongoDB database '{db_name}' dropped successfully.")
+except Exception as e:
+    print(f"Warning: Could not drop database '{db_name}': {e}", file=sys.stderr)
+
+# Fallback: Die interne Funktion trotzdem aufrufen, falls sie noch Ordner/Dateien bereinigt
+try:
+    from tenant import delete_tenant
+    delete_tenant(sys.argv[1])
+except Exception:
+    pass
 PY
             echo "Tenant '$TENANT_ID' database and config removed."
         else
