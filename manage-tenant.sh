@@ -524,6 +524,8 @@ remove_runtime_port() {
     local port_list=()
     local new_ports=()
     local first_port=""
+    local ports_csv=""
+
 
     if [ ! -f "$env_file" ]; then
         return 0
@@ -551,7 +553,8 @@ remove_runtime_port() {
     fi
 
     first_port="${new_ports[0]}"
-    local ports_csv="$(IFS=,; echo "${new_ports[*]}")"
+    # Das 'local' hier entfernen, da wir es oben deklariert haben:
+    ports_csv="$(IFS=,; echo "${new_ports[*]}")"
 
     if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
         sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
@@ -762,33 +765,27 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         echo "Removing tenant '$TENANT_ID'..."
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         port_to_remove=""
+        
+        if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
+            : 
+        else
+            echo "Warning: tenant '$TENANT_ID' was not found in config.json."
+        fi
+
         if [ -n "$APP_CONTAINER" ]; then
-            port_to_remove="$(docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
+            docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
 import sys
 sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/Web')
-from tenant import delete_tenant, get_tenant_config
+from tenant import delete_tenant
 
 tenant_id = sys.argv[1]
-tenant_cfg = get_tenant_config(tenant_id)
-port = tenant_cfg.get('port')
-
 if not delete_tenant(tenant_id):
-    print(f'Error: failed to delete tenant {tenant_id}', file=sys.stderr)
-    sys.exit(1)
-
-if port is not None:
-    print(port)
+    print(f'Error: failed to delete tenant {tenant_id} database', file=sys.stderr)
 PY
-            )"
             echo "Tenant '$TENANT_ID' database and config removed."
         else
             echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
-            if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
-                :
-            else
-                echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
-            fi
         fi
 
         if [ -n "$port_to_remove" ]; then
@@ -798,6 +795,7 @@ PY
         if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
             restart_app_container
         fi
+        
         if [ -n "$port_to_remove" ]; then
             echo "Removed tenant '$TENANT_ID' and cleaned runtime port $port_to_remove."
         else
