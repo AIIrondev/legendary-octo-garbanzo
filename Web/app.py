@@ -10275,12 +10275,14 @@ def admin_damaged_items():
         flash('Administratorrechte erforderlich.', 'error')
         return redirect(url_for('login'))
 
+    '''
     permissions = _get_current_user_permissions()
     if not _action_access_allowed(permissions, 'can_manage_settings'):
         flash('Sie haben keine Berechtigung, die Schulstammdaten zu ändern.', 'error')
         if cfg.MODULES.is_enabled('library'):
             return redirect(url_for('library_admin'))
-
+    '''
+            
     client = None
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
