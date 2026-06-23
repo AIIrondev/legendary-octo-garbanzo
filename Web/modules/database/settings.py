@@ -284,7 +284,6 @@ def _match_inventory(path):
     if path == '/' or path.startswith('/home'): return True
     return path.startswith(('/scanner', '/inventory', '/upload_admin', '/manage_filters', '/manage_locations', '/admin_borrowings', '/admin_damaged_items', '/admin/borrowings', '/admin/damaged_items'))
 
-
 def _match_terminplan(path):
     if not path:
         return False
@@ -292,7 +291,7 @@ def _match_terminplan(path):
 
 def _match_library(path):
     if not path: return False
-    return path.startswith(('/library', '/library_', '/student_cards'))
+    return path.startswith(('/library', '/library_', '/student_cards', '/admin_damaged_items', '/admin_borrowings', '/admin/library'))
 
 def _match_student_cards(path):
     if not path: return False
