@@ -103,53 +103,6 @@ PY
     fi
 }
 
-register_tenant_port() {
-    local tenant_id="$1"
-    local port="$2"
-
-    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port"
-import json, sys, os
-path, tenant_id, port_str = sys.argv[1], sys.argv[2], sys.argv[3]
-if not os.path.isfile(path):
-    print(f"Error: config file not found: {path}", file=sys.stderr)
-    sys.exit(1)
-with open(path, 'r', encoding='utf-8') as f:
-    cfg = json.load(f)
-tenants = cfg.get('tenants')
-if tenants is None or not isinstance(tenants, dict):
-    tenants = {}
-aliases = {tenant_id}
-normalized = tenant_id.lower()
-if normalized.startswith('schule'):
-    aliases.add('school' + normalized[len('schule'):])
-elif normalized.startswith('school'):
-    aliases.add('schule' + normalized[len('school'):])
-for tid, conf in tenants.items():
-    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
-        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
-        sys.exit(2)
-existing = {}
-for alias in aliases:
-    alias_cfg = tenants.get(alias)
-    if isinstance(alias_cfg, dict):
-        existing = alias_cfg
-        break
-existing['port'] = int(port_str)
-for alias in aliases:
-    tenants[alias] = dict(existing)
-cfg['tenants'] = tenants
-with open(path, 'w', encoding='utf-8') as f:
-    json.dump(cfg, f, indent=4, ensure_ascii=False)
-print(f"Registered tenant port {port_str} for {tenant_id}")
-PY
-    then
-        echo "Tenant $tenant_id port $port registered in config.json"
-    else
-        echo "Failed to register tenant port $port for $tenant_id"
-        exit 1
-    fi
-}
-
 write_trial_tenant_config() {
     local tenant_id="$1"
     local port="$2"
@@ -566,6 +519,53 @@ remove_runtime_port() {
         sed -i "s|^INVENTAR_HTTP_PORT=.*|INVENTAR_HTTP_PORT=$first_port|" "$env_file"
     else
         printf '\nINVENTAR_HTTP_PORT=%s\n' "$first_port" >> "$env_file"
+    fi
+}
+
+register_tenant_port() {
+    local tenant_id="$1"
+    local port="$2"
+
+    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port"
+import json, sys, os
+path, tenant_id, port_str = sys.argv[1], sys.argv[2], sys.argv[3]
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants')
+if tenants is None or not isinstance(tenants, dict):
+    tenants = {}
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
+for tid, conf in tenants.items():
+    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
+        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
+        sys.exit(2)
+existing = {}
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        existing = alias_cfg
+        break
+existing['port'] = int(port_str)
+for alias in aliases:
+    tenants[alias] = dict(existing)
+cfg['tenants'] = tenants
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+print(f"Registered tenant port {port_str} for {tenant_id}")
+PY
+    then
+        echo "Tenant $tenant_id port $port registered in config.json"
+    else
+        echo "Failed to register tenant port $port for $tenant_id"
+        exit 1
     fi
 }
 
