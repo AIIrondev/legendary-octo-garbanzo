@@ -1,27 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 IFS=$'\n\t'
-
-# Skript zur Verwaltung von Multitenant-Deployments
+# Script to manage multitenant deployment
+# Allows adding, removing, and restarting tenants without downtime for others
 
 if [ ! -f "docker-compose-multitenant.yml" ]; then
     echo "Error: docker-compose-multitenant.yml not found."
     exit 1
 fi
 
+# Resolve script directory so config paths are deterministic even when called via sudo
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 
-# === HILFSFUNKTIONEN ===
-
 ensure_runtime_config_json() {
-    local config_path="$CONFIG_FILE"
-    local backup_path
+    local config_path backup_path
+    config_path="$CONFIG_FILE"
+
     if [ -d "$config_path" ]; then
         backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
         mv "$config_path" "$backup_path"
         echo "Warning: moved unexpected directory $config_path to $backup_path"
     fi
+
     if [ ! -f "$config_path" ]; then
         cat > "$config_path" <<'EOF'
 {
@@ -29,6 +30,7 @@ ensure_runtime_config_json() {
     "tenants": {}
 }
 EOF
+        echo "Created default config.json"
     fi
 }
 
