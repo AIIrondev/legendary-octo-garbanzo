@@ -1,92 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 IFS=$'\n\t'
-# Script to manage multitenant deployment
-# Allows adding, removing, and restarting tenants without downtime for others
+
+# Skript zur Verwaltung von Multitenant-Deployments
 
 if [ ! -f "docker-compose-multitenant.yml" ]; then
     echo "Error: docker-compose-multitenant.yml not found."
     exit 1
 fi
 
-# Resolve script directory so config paths are deterministic even when called via sudo
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 
-ensure_runtime_config_json() {
-    local config_path backup_path
-    config_path="$CONFIG_FILE"
+# === HILFSFUNKTIONEN ===
 
+ensure_runtime_config_json() {
+    local config_path="$CONFIG_FILE"
+    local backup_path
     if [ -d "$config_path" ]; then
         backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
         mv "$config_path" "$backup_path"
         echo "Warning: moved unexpected directory $config_path to $backup_path"
     fi
-
-        FORCE_REMOVE=false
-        if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then
-            FORCE_REMOVE=true
-            TENANT_ID="${3:-}"
-        fi
-
-        if [ -z "$TENANT_ID" ]; then
+    if [ ! -f "$config_path" ]; then
         cat > "$config_path" <<'EOF'
 {
     "ver": "2.6.5",
+    "tenants": {}
+}
+EOF
+    fi
+}
 
-        if [ "$FORCE_REMOVE" != true ]; then
-            echo -n "WARNING: Are you sure you want to permanently delete all data for tenant '$TENANT_ID'? (y/N) "
-            read confirm
-            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-                echo "Removal canceled."
-                exit 0
-            fi
-        fi
-
-        echo "Removing tenant '$TENANT_ID'..."
-        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
-        port_to_remove=""
-        if [ -n "$APP_CONTAINER" ]; then
-            port_to_remove="$({ docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
-import sys
-sys.path.insert(0, '/app')
-sys.path.insert(0, '/app/Web')
-from tenant import delete_tenant, get_tenant_config
-
-tenant_id = sys.argv[1]
-tenant_cfg = get_tenant_config(tenant_id)
-port = tenant_cfg.get('port')
-
-if not delete_tenant(tenant_id):
-    print(f'Error: failed to delete tenant {tenant_id}', file=sys.stderr)
-    sys.exit(1)
-
-if port is not None:
-    print(port)
-PY
-            } 2>/dev/null)"
-            echo "Tenant '$TENANT_ID' database and config removed."
-        else
-            echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
-            if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
-                :
-            else
-                echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
-            fi
-        fi
-
-        if [ -n "$port_to_remove" ]; then
-            remove_runtime_port "$port_to_remove"
-        fi
-        sync_tenant_port_map
-        if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
-            restart_app_container
-        fi
-        if [ -n "$port_to_remove" ]; then
-            echo "Removed tenant '$TENANT_ID' and cleaned runtime port $port_to_remove."
-        else
-            echo "Removed tenant '$TENANT_ID'. No port mapping was present."
-        fi
+get_tenant_aliases() {
+    local tenant_id="$1"
     local normalized alias
     normalized="$(printf '%s' "$tenant_id" | tr '[:upper:]' '[:lower:]')"
     printf '%s\n' "$tenant_id"
@@ -100,6 +47,53 @@ PY
         if [[ "$alias" != "$tenant_id" ]]; then
             printf '%s\n' "$alias"
         fi
+    fi
+}
+
+register_tenant_port() {
+    local tenant_id="$1"
+    local port="$2"
+
+    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port"
+import json, sys, os
+path, tenant_id, port_str = sys.argv[1], sys.argv[2], sys.argv[3]
+if not os.path.isfile(path):
+    print(f"Error: config file not found: {path}", file=sys.stderr)
+    sys.exit(1)
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+tenants = cfg.get('tenants')
+if tenants is None or not isinstance(tenants, dict):
+    tenants = {}
+aliases = {tenant_id}
+normalized = tenant_id.lower()
+if normalized.startswith('schule'):
+    aliases.add('school' + normalized[len('schule'):])
+elif normalized.startswith('school'):
+    aliases.add('schule' + normalized[len('school'):])
+for tid, conf in tenants.items():
+    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
+        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
+        sys.exit(2)
+existing = {}
+for alias in aliases:
+    alias_cfg = tenants.get(alias)
+    if isinstance(alias_cfg, dict):
+        existing = alias_cfg
+        break
+existing['port'] = int(port_str)
+for alias in aliases:
+    tenants[alias] = dict(existing)
+cfg['tenants'] = tenants
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=4, ensure_ascii=False)
+print(f"Registered tenant port {port_str} for {tenant_id}")
+PY
+    then
+        echo "Tenant $tenant_id port $port registered in config.json"
+    else
+        echo "Failed to register tenant port $port for $tenant_id"
+        exit 1
     fi
 }
 
@@ -165,7 +159,7 @@ existing['modules'] = {
     'inventory': {'enabled': True},
     'library': {'enabled': True},
     'student_cards': {'enabled': True, 'default_borrow_days': 14, 'max_borrow_days': 365},
-        'terminplan': {'enabled': True},
+    'terminplan': {'enabled': True},
     'mail': {'enabled': True},
 }
 existing['trial'] = trial_config
@@ -211,7 +205,7 @@ sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
 db_name = f"inventar_{sanitized}"
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[db_name]
-hashed_pw = hashlib.scrypt('admin123'.encode(), salt=b'some_salt', n=16384, r=8, p=1).hex()
+hashed_pw = hashlib.scrypt("admin123".encode(), salt=b"some_salt", n=16384, r=8, p=1).hex()
 
 action_permissions = {
     "can_borrow": True,
@@ -388,7 +382,6 @@ restart_app_container() {
 
     ensure_runtime_config_json
     
-    # If HOST_WORKDIR is set (called from container), use absolute paths so docker daemon resolves them correctly
     if [ -n "${HOST_WORKDIR:-}" ]; then
         workdir="$HOST_WORKDIR"
         compose_args+=( -f "$(readlink -f "$HOST_WORKDIR/docker-compose-multitenant.yml")" )
@@ -399,7 +392,6 @@ restart_app_container() {
             compose_args+=( --env-file "$(readlink -f "$HOST_WORKDIR/.docker-build.env")" )
         fi
     else
-        # Normal case: called directly from host
         compose_args+=( -f "$workdir/docker-compose-multitenant.yml" )
         if [ -f "$workdir/.docker-compose.runtime.override.yml" ]; then
             compose_args+=( -f "$workdir/.docker-compose.runtime.override.yml" )
@@ -409,7 +401,6 @@ restart_app_container() {
         fi
     fi
     
-    # Pass along COMPOSE_PROJECT_NAME if set so the internal docker-compose sees it
     if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
         compose_args=( -p "$COMPOSE_PROJECT_NAME" "${compose_args[@]}" )
     fi
@@ -477,8 +468,6 @@ remove_runtime_port() {
     local port_list=()
     local new_ports=()
     local first_port=""
-    local ports_csv=""
-
 
     if [ ! -f "$env_file" ]; then
         return 0
@@ -506,8 +495,7 @@ remove_runtime_port() {
     fi
 
     first_port="${new_ports[0]}"
-    # Das 'local' hier entfernen, da wir es oben deklariert haben:
-    ports_csv="$(IFS=,; echo "${new_ports[*]}")"
+    local ports_csv="$(IFS=,; echo "${new_ports[*]}")"
 
     if grep -q '^INVENTAR_HTTP_PORTS=' "$env_file" 2>/dev/null; then
         sed -i "s|^INVENTAR_HTTP_PORTS=.*|INVENTAR_HTTP_PORTS=$ports_csv|" "$env_file"
@@ -522,120 +510,83 @@ remove_runtime_port() {
     fi
 }
 
-register_tenant_port() {
-    local tenant_id="$1"
-    local port="$2"
-
-    if python3 - <<'PY' "$CONFIG_FILE" "$tenant_id" "$port"
-import json, sys, os
-path, tenant_id, port_str = sys.argv[1], sys.argv[2], sys.argv[3]
-if not os.path.isfile(path):
-    print(f"Error: config file not found: {path}", file=sys.stderr)
-    sys.exit(1)
-with open(path, 'r', encoding='utf-8') as f:
-    cfg = json.load(f)
-tenants = cfg.get('tenants')
-if tenants is None or not isinstance(tenants, dict):
-    tenants = {}
-aliases = {tenant_id}
-normalized = tenant_id.lower()
-if normalized.startswith('schule'):
-    aliases.add('school' + normalized[len('schule'):])
-elif normalized.startswith('school'):
-    aliases.add('schule' + normalized[len('school'):])
-for tid, conf in tenants.items():
-    if isinstance(conf, dict) and str(conf.get('port')) == port_str and tid not in aliases:
-        print(f"Error: port {port_str} is already mapped to tenant {tid}", file=sys.stderr)
-        sys.exit(2)
-existing = {}
-for alias in aliases:
-    alias_cfg = tenants.get(alias)
-    if isinstance(alias_cfg, dict):
-        existing = alias_cfg
-        break
-existing['port'] = int(port_str)
-for alias in aliases:
-    tenants[alias] = dict(existing)
-cfg['tenants'] = tenants
-with open(path, 'w', encoding='utf-8') as f:
-    json.dump(cfg, f, indent=4, ensure_ascii=False)
-print(f"Registered tenant port {port_str} for {tenant_id}")
-PY
-    then
-        echo "Tenant $tenant_id port $port registered in config.json"
-    else
-        echo "Failed to register tenant port $port for $tenant_id"
-        exit 1
-    fi
-}
-
 show_help() {
-    local script_name
-    script_name="$(basename "$0")"
+    local HEADER='\033[95m'
+    local BLUE='\033[94m'
+    local GREEN='\033[92m'
+    local YELLOW='\033[93m'
+    local RED='\033[91m'
+    local BOLD='\033[1m'
+    local RESET='\033[0m'
 
-    echo "=== MULTI-TENANT INVENTAR MANAGER ==="
-    echo ""
-    echo "NUTZUNG:"
-    echo "  ./$script_name <befehl> [tenant_id] [optionen]"
-    echo ""
-    echo "VERFÜGBARE BEFEHLE:"
-    echo "  add <tenant_id> [port]"
-    echo "      Legt einen neuen Tenant an, registriert den Port und initialisiert"
-    echo "      die MongoDB-Datenbank mit einem Standard-Admin (admin / admin123)."
-    echo ""
-    echo "  trial <tenant_id> [port] [tage]"
-    echo "      Erstellt einen temporären Test-Tenant (Standardlaufzeit: 7 Tage)."
-    echo "      Dieser läuft nach der festgelegten Zeit ab und wird automatisch gelöscht."
-    echo ""
-    echo "  remove [-y|--yes] <tenant_id>"
-    echo "      Löscht einen Tenant komplett (Konfiguration, Ports und Datenbank)."
-    echo "      Nutze -y oder --yes, um die Bestätigungsabfrage zu überspringen."
-    echo ""
-    echo "  restart-tenant <tenant_id>"
-    echo "      Startet einen spezifischen Tenant neu, indem alle aktiven Sessions"
-    echo "      und der Cache in der MongoDB geleert werden (Sitzungs-Reset)."
-    echo ""
-    echo "  restart-all"
-    echo "      Führt einen Zero-Downtime Rolling-Restart für alle App-Container durch."
-    echo ""
-    echo "  list"
-    echo "      Listet alle registrierten Tenants (aus der config.json) sowie alle"
-    echo "      aktiven Tenant-Datenbanken (aus der MongoDB) übersichtlich auf."
-    echo ""
-    echo "  module <tenant_id> <modulname>=<on|off> [...]"
-    echo "      Aktiviert oder deaktiviert bestimmte Features/Module für einen Tenant."
-    echo "      Es können mehrere Module gleichzeitig konfiguriert werden."
-    echo ""
-    echo "GLOBALE OPTIONEN:"
-    echo "  -h, --help"
-    echo "      Zeigt dieses Hilfemenü an."
-    echo ""
-    echo "BEISPIELE:"
-    echo "  ./$script_name add schule_muenchen 8081"
-    echo "  ./$script_name trial test_user 8082 14"
-    echo "  ./$script_name module schule_muenchen inventory=on mail=off"
-    echo "  ./$script_name remove --yes test_user"
-    echo ""
+    cat << EOF
+
+${HEADER}${BOLD}=== MULTI-TENANT INVENTAR MANAGER ===${RESET}
+${YELLOW}Nutzung:${RESET} $0 <befehl> [tenant_id] [optionen]
+
+${BLUE}${BOLD}VERFÜGBARE BEFEHLE:${RESET}
+  ${GREEN}add${RESET} <tenant_id> [port]
+    Legt einen neuen Tenant an, registriert den Port und initialisiert 
+    die MongoDB-Datenbank mit einem Standard-Admin (${YELLOW}admin / admin123${RESET}).
+
+  ${GREEN}trial${RESET} <tenant_id> [port] [tage]
+    Erstellt einen temporären Test-Tenant. Standardlaufzeit: 7 Tage.
+    Läuft automatisch ab und löscht sich selbst.
+
+  ${GREEN}remove${RESET} [-y|--yes] <tenant_id>
+    Löscht einen Tenant, seine Konfiguration, Ports und die Datenbank.
+    Nutze ${RED}-y${RESET}, um die Bestätigungsabfrage zu überspringen.
+
+  ${GREEN}restart-tenant${RESET} <tenant_id>
+    Startet einen spezifischen Tenant neu, indem alle aktiven Sessions 
+    und der Cache in der MongoDB geleert werden (Sitzungs-Reset).
+
+  ${GREEN}restart-all${RESET}
+    Führt einen Zero-Downtime Rolling-Restart für alle App-Container durch.
+
+  ${GREEN}list${RESET}
+    Listet alle registrierten Tenants aus der 'config.json' sowie alle 
+    aktiven Tenant-Datenbanken aus der MongoDB auf.
+
+  ${GREEN}module${RESET} <tenant_id> <modulname>=<on|off> ...
+    Aktiviert oder deaktiviert bestimmte Features/Module für einen Tenant.
+    Es können mehrere Module gleichzeitig übergeben werden.
+
+${BLUE}${BOLD}GLOBALE OPTIONEN:${RESET}
+  ${GREEN}-h, --help${RESET}
+    Zeigt diese Hilfe an.
+
+${YELLOW}Beispiele:${RESET}
+  $0 add schule_muenchen 8081
+  $0 trial test_user 8082 14
+  $0 module schule_muenchen barre_code=on leih_historie=off
+  $0 remove -y test_user
+
+-----------------------------------------------------------------
+EOF
 }
 
 if [ -z "${1:-}" ]; then
     show_help
+    exit 0
 fi
 
 COMMAND="$1"
-TENANT_ID="${2:-}"
+
+# === MAIN ROUTING BLOCK ===
 
 case "$COMMAND" in
     -h|--help)
         show_help
         ;;
     add)
+        TENANT_ID="${2:-}"
         if [ -z "$TENANT_ID" ]; then
             echo "Error: Please provide a tenant_id."
             exit 1
         fi
 
-        PORT_ARG="$3"
+        PORT_ARG="${3:-}"
         if [ -n "$PORT_ARG" ]; then
             if ! printf '%s\n' "$PORT_ARG" | grep -qE '^[0-9]+$'; then
                 echo "Error: Port must be a numeric value."
@@ -650,68 +601,13 @@ case "$COMMAND" in
         fi
 
         echo "Adding new tenant '$TENANT_ID'..."
-        # Initialize tenant database via Python inside container
         echo "Initializing database for $TENANT_ID..."
-        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
-        if [ -n "$APP_CONTAINER" ]; then
-            docker exec $APP_CONTAINER python3 -c "
-import sys, re; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from Web.modules.database import settings; from pymongo import MongoClient; import hashlib
-tenant_id = sys.argv[1].lower()
-sanitized = ''.join(c for c in tenant_id if c.isalnum() or c == '_')
-db_name = f'inventar_{sanitized}'
-client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
-db = client[db_name]
-hashed_pw = hashlib.scrypt('admin123'.encode(), salt=b'some_salt', n=16384, r=8, p=1).hex()
-if db.users.count_documents({'Username': 'admin'}) == 0:
-    db.users.insert_one({
-        'Username': 'admin',
-        'Password': hashed_pw,
-        'Admin': True,
-        'active_ausleihung': None,
-        'name': 'Admin',
-        'last_name': 'User',
-        'IsStudent': False,
-        'PermissionPreset': 'full_access',
-        'ActionPermissions': {
-            'can_borrow': True,
-            'can_insert': True,
-            'can_edit': True,
-            'can_delete': True,
-            'can_manage_users': True,
-            'can_manage_settings': True,
-            'can_view_logs': True,
-        },
-        'PagePermissions': {
-            'home': True,
-            'tutorial_page': True,
-            'my_borrowed_items': True,
-            'notifications_view': True,
-            'impressum': True,
-            'license': True,
-            'library_view': True,
-            'terminplan': True,
-            'home_admin': True,
-            'upload_admin': True,
-            'library_admin': True,
-            'admin_borrowings': True,
-            'library_loans_admin': True,
-            'admin_damaged_items': True,
-            'admin_audit_dashboard': True,
-            'logs': True,
-            'manage_filters': True,
-            'manage_locations': True,
-        },
-    })
-print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin123')
-" "$TENANT_ID"
-            echo "Tenant '$TENANT_ID' successfully added. Ready to use."
-        else
-            echo "Warning: Application container is not running. Please start the multi-tenant system first."
-            echo "Data will be initialized upon first access by the tenant."
-        fi
+        initialize_tenant_database "$TENANT_ID" "standard"
+        echo "Tenant '$TENANT_ID' successfully added. Ready to use."
         ;;
 
     trial)
+        TENANT_ID="${2:-}"
         if [ -z "$TENANT_ID" ]; then
             echo "Error: Please provide a tenant_id."
             exit 1
@@ -742,10 +638,14 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         ;;
     
     remove)
-        FORCE_REMOVE=true
-        if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then
+        FORCE_REMOVE=false
+        TENANT_ARG="${2:-}"
+        
+        if [ "$TENANT_ARG" = "--yes" ] || [ "$TENANT_ARG" = "-y" ]; then
             FORCE_REMOVE=true
             TENANT_ID="${3:-}"
+        else
+            TENANT_ID="$TENANT_ARG"
         fi
 
         if [ -z "$TENANT_ID" ]; then
@@ -766,44 +666,47 @@ print(f'Tenant {sys.argv[1]} database initialized. Default admin: admin / admin1
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         port_to_remove=""
         
-        if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
-            : 
-        else
-            echo "Warning: tenant '$TENANT_ID' was not found in config.json."
-        fi
-
-        # 2. Dann die Datenbank via Container hart über PyMongo löschen
         if [ -n "$APP_CONTAINER" ]; then
-            docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
+            # Zuerst die Datenbank via PyMongo hart droppen (Erzwungenes Löschen)
+            port_to_remove="$(docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" <<'PY'
 import sys, re
 sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/Web')
+from tenant import delete_tenant, get_tenant_config
 from Web.modules.database import settings
 from pymongo import MongoClient
 
-tenant_id = sys.argv[1].lower()
-# Den genauen Datenbanknamen rekonstruieren (wie beim 'add' Befehl)
+tenant_id = sys.argv[1]
+tenant_cfg = get_tenant_config(tenant_id)
+port = tenant_cfg.get('port')
+
+# Datenbanknamen exakt rekonstruieren
 sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
 db_name = f"inventar_{sanitized}"
 
 try:
-    # Direkte Verbindung zur Datenbank herstellen und komplett löschen
     client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
     client.drop_database(db_name)
-    print(f"MongoDB database '{db_name}' dropped successfully.")
+    print(f"MongoDB database '{db_name}' dropped successfully.", file=sys.stderr)
 except Exception as e:
     print(f"Warning: Could not drop database '{db_name}': {e}", file=sys.stderr)
 
-# Fallback: Die interne Funktion trotzdem aufrufen, falls sie noch Ordner/Dateien bereinigt
-try:
-    from tenant import delete_tenant
-    delete_tenant(sys.argv[1])
-except Exception:
-    pass
+if not delete_tenant(tenant_id):
+    print(f'Error: failed to delete tenant {tenant_id}', file=sys.stderr)
+    sys.exit(1)
+
+if port is not None:
+    print(port)
 PY
+            )"
             echo "Tenant '$TENANT_ID' database and config removed."
         else
             echo "Warning: Application container not running. Tenant database may still exist in MongoDB."
+            if port_to_remove="$(remove_tenant_port "$TENANT_ID" 2>/dev/null)"; then
+                :
+            else
+                echo "Warning: tenant '$TENANT_ID' was not configured in config.json or could not be removed."
+            fi
         fi
 
         if [ -n "$port_to_remove" ]; then
@@ -813,7 +716,6 @@ PY
         if [ -n "$(docker ps -qf 'name=app' | head -n 1)" ]; then
             restart_app_container
         fi
-        
         if [ -n "$port_to_remove" ]; then
             echo "Removed tenant '$TENANT_ID' and cleaned runtime port $port_to_remove."
         else
@@ -822,20 +724,19 @@ PY
         ;;
 
     restart-tenant)
+        TENANT_ID="${2:-}"
         if [ -z "$TENANT_ID" ]; then
             echo "Error: Please provide a tenant_id."
             exit 1
         fi
         echo "Restarting tenant '$TENANT_ID' (clearing session/cache)..."
-        # To restart a single tenant without restarting the global python processes,
-        # we can invalidate their cache or drop their sessions collection to sign everyone out
         APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
         if [ -n "$APP_CONTAINER" ]; then
             docker exec $APP_CONTAINER python3 -c "
 import sys; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from Web.modules.database import settings; from pymongo import MongoClient
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[f'{settings.MONGODB_DB}_{sys.argv[1]}']
-db.sessions.drop() # Force sign-out / session clear
+db.sessions.drop()
 print(f'Tenant {sys.argv[1]} session cache cleared. Tenant restarted.')
 " "$TENANT_ID"
             echo "Tenant '$TENANT_ID' has been refreshed without impacting others."
@@ -898,12 +799,12 @@ PY
         ;;
 
     module)
+        TENANT_ID="${2:-}"
         if [ -z "$TENANT_ID" ] || [ -z "${3:-}" ]; then
             echo "Error: Usage: manage-tenant.sh module <tenant_id> <module_name>=<on|off> [...]"
             exit 1
         fi
         
-        # Pass all remaining arguments to python script
         shift 2
         
         if python3 - "$CONFIG_FILE" "$TENANT_ID" "$@" <<'PY'
