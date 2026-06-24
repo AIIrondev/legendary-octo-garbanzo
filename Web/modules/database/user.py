@@ -20,6 +20,8 @@ import string
 from bson.objectid import ObjectId
 import Web.modules.database.settings as cfg
 from Web.modules.database.settings import MongoClient
+import hmac
+import os
 
 logger = logging.getLogger('app')
 logger.setLevel(logging.DEBUG)
@@ -430,104 +432,84 @@ def check_password_strength(password):
     return True
 
 
-def hashing(password):
+def hashing(password, salt=None):
     """
-    Hash a password using scrypt.
+    Hasht ein Passwort mit scrypt. 
+    - Wenn kein Salt übergeben wird, wird ein sicherer, zufälliger Salt generiert (für neue Passwörter).
+    - Format für neue Hashes: v1$<salt_hex>$<hash_hex>
+    """
+    password_bytes = password.encode('utf-8') # Explizit UTF-8 für Plattformunabhängigkeit
     
-    Args:
-        password (str): Password to hash
-        
-    Returns:
-        str: Hexadecimal digest of the hashed password
+    if salt is None:
+        # Neuer Benutzer / Passwortänderung -> Dynamischer Salt
+        random_salt = os.urandom(16)
+        hashed = hashlib.scrypt(password_bytes, salt=random_salt, n=16384, r=8, p=1)
+        return f"v1${random_salt.hex()}${hashed.hex()}"
+    else:
+        # Bestehender Benutzer (wird zur Verifizierung aufgerufen)
+        hashed = hashlib.scrypt(password_bytes, salt=salt, n=16384, r=8, p=1)
+        return hashed.hex()
+
+
+def verify_password(provided_password, stored_password_string):
     """
-    hashed = hashlib.scrypt(password.encode(), salt=b'some_salt', n=16384, r=8, p=1)
-    return hashed.hex()
+    Verifiziert ein Passwort gegen einen gespeicherten Hash-String.
+    Unterstützt das alte Format (statischer Salt) und das neue Format (v1$...).
+    """
+    if not stored_password_string:
+        return False
+
+    # Überprüfung für das neue, sichere Format
+    if stored_password_string.startswith("v1$"):
+        try:
+            _, salt_hex, hash_hex = stored_password_string.split("$")
+            salt_bytes = bytes.fromhex(salt_hex)
+            # Berechne den Hash des eingegebenen Passworts mit dem extrahierten Salt
+            calculated_hash = hashing(provided_password, salt=salt_bytes)
+            # Timing-Attack-sicherer Vergleich
+            return hmac.compare_digest(calculated_hash, hash_hex)
+        except (ValueError, TypeError):
+            logger.error("Ungültiges Hash-Format in der Datenbank entdeckt.")
+            return False
+    else:
+        # Abwärtskompatibilität: Altes Format mit statischem Salt b'some_salt'
+        old_static_salt = b'some_salt'
+        calculated_hash = hashing(provided_password, salt=old_static_salt)
+        return hmac.compare_digest(calculated_hash, stored_password_string)
 
 
 def check_nm_pwd(username, password):
     """
-    Verify username and password combination.
-    
-    Args:
-        username (str): Username to check
-        password (str): Password to verify
-        
-    Returns:
-        dict: User document if credentials are valid, None otherwise
+    Überprüft die Kombination aus Benutzername und Passwort (optimiert).
     """
     db_name, tenant_id = _resolve_request_tenant_db()
-    ctx = None
-    try:
-        from tenant import get_tenant_context
-        ctx = get_tenant_context()
-    except Exception:
-        ctx = None
-
     if not db_name:
         if _has_tenant_configs():
-            logger.warning(
-                "Refusing default DB fallback for login because tenant configs exist and no tenant was resolved."
-            )
+            logger.warning("Default DB fallback verweigert, da Tenant-Konfigurationen existieren.")
             return None
         db_name = cfg.MONGODB_DB
 
-    logger.info(
-        "check_nm_pwd start: username=%r tenant=%r db=%r host=%r port=%r uri=%r",
-        username,
-        tenant_id,
-        db_name,
-        cfg.MONGODB_HOST,
-        cfg.MONGODB_PORT,
-        getattr(cfg, 'MONGODB_URI', None),
-    )
-
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
     try:
-        hashed_password = hashing(password)
-        logger.info("check_nm_pwd password hash for username=%r: %s", username, hashed_password)
-        available_dbs = []
-        try:
-            available_dbs = client.list_database_names()
-            logger.debug("MongoDB connected. Available databases=%s", available_dbs)
-        except Exception as exc:
-            logger.exception("Unable to list MongoDB databases: %s", exc)
-
         db = client[db_name]
-        try:
-            existing_collections = db.list_collection_names()
-        except Exception as exc:
-            logger.exception("Unable to list collections for db=%r: %s", db_name, exc)
-            existing_collections = []
-        logger.debug("Tenant db=%r collections=%s", db_name, existing_collections)
-
         users = db['users']
+        
         query = {'$or': [{'Username': username}, {'username': username}]}
-        logger.debug("Running user lookup on %r: %s", db_name, query)
         user_record = users.find_one(query)
 
         if user_record is None:
-            logger.warning("No user document found in db=%r for username=%r", db_name, username)
-            if db_name not in available_dbs:
-                logger.warning("Tenant database %r is missing from available MongoDB databases", db_name)
-            if 'users' not in existing_collections:
-                logger.warning("Tenant database %r has no users collection", db_name)
+            logger.warning("Kein Benutzer für %r in DB %r gefunden.", username, db_name)
             return None
 
-        logger.info("Found user document for username=%r in db=%r: %s", username, db_name, user_record)
         stored_password = user_record.get('Password') or user_record.get('password')
-        if stored_password is None:
-            logger.warning("User document for username=%r in db=%r has no password field", username, db_name)
+        
+        if not verify_password(password, stored_password):
+            logger.warning("Falsches Passwort für Benutzer %r in DB %r.", username, db_name)
             return None
 
-        if stored_password != hashed_password:
-            logger.warning(
-                "Password mismatch for username=%r in db=%r: provided_hash=%s stored_hash=%s",
-                username,
-                db_name,
-                hashed_password,
-                stored_password,
-            )
-            return None
+        # Automatische Migration alter Hashes auf das neue Format
+        if not stored_password.startswith("v1$"):
+            users.update_one({'_id': user_record['_id']}, {'$set': {'Password': hashing(password)}})
 
         return user_record
     finally:
@@ -557,44 +539,46 @@ def add_user(
         bool: True if user was added successfully, False if password was too weak
     """
     client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
-    db = _get_tenant_db(client)
-    users = db['users']
-    if not check_password_strength(password):
-        return False
-    permission_defaults = build_default_permission_payload(permission_preset)
-    if isinstance(action_permissions, dict):
-        for key, value in action_permissions.items():
-            permission_defaults['actions'][str(key)] = bool(value)
-    if isinstance(page_permissions, dict):
-        for key, value in page_permissions.items():
-            permission_defaults['pages'][str(key)] = bool(value)
+    try:
+        db = _get_tenant_db(client)
+        users = db['users']
+        if not check_password_strength(password):
+            return False
+        permission_defaults = build_default_permission_payload(permission_preset)
+        if isinstance(action_permissions, dict):
+            for key, value in action_permissions.items():
+                permission_defaults['actions'][str(key)] = bool(value)
+        if isinstance(page_permissions, dict):
+            for key, value in page_permissions.items():
+                permission_defaults['pages'][str(key)] = bool(value)
 
-    user_doc = {
-        'Username': username,
-        'Password': hashing(password),
-        'Admin': False,
-        'active_ausleihung': None,
-        'name': name.strip() if name else '',
-        'last_name': last_name.strip() if last_name else '',
-        'IsStudent': bool(is_student),
-        'PermissionPreset': permission_defaults['preset'],
-        'ActionPermissions': permission_defaults['actions'],
-        'PagePermissions': permission_defaults['pages'],
-    }
+        user_doc = {
+            'Username': username,
+            'Password': hashing(password),
+            'Admin': False,
+            'active_ausleihung': None,
+            'name': name.strip() if name else '',
+            'last_name': last_name.strip() if last_name else '',
+            'IsStudent': bool(is_student),
+            'PermissionPreset': permission_defaults['preset'],
+            'ActionPermissions': permission_defaults['actions'],
+            'PagePermissions': permission_defaults['pages'],
+        }
 
-    normalized_card = normalize_student_card_id(student_card_id)
-    if bool(is_student):
-        if normalized_card:
-            user_doc['StudentCardId'] = normalized_card
-        if max_borrow_days is not None:
-            try:
-                user_doc['MaxBorrowDays'] = int(max_borrow_days)
-            except (TypeError, ValueError):
-                pass
+        normalized_card = normalize_student_card_id(student_card_id)
+        if bool(is_student):
+            if normalized_card:
+                user_doc['StudentCardId'] = normalized_card
+            if max_borrow_days is not None:
+                try:
+                    user_doc['MaxBorrowDays'] = int(max_borrow_days)
+                except (TypeError, ValueError):
+                    pass
 
-    users.insert_one(user_doc)
-    client.close()
-    return True
+        users.insert_one(user_doc)
+        return True
+    finally:
+        client.close()
 
 
 def student_card_exists(student_card_id):

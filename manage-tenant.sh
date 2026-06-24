@@ -194,8 +194,8 @@ initialize_tenant_database() {
         return 0
     fi
 
-    docker exec "$APP_CONTAINER" python3 -c '
-import sys, re, datetime, hashlib
+    docker exec -i "$APP_CONTAINER" python3 - "$tenant_id" "$mode" <<'PY'
+import sys, os, re, datetime, hashlib
 sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/Web")
 from Web.modules.database import settings
@@ -207,7 +207,11 @@ sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
 db_name = f"inventar_{sanitized}"
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[db_name]
-hashed_pw = hashlib.scrypt("admin123", salt=b"some_salt", n=16384, r=8, p=1).hex()
+
+pw_bytes = "admin123".encode("utf-8")
+random_salt = os.urandom(16)
+hashed = hashlib.scrypt(pw_bytes, salt=random_salt, n=16384, r=8, p=1)
+hashed_pw_string = f"v1${random_salt.hex()}${hashed.hex()}"
 
 action_permissions = {
     "can_borrow": True,
@@ -243,7 +247,7 @@ page_permissions = {
 if db.users.count_documents({"Username": "admin"}) == 0:
     db.users.insert_one({
         "Username": "admin",
-        "Password": hashed_pw,
+        "Password": hashed_pw_string,
         "Admin": True,
         "active_ausleihung": None,
         "name": "Admin",
@@ -268,7 +272,7 @@ if mode == "trial":
     )
 
 print(f"Tenant {sys.argv[1]} database initialized. Default admin: admin / admin123")
-' "$tenant_id" "$mode"
+PY
 }
 
 update_runtime_ports() {
