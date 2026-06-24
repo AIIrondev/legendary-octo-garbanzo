@@ -211,7 +211,7 @@ sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
 db_name = f"inventar_{sanitized}"
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[db_name]
-hashed_pw = hashlib.scrypt('admin123'.encode(), salt=b'some_salt', n=16384, r=8, p=1).hex()
+hashed_pw = hashlib.scrypt('admin123', salt=b'some_salt', n=16384, r=8, p=1).hex()
 
 action_permissions = {
     "can_borrow": True,
@@ -661,7 +661,7 @@ sanitized = ''.join(c for c in tenant_id if c.isalnum() or c == '_')
 db_name = f'inventar_{sanitized}'
 client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
 db = client[db_name]
-hashed_pw = hashlib.scrypt('admin123'.encode(), salt=b'some_salt', n=16384, r=8, p=1).hex()
+hashed_pw = hashlib.scrypt('admin123', salt=b'some_salt', n=16384, r=8, p=1).hex()
 if db.users.count_documents({'Username': 'admin'}) == 0:
     db.users.insert_one({
         'Username': 'admin',
