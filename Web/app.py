@@ -731,6 +731,7 @@ AUDIT_INDEXES_READY = False
 
 def _ensure_audit_indexes_once():
     """Ensure audit indexes exist once per process."""
+    global AUDIT_INDEXES_READY
     if AUDIT_INDEXES_READY:
         return
 

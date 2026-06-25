@@ -556,6 +556,14 @@ sudo chmod 644 certs/inventarsystem.crt
 
 ## Fehlerbehebung
 
+### Logs Auslesen
+
+```bash
+docker logs inventarsystem-app-1
+docker exec inventarsystem-app-1 cat /data/logs/application.log | tail -n 100
+docker compose exec mongodb mongosh
+```
+
 ### Webserver startet nicht
 
 ```bash
