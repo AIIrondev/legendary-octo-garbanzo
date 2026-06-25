@@ -3302,7 +3302,13 @@ def api_library_items():
                 borrower = doc.get('User', '')
             # Decrypt if value is encrypted (decrypt_text returns original if not encrypted)
             try:
-                borrower = decrypt_text(borrower) if borrower else ''
+                client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+                db = client[cfg.MONGODB_DB]
+                student_cards = db['student_cards']
+                card = student_cards.find_one({'_id': ObjectId(borrow_id)})
+                card = _decrypt_student_card_doc(card)
+                client.close()
+                borrower = card['SchülerName']
             except Exception:
                 # Fallback: keep original string if decryption fails
                 borrower = borrower or ''
@@ -8368,8 +8374,15 @@ def admin_create_invoice(borrow_id):
             flash('Für diese Ausleihe existiert bereits eine Rechnung. Bitte Korrekturbuchung verwenden.', 'warning')
             return redirect(url_for('admin_borrowings'))
 
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        student_cards = db['student_cards']
+        card = student_cards.find_one({'_id': ObjectId(borrow_id)})
+        card = _decrypt_student_card_doc(card)
+        client.close()
+        borrower = card['SchülerName']
+
         invoice_number = existing_invoice.get('invoice_number') or _build_invoice_number(borrow_doc['_id'], now)
-        borrower = borrow_doc.get('User', '')
         item_name = item_doc.get('Name', '')
         item_code = item_doc.get('Code_4', '')
 
