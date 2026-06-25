@@ -3821,7 +3821,7 @@ def library_admin():
         show_library_features=True,
         upload_mode='library',
         page_title='Bücher hochladen',
-        back_target='home_admin'
+        back_target='library'
     )
 
 
@@ -5074,7 +5074,7 @@ def upload_item():
     Enhanced for mobile browser compatibility.
     
     Returns:
-        flask.Response: Redirect to admin homepage or JSON response
+        flask.Response: Redirect to admin homepage
     """
     # Check if the user is authenticated
     if 'username' not in session:
@@ -5087,7 +5087,12 @@ def upload_item():
         return jsonify({'success': False, 'message': 'Einfüge-Rechte erforderlich'}), 403
         
     can_access_admin_home = _page_access_allowed(permissions, 'home_admin') and _action_access_allowed(permissions, 'can_manage_settings')
-    success_redirect_endpoint = 'home_admin' if can_access_admin_home else 'home'
+    if can_access_admin_home:
+        success_redirect_endpoint = 'home_admin'
+    elif cfg.MODULES.is_enabled('library') and _page_access_allowed(permissions, 'home_library'):
+        success_redirect_endpoint = 'home_library'
+    else:
+        success_redirect_endpoint = 'home'
 
     # Detect if request is from mobile device
     is_mobile = 'Mobile' in request.headers.get('User-Agent', '')
@@ -6044,22 +6049,9 @@ def upload_item():
             except Exception:
                 app.logger.warning('Audit write failed for library_item_created')
 
-        if is_mobile:
-            return jsonify({
-                'success': True, 
-                'message': success_msg,
-                'itemId': str(item_id),
-                'stats': {
-                    'processed': processed_count,
-                    'errors': error_count,
-                    'skipped': skipped_count,
-                    'duplicates': len(duplicate_images) if duplicate_images else 0,
-                    'totalImages': len(image_filenames)
-                }
-            })
-        else:
-            flash(success_msg, 'success')
-            return redirect(url_for(success_redirect_endpoint, highlight_item=str(item_id)))
+        
+        flash(success_msg, 'success')
+        return redirect(url_for(success_redirect_endpoint, highlight_item=str(item_id)))
     else:
         error_msg = 'Fehler beim Hinzufügen des Elements'
         if is_mobile:
