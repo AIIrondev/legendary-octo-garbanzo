@@ -1321,10 +1321,7 @@
                                 {% if 'username' in session and (session.get('admin', False) or is_admin) and current_permissions.actions.get('can_manage_settings', True) %}
                                 <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
                                 {% if current_permissions.pages.get('library_loans_admin', True) %}
-                                <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
-                                {% endif %}
-                                {% if current_permissions.pages.get('admin_damaged_items', True) %}
-                                <li><a class="dropdown-item" href="{{ url_for('admin_damaged_items') }}">Defekte Items</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen / Defekte Items</a></li>
                                 {% endif %}
                                 {% if student_cards_module_enabled %}
                                 <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Bibliotheksausweis</a></li>
