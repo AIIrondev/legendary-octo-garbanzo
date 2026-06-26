@@ -307,8 +307,7 @@ def configure():
             flash('Fehler beim Erstellen des Terminplans.', 'error')
             return redirect(url_for('terminplaner.configure'))
 
-        #flash('Der Terminplan wurde angelegt.', 'success')
-        flash(f'{inserted_id['link']}', 'warning')
+        flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
