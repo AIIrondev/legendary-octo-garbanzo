@@ -38,7 +38,7 @@ def _active_record_query(extra_query=None):
     return base_query
 
 
-def add(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = ()):
+def add(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght: int, user: str, mail: list=[], note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = (), clients_p_slot: int=1):
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = _get_tenant_db(client)
@@ -56,7 +56,8 @@ def add(date_start: str, date_end: str, time_span: list, slots: int, slot_lenght
             'title': title,
             'custom_fields': custom_fields, 
             'calendar_enabled': bool(calendar_enabled),
-            'slots_booked': [], # -> [(start_time, name,(custom1, custom2,...)), ...]the list gets there indexes as the slot 1-defined so is can be counted without an extra variable
+            'clients_per_slot': clients_p_slot,
+            'slots_booked': [], # -> [(start_time, (names),(custom1, custom2,...)), ...]the list gets there indexes as the slot 1-defined so is can be counted without an extra variable
             'Created': datetime.datetime.now(),
             'LastUpdated': datetime.datetime.now()
         }

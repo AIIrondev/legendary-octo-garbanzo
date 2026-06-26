@@ -322,6 +322,7 @@ document.addEventListener('DOMContentLoaded', function () {
     (function () {
         const available = {{ available|tojson }};
         const appointmentId = {{ appointment_id|tojson }};
+        const canViewBookingNames = {{ can_view_booking_names|tojson }}; // Injected from Flask
         const slider = document.getElementById('day-slider');
         const sliderLabel = document.getElementById('day-slider-label');
         const sliderWrap = slider ? slider.closest('.day-slider-wrap') : null;
@@ -335,10 +336,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const confirmBookingWithIcsBtn = document.getElementById('confirm-booking-with-ics');
         const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
 
-        const slotLength = Number.parseInt(available.slot_lenght, 10) || 45;
-        const bookedStarts = new Set((available.slots_booked || []).map(function (entry) {
-            return String(entry.start || '').trim();
-        }).filter(Boolean));
+        // Fallback for both spellings of slot length
+        const slotLength = Number.parseInt(available.slot_length || available.slot_lenght, 10) || 45;
+        const clientsPerSlot = Number.parseInt(available.clients_per_slot, 10) || 1;
+        const bookingsByTime = available.bookings_by_time || {};
 
         function formatDateForInput(dateObj) {
             const y = dateObj.getFullYear();
@@ -402,6 +403,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return null;
         }
 
+        const fullyBookedSlots = [];
+
         function buildCandidateSlots() {
             const slots = [];
             const allowedDates = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
@@ -409,9 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             spans.forEach(function (entry) {
                 const parsed = parseTimeSpanEntry(entry);
-                if (!parsed) {
-                    return;
-                }
+                if (!parsed) return;
 
                 const targetDates = parsed.date ? [parsed.date] : allowedDates;
                 targetDates.forEach(function (date) {
@@ -424,10 +425,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     let cursor = new Date(from);
                     while (addMinutes(cursor, slotLength) <= to) {
                         const slotStart = formatDateForInput(cursor);
-                        if (!bookedStarts.has(slotStart)) {
+                        const currentBookingsCount = bookingsByTime[slotStart] || 0;
+                        
+                        // Check if the current individual timestamp still has capacity left
+                        if (currentBookingsCount < clientsPerSlot) {
                             slots.push({
                                 start: slotStart,
                                 end: formatDateForInput(addMinutes(cursor, slotLength)),
+                                bookingsCount: currentBookingsCount
+                            });
+                        } else {
+                            fullyBookedSlots.push({
+                                start: slotStart,
+                                end: formatDateForInput(addMinutes(cursor, slotLength))
                             });
                         }
                         cursor = addMinutes(cursor, slotLength);
@@ -442,27 +452,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
         const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
 
-        // Show the requested UI time window from 08:15 to 20:00 and highlight available slots
         let slotMinTime = '08:15:00';
         let slotMaxTime = '20:00:00';
-        if (candidateSlots.length > 0) {
-            const starts = candidateSlots.map(function (slot) {
-                return new Date(slot.start.replace(' ', 'T') + ':00');
-            }).filter(function (d) { return !Number.isNaN(d.getTime()); });
-            const ends = candidateSlots.map(function (slot) {
-                return new Date(slot.end.replace(' ', 'T') + ':00');
-            }).filter(function (d) { return !Number.isNaN(d.getTime()); });
-
-            // Keep the computed min/max for gap calculations below
-            var computedMinStart = null;
-            var computedMaxEnd = null;
-            if (starts.length > 0 && ends.length > 0) {
-                computedMinStart = starts[0];
-                computedMaxEnd = ends[0];
-                starts.forEach(function (d) { if (d < computedMinStart) computedMinStart = d; });
-                ends.forEach(function (d) { if (d > computedMaxEnd) computedMaxEnd = d; });
-            }
-        }
 
         const visibleStart = allDays[0] || String(available.date_start || '');
         const visibleEndExclusive = allDays.length > 0
@@ -497,14 +488,8 @@ document.addEventListener('DOMContentLoaded', function () {
             slotMinTime: slotMinTime,
             slotMaxTime: slotMaxTime,
             nowIndicator: true,
-            validRange: {
-                start: visibleStart,
-                end: visibleEndExclusive,
-            },
-            visibleRange: {
-                start: visibleStart,
-                end: visibleEndExclusive,
-            },
+            validRange: { start: visibleStart, end: visibleEndExclusive },
+            visibleRange: { start: visibleStart, end: visibleEndExclusive },
             headerToolbar: {
                 left: '',
                 center: 'title',
@@ -512,27 +497,21 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             events: [],
             eventDrop: function (info) {
-                if (info.event.id !== 'selected-slot') {
-                    return;
-                }
+                if (info.event.id !== 'selected-slot') return;
                 const droppedStart = formatDateForInput(info.event.start);
                 if (!slotStartSet.has(droppedStart)) {
                     info.revert();
-                    window.alert('Dieser Zeitpunkt ist nicht als freier Slot verfügbar.');
+                    window.alert('Dieser Zeitpunkt ist ausgebucht oder nicht verfügbar.');
                     return;
                 }
                 applySelectedSlot(droppedStart);
             },
             eventClick: function (info) {
                 const slotType = info.event.extendedProps ? info.event.extendedProps.slotType : '';
-                if (slotType !== 'free') {
-                    return;
-                }
+                if (slotType !== 'free') return;
                 applySelectedSlot(info.event.extendedProps.slotStart || '');
             }
         });
-
-        // No background greying: show full calendar skeleton and only mark possible slots
 
         function updateSliderLabel() {
             const dateList = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
@@ -552,9 +531,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 selectedEvent = null;
             }
 
-            if (!selectedSlot) {
-                return;
-            }
+            if (!selectedSlot) return;
 
             const start = new Date(selectedSlot.replace(' ', 'T') + ':00');
             const end = addMinutes(start, slotLength);
@@ -573,13 +550,9 @@ document.addEventListener('DOMContentLoaded', function () {
         function getIcsDownloadUrl() {
             const base = {{ url_for('terminplaner.client_slot_calendar_export', appointment_id=appointment_id, tenant=tenant_id)|tojson }};
             const url = new URL(base, window.location.origin);
-            if (selectedSlot) {
-                url.searchParams.set('start', selectedSlot);
-            }
+            if (selectedSlot) url.searchParams.set('start', selectedSlot);
             const name = String(clientNameInput.value || '').trim();
-            if (name) {
-                url.searchParams.set('name', name);
-            }
+            if (name) url.searchParams.set('name', name);
             return url.toString();
         }
 
@@ -590,14 +563,19 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // No background gaps: keep full skeleton/grid visible
-
-        // Add candidate free slots (blue)
+        // Render Active/Available Slots with Live Seat Counts
         candidateSlots.forEach(function (slot) {
             const start = new Date(slot.start.replace(' ', 'T') + ':00');
             const end = new Date(slot.end.replace(' ', 'T') + ':00');
+            
+            let displayTitle = 'Freier Slot';
+            if (clientsPerSlot > 1) {
+                const remainingSeats = clientsPerSlot - slot.bookingsCount;
+                displayTitle += ' (' + remainingSeats + '/' + clientsPerSlot + ' frei)';
+            }
+
             calendar.addEvent({
-                title: 'Freier Slot',
+                title: displayTitle,
                 start: start,
                 end: end,
                 color: '#0d6efd',
@@ -610,46 +588,54 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        (available.slots_booked || []).forEach(function (booking) {
-            const startStr = String(booking.start || '').trim();
-            if (!startStr) {
-                return;
-            }
-            const start = new Date(startStr.replace(' ', 'T') + ':00');
-            const end = addMinutes(start, slotLength);
+        // Client View Optimization: Render solid red events ONLY if a slot is 100% full
+        fullyBookedSlots.forEach(function (slot) {
+            const start = new Date(slot.start.replace(' ', 'T') + ':00');
+            const end = new Date(slot.end.replace(' ', 'T') + ':00');
             calendar.addEvent({
-                title: 'Gebucht' + (booking.name ? ' - ' + booking.name : ''),
+                title: 'Ausgebucht',
                 start: start,
                 end: end,
                 color: '#dc3545',
                 editable: false,
-                display: 'block',
+                display: 'block'
             });
         });
 
+        // Admin Management View: Render detailed name blocks exclusively for management interaction
+        if (canViewBookingNames) {
+            (available.slots_booked || []).forEach(function (booking) {
+                const startStr = String(booking.start || '').trim();
+                if (!startStr) return;
+                const start = new Date(startStr.replace(' ', 'T') + ':00');
+                const end = addMinutes(start, slotLength);
+                calendar.addEvent({
+                    title: 'Belegt: ' + (booking.name || 'Anonym'),
+                    start: start,
+                    end: end,
+                    color: '#9e9e9e',
+                    editable: false,
+                    display: 'block',
+                });
+            });
+        }
+
+        // Event Listeners and Setup
         form.addEventListener('submit', function (ev) {
             if (!selectedSlotInput.value) {
                 ev.preventDefault();
                 window.alert('Bitte zuerst im Kalender einen freien Slot auswählen.');
                 return;
             }
-
-            if (allowImmediateSubmit) {
-                return;
-            }
-
+            if (allowImmediateSubmit) return;
             ev.preventDefault();
-            if (modal) {
-                modal.show();
-            }
+            if (modal) modal.show();
         });
 
         if (confirmBookingOnlyBtn) {
             confirmBookingOnlyBtn.addEventListener('click', function () {
                 allowImmediateSubmit = true;
-                if (modal) {
-                    modal.hide();
-                }
+                if (modal) modal.hide();
                 form.submit();
             });
         }
@@ -657,13 +643,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (confirmBookingWithIcsBtn) {
             confirmBookingWithIcsBtn.addEventListener('click', function () {
                 const icsUrl = confirmBookingWithIcsBtn.getAttribute('data-ics-url') || getIcsDownloadUrl();
-                if (icsUrl) {
-                    window.open(icsUrl, '_blank');
-                }
+                if (icsUrl) window.open(icsUrl, '_blank');
                 allowImmediateSubmit = true;
-                if (modal) {
-                    modal.hide();
-                }
+                if (modal) modal.hide();
                 form.submit();
             });
         }
@@ -684,10 +666,8 @@ document.addEventListener('DOMContentLoaded', function () {
         slider.addEventListener('input', function () {
             const idx = Number.parseInt(slider.value, 10) || 0;
             updateSliderLabel();
-            if (allDays[idx]) {
-                if (calendar.view.type === 'timeGridDay') {
-                    calendar.gotoDate(allDays[idx]);
-                }
+            if (allDays[idx] && calendar.view.type === 'timeGridDay') {
+                calendar.gotoDate(allDays[idx]);
             }
         });
 

@@ -198,7 +198,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     return '\r\n'.join(ics_lines)
 
 
-def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = ()) -> dict:
+def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = (), client_per_slot: int=1) -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
     """
@@ -220,7 +220,7 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail or [])
     
-    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title, custom_fields=custom_fields)
+    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title, custom_fields=custom_fields, clients_p_slot=client_per_slot)
     id_str = str(id)
     tenant_id = _current_tenant_id()
 
@@ -259,7 +259,7 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
     }
     
         
-def book_slot(id, date_start_time, name, custom:list=()):
+def book_slot(id, date_start_time, name, custom: tuple = ()):
     try:
         item = termin.get_item(id)
         if not item:
@@ -269,18 +269,32 @@ def book_slot(id, date_start_time, name, custom:list=()):
         if not isinstance(slots, list):
             slots = []
 
+        # 1. Check overall total booking capacity 
         capacity = int(item.get('slots', 0) or 0)
         if capacity and len(slots) >= capacity:
             return False
 
+        # 2. Prevent the exact same user from double-booking the exact same slot
         for existing in slots:
             if isinstance(existing, (list, tuple)) and len(existing) >= 2:
                 if existing[0] == date_start_time and existing[1] == name:
                     return False
 
+        # 3. Check concurrent capacity for this specific time slot
+        clients_per_slot = int(item.get('clients_per_slot', 1) or 1)
+        bookings_at_time = sum(
+            1 for existing in slots 
+            if isinstance(existing, (list, tuple)) and len(existing) > 0 and existing[0] == date_start_time
+        )
+        
+        if bookings_at_time >= clients_per_slot:
+            return False
+
+        # Append the new booking successfully
         slots.append((date_start_time, name, custom))
         success = termin.update(id, slots)
         return bool(success)
+        
     except Exception as e:
         print(f"Error booking slot: {e}")
         return False
@@ -331,32 +345,46 @@ def get_available(id):
         date_end = termin_range.get('date_end')
         time_span = termin_range.get('time_span', [])
         
+        # Safe integer parsing without heavy try-except blocks
         try:
             total_slots = int(termin_range.get('slots', 0) or 0)
-        except Exception:
+        except (ValueError, TypeError):
             total_slots = 0
 
+        # Support both spellings gracefully
+        raw_length = termin_range.get('slot_length') or termin_range.get('slot_lenght') or 0
         try:
-            slot_length = int(termin_range.get('slot_length') or termin_range.get('slot_lenght') or 0)
-        except Exception:
-            slot_length = termin_range.get('slot_length') or termin_range.get('slot_lenght')
+            slot_length = int(raw_length)
+        except (ValueError, TypeError):
+            slot_length = raw_length
 
+        clients_per_slot = int(termin_range.get('clients_per_slot', 1) or 1)
         booked = termin_range.get('slots_booked', []) or []
 
+        # Normalize the bookings list safely
         normalized = []
+        bookings_by_time = {}  # Tracks how many people are in each specific time slot
+        
         for s in booked:
             if isinstance(s, (list, tuple)) and len(s) >= 2:
-                normalized.append({'start': s[0], 'name': s[1]})
+                slot_time = s[0]
+                item = {'start': slot_time, 'name': s[1]}
             elif isinstance(s, dict):
-                normalized.append(s)
+                slot_time = s.get('start')
+                item = s
             else:
-                normalized.append({'value': s})
+                slot_time = str(s)
+                item = {'value': s}
+                
+            normalized.append(item)
+            
+            # Count concurrent bookings per timestamp
+            if slot_time:
+                bookings_by_time[slot_time] = bookings_by_time.get(slot_time, 0) + 1
 
+        # Calculate remaining total capacity safely
         slots_used = len(normalized)
-        try:
-            slots_left = max(0, int(total_slots) - slots_used)
-        except Exception:
-            slots_left = max(0, slots_used - slots_used)
+        slots_left = max(0, total_slots - slots_used)
 
         return {
             'date_start': date_start,
@@ -365,8 +393,10 @@ def get_available(id):
             'slot_length': slot_length,
             'slot_lenght': slot_length,
             'slots_total': total_slots,
+            'clients_per_slot': clients_per_slot,
             'slots_booked': normalized,
             'slots_left': slots_left,
+            'bookings_by_time': bookings_by_time
         }
     except Exception as e:
         print(f"Error getting available slots: {e}")

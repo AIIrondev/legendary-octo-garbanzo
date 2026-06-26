@@ -70,6 +70,10 @@
                                 <label for="slot_length" class="form-label fw-semibold">Slot-Länge in Minuten</label>
                                 <input type="number" id="slot_length" name="slot_length" class="form-control form-control-lg" min="1" value="45">
                             </div>
+                            <div>
+                                <label class="form-label fw-semibold text-primary">Nutzer pro Slot</label>
+                                <input type="number" id="clients_per_slot" name="clients_per_slot" value="1">
+                            </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-primary">Automatisch berechnete Slots</label>
                                 <div id="slots_amounts_display" class="form-control form-control-lg bg-primary-subtle text-primary fw-bold d-flex align-items-center">0</div>
@@ -149,6 +153,7 @@
     const defaultPauseEndInput = document.getElementById('default_pause_end');
     
     const slotLengthInput = document.getElementById('slot_length');
+    const clientsperslot = document.getElementById('clients_per_slot')
     const slotsAmountsInput = document.getElementById('slots_amounts');
     const slotsAmountsDisplay = document.getElementById('slots_amounts_display'); // Neu: Anzeige-Element
 
@@ -200,7 +205,7 @@
 
     // Berechnet die Slots basierend auf den konfigurierten Zeiten & Pausen
     function calculateSlots() {
-        if (!slotLengthInput || !slotsAmountsInput) return;
+        if (!slotLengthInput || !slotsAmountsInput || !clientsperslot) return;
         
         const slotLength = parseInt(slotLengthInput.value, 10);
         if (isNaN(slotLength) || slotLength <= 0) {
@@ -243,8 +248,8 @@
                 totalSlots += Math.floor((endMins - startMins) / slotLength);
             }
         });
-
-        updateSlotsDisplay(totalSlots);
+        totalSlotscomplete = totalSlots * Number(clientsperslot)
+        updateSlotsDisplay(totalSlotscomplete);
     }
 
     // Synchronisiert das Textfeld und fügt den Break-Cut hinzu
@@ -363,33 +368,33 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         const container = document.getElementById('custom-fields-container');
-        
+
         // Monitor inputs inside the container using event delegation
         container.addEventListener('input', function (event) {
             // Only trigger if the user is typing inside our dynamic inputs
             if (event.target.classList.contains('custom-dynamic-input')) {
                 const allInputs = container.querySelectorAll('.custom-dynamic-input');
                 const lastInput = allInputs[allInputs.length - 1];
-            
+
                 // If the user typed something into the absolute last input field, spawn a new one
                 if (lastInput.value.trim() !== '') {
                     createNewFieldRow(container);
                 }
             }
         });
-    
+
         // Helper function to generate and append a clean new input row
         function createNewFieldRow(targetContainer) {
             const rowDiv = document.createElement('div');
             rowDiv.className = 'mb-3 custom-field-row';
-            
+
             rowDiv.innerHTML = `
                 <input type="text" 
                        name="custom_fields" 
                        class="form-control form-control-lg custom-dynamic-input" 
                        placeholder="Nächstes Zusatzfeld...">
             `;
-            
+
             targetContainer.appendChild(rowDiv);
         }
     });

@@ -114,9 +114,9 @@ def client(appointment_id):
     appointment_item = termin.get_item(appointment_id) or {}
     appointment_owner = str(appointment_item.get('user', '') or '').strip()
     
-    # Extract the custom fields defined by the appointment owner
     custom_fields = appointment_item.get('custom_fields', [])
 
+    # Permissions check
     can_view_booking_names = False
     if current_user:
         try:
@@ -124,6 +124,7 @@ def client(appointment_id):
         except Exception:
             can_view_booking_names = bool(current_user == appointment_owner)
 
+    # Sanitize data for public/client view
     available_for_view = dict(available)
     if not can_view_booking_names:
         sanitized_bookings = []
@@ -139,21 +140,19 @@ def client(appointment_id):
     if request.method == 'POST':
         action = request.form.get('action', 'book')
 
-        # Fall 1: ADMIN/AUTOR storniert einen Termin
+        # Case 1: Admin/Owner cancels a booking
         if action == 'delete' and can_view_booking_names:
             slot_time = request.form.get('slot_time')
             client_name = request.form.get('target_client_name')
             
-            # Aktuelle Buchungen direkt aus dem DB-Item holen
             current_slots = appointment_item.get('slots_booked', []) or []
             
-            # Filtere den zu löschenden Slot heraus (Prüfung auf Zeit und Name)
+            # Keep everything EXCEPT the item targeted for deletion
             updated_slots = [
                 slot for slot in current_slots 
                 if not (isinstance(slot, (list, tuple)) and slot[0] == slot_time and slot[1] == client_name)
             ]
             
-            # In DB schreiben via deiner existierenden termin.update() Funktion
             if termin.update(appointment_id, updated_slots):
                 flash('Buchung wurde erfolgreich gelöscht.', 'success')
             else:
@@ -161,11 +160,11 @@ def client(appointment_id):
                 
             return redirect(url_for('terminplaner.client', appointment_id=appointment_id, tenant=_current_tenant_id() or None))
 
-        # Fall 2: NORMALER CLIENT bucht einen Termin
+        # Case 2: Client books a slot
         elif action == 'book':
             start_daytime = request.form.get('start_day_time')
             username = request.form.get('client_name')
-            custom_answers = request.form.getlist('custom_answers')
+            custom_answers = tuple(request.form.getlist('custom_answers'))  # Cast to tuple for DB safety
 
             if not start_daytime or not username:
                 flash('Bitte Name und gewünschte Uhrzeit angeben.', 'error')
@@ -190,7 +189,7 @@ def client(appointment_id):
                     )
                 )
 
-            flash('Der Termin konnte nicht gespeichert werden.', 'error')
+            flash('Der Termin konnte nicht gespeichert werden. Eventuell ist der Slot bereits voll.', 'error')
 
     return render_template(
         'termin_client.html',
@@ -252,7 +251,7 @@ def delete_appointment(appointment_id):
 @appoint_bp.route('/configure', methods=['GET', 'POST'])
 def configure():
     """
-    Route for authenticated persons to configure a new appointment for them
+    Route for authenticated persons to configure a new appointment schedule
     """
     guard = _require_module_enabled()
     if guard:
@@ -273,6 +272,11 @@ def configure():
         add_to_calendar = request.form.get('add_to_calendar') == 'on'
         title = request.form.get('title', '').strip()
         custom = request.form.getlist('custom_fields')
+        
+        try:
+            clients_p_slot = int(request.form.get('clients_per_slot', 1))
+        except (ValueError, TypeError):
+            clients_p_slot = 1
 
         if not start or not end or not time or not slots_amount or not slot_length or not title:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
@@ -283,28 +287,54 @@ def configure():
                 email_service_enabled=cfg.EMAIL_ENABLED,
             )
 
-        # Variablen im Funktionsaufruf aktualisiert
-        result = appointment_service.new(start, end, time, slots_amount, slot_length, session["username"], mail, note, calendar_enabled=add_to_calendar, title=title, custom_fields=custom)
+        # Call the database service function (standardized to match your underlying code)
+        inserted_id = appointment_service.add(
+            date_start=start, 
+            date_end=end, 
+            time_span=time, 
+            slots=slots_amount, 
+            slot_lenght=slot_length, 
+            user=session["username"], 
+            mail=mail, 
+            note=note, 
+            calendar_enabled=add_to_calendar, 
+            title=title, 
+            custom_fields=custom,
+            clients_p_slot=clients_p_slot
+        )
+
+        if not inserted_id:
+            flash('Fehler beim Erstellen des Terminplans.', 'error')
+            return redirect(url_for('terminplaner.configure'))
+
+        # Resolve the URL string here using Flask's native url_for instead of relying on the database layer
+        generated_link = url_for(
+            'terminplaner.client', 
+            appointment_id=str(inserted_id), 
+            tenant=_current_tenant_id() or None, 
+            _external=True
+        )
+
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
-            generated_link=result['link'],
-            calendar_link=result.get('calendar_link'),
+            generated_link=generated_link,
+            calendar_link=None, # Update with calendar service link generation if needed
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
             title=title,
         )
-    elif request.method == "GET":
-        return render_template(
-            'termin_configure.html',
-            school_periods=cfg.SCHOOL_PERIODS,
-            generated_link=None,
-            calendar_link=None,
-            add_to_calendar=False,
-            email_service_enabled=cfg.EMAIL_ENABLED,
-            title=None,
-        )
+
+    return render_template(
+        'termin_configure.html',
+        school_periods=cfg.SCHOOL_PERIODS,
+        generated_link=None,
+        calendar_link=None,
+        add_to_calendar=False,
+        email_service_enabled=cfg.EMAIL_ENABLED,
+        title=None,
+    )
 
 
 @appoint_bp.route('/calendar/<appointment_id>.ics', methods=['GET'])
