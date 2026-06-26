@@ -435,8 +435,8 @@
         slotLengthInput.addEventListener('change', calculateSlots);
     }
     if (clientsperslot) {
-        slotLengthInput.addEventListener('input', calculateSlots);
-        slotLengthInput.addEventListener('change', calculateSlots);
+        clientsperslot.addEventListener('input', calculateSlots);
+        clientsperslot.addEventListener('change', calculateSlots);
     }
 
     if (startDateInput.value && endDateInput.value) {

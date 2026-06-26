@@ -452,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const slotStartSet = new Set(candidateSlots.map(function (slot) { return slot.start; }));
         const allDays = dateRangeInclusive(String(available.date_start || ''), String(available.date_end || ''));
 
-        let slotMinTime = '08:15:00';
+        let slotMinTime = '08:00:00';
         let slotMaxTime = '20:00:00';
 
         const visibleStart = allDays[0] || String(available.date_start || '');
