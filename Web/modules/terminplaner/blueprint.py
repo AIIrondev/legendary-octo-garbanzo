@@ -4,6 +4,9 @@ import Web.modules.terminplaner.backend_server as appointment_service
 import Web.modules.database.settings as cfg
 import Web.modules.database.termine as termin
 import Web.modules.database.user as us
+import csv
+import io
+from flask import make_response, flash, redirect, url_for, session
 
 # Create a blueprint instance
 appoint_bp = Blueprint('terminplaner', __name__)
@@ -33,6 +36,67 @@ def _current_tenant_id():
     except Exception:
         pass
     return str(session.get('tenant_id', '') or '').strip()
+
+@appoint_bp.route('/client/<appointment_id>/export_csv')
+def export_csv(appointment_id):
+    """
+    Generiert einen CSV-Export aller Buchungen für den Ersteller.
+    """
+    # 1. Berechtigungsprüfung (analog zur Client-Route)
+    current_user = str(session.get('username', '') or '').strip()
+    appointment_item = termin.get_item(appointment_id) or {}
+    appointment_owner = str(appointment_item.get('user', '') or '').strip()
+    
+    can_view = False
+    if current_user:
+        try:
+            can_view = bool(us.check_admin(current_user) or current_user == appointment_owner)
+        except Exception:
+            can_view = bool(current_user == appointment_owner)
+            
+    if not can_view:
+        flash('Nicht autorisiert für diesen Export.', 'error')
+        return redirect(url_for('terminplaner.client', appointment_id=appointment_id))
+
+    custom_fields = appointment_item.get('custom_fields', [])
+    bookings = appointment_item.get('slots_booked', []) or []
+
+    # 2. CSV im Speicher erstellen
+    si = io.StringIO()
+    # Wir nutzen ein Semikolon als Trennzeichen – das öffnet Excel im deutschsprachigen Raum direkt fehlerfrei
+    cw = csv.writer(si, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+    
+    # Tabellenkopf schreiben
+    headers = ['Zeitpunkt', 'Name'] + list(custom_fields)
+    cw.writerow(headers)
+    
+    # Datenzeilen schreiben
+    for booking in bookings:
+        if isinstance(booking, (list, tuple)):
+            row = [booking[0], booking[1]]
+            
+            # Antworten holen und sicherstellen, dass Lücken (falls vorhanden) mit Leerstrings gefüllt werden
+            answers = booking[2] if len(booking) > 2 else []
+            for i in range(len(custom_fields)):
+                if i < len(answers):
+                    row.append(answers[i])
+                else:
+                    row.append('')
+            cw.writerow(row)
+
+    # 3. Response vorbereiten und UTF-8-BOM für Excel mitsenden
+    response_content = si.getvalue()
+    output = make_response(response_content)
+    
+    # Der Byte Order Mark (BOM) zwingt Excel dazu, UTF-8 (Umlaute) direkt richtig zu erkennen
+    output.data = b'\xef\xbb\xbf' + output.data.encode('utf-8')
+    
+    # Dateiname generieren
+    title_slug = appointment_item.get('title', 'export').replace(' ', '_')
+    output.headers["Content-Disposition"] = f"attachment; filename=buchungen_{title_slug}.csv"
+    output.headers["Content-Type"] = "text/csv; charset=utf-8"
+    
+    return output
 
 @appoint_bp.route('/client/<appointment_id>', methods=['POST', 'GET'])
 def client(appointment_id):
