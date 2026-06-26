@@ -8,6 +8,7 @@ import Web.modules.emailservice.email as mail_service
 import Web.modules.database.termine as termin
 import Web.modules.database.settings as cfg
 from Web.tenant import get_tenant_context
+import Web.modules.inventarsystem.data_protection as dp
 
 
 def _resolve_public_base_url() -> str:
@@ -99,8 +100,11 @@ def build_calendar_ics(appointment_id: str) -> str | None:
         return None
 
     uid = f"terminplaner-{appointment_id}@invario.eu"
-    created_at = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-    summary = f"Terminplan für {creator}"
+    
+    created_at = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    
+    summary = titel if titel else f"Terminplan für {creator}"
+    
     description_lines = [
         f"Buchungslink: {link}",
         f"Zeitraum: {date_start} bis {date_end}",
@@ -109,7 +113,7 @@ def build_calendar_ics(appointment_id: str) -> str | None:
         description_lines.append('Zeitfenster: ' + '; '.join(str(entry) for entry in time_span))
     if note:
         description_lines.append('Notiz: ' + str(note))
-    if titel:
+    if titel and not summary == titel: 
         description_lines.append('Titel: ' + str(titel))
 
     ics_lines = [
@@ -125,8 +129,7 @@ def build_calendar_ics(appointment_id: str) -> str | None:
         f'DESCRIPTION:{_escape_ics_text(chr(10).join(description_lines))}',
         f'URL:{_escape_ics_text(link)}',
         f'DTSTART;VALUE=DATE:{_format_ics_date(start_date)}',
-        f'DTEND;VALUE=DATE:{_format_ics_date(end_date + timedelta(days=1))}',
-        f'Titel:{_escape_ics_text(titel)}',
+        f'DTEND;VALUE=DATE:{_format_ics_date(end_date + datetime.timedelta(days=1))}',
         'END:VEVENT',
         'END:VCALENDAR',
         '',
@@ -172,7 +175,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     ]
 
     uid = f"terminplaner-slot-{appointment_id}-{start_dt.strftime('%Y%m%d%H%M')}@invario.eu"
-    created_at = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    created_at = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     dt_start = start_dt.strftime('%Y%m%dT%H%M%S')
     dt_end = end_dt.strftime('%Y%m%dT%H%M%S')
 
@@ -404,7 +407,6 @@ def get_available(id):
 
 def get_available_user(id):
     return get_available(id)
-
 
 def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
     user_name = str(user or '').strip()
