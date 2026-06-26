@@ -293,14 +293,14 @@ def configure():
             date_end=end, 
             time_span=time, 
             slots=slots_amount, 
-            slot_lenght=slot_length, 
+            slot_length=slot_length, 
             user=session["username"], 
             mail=mail, 
             note=note, 
             calendar_enabled=add_to_calendar, 
             title=title, 
             custom_fields=custom,
-            clients_p_slot=clients_p_slot
+            clients_per_slot=clients_p_slot
         )
 
         if not inserted_id:
