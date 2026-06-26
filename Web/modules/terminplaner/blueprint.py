@@ -88,8 +88,7 @@ def export_csv(appointment_id):
     response_content = si.getvalue()
     output = make_response(response_content)
     
-    # Der Byte Order Mark (BOM) zwingt Excel dazu, UTF-8 (Umlaute) direkt richtig zu erkennen
-    output.data = b'\xef\xbb\xbf' + output.data.encode('utf-8')
+    output.data = b'\xef\xbb\xbf' + output.data
     
     # Dateiname generieren
     title_slug = appointment_item.get('title', 'export').replace(' ', '_')
