@@ -43,9 +43,14 @@
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5">
                             <p class="text-uppercase text-muted fw-semibold mb-2">Terminplaner</p>
-                            <h1 class="h3 fw-bold mb-3">Termin buchen - {{ available.title }}</h1>
-                            <p class="text-muted mb-4">Wählen Sie im Kalender einen freien Slot aus. Den gewählten Termin können Sie danach direkt wie in einem Kalender-Block verschieben.</p>
-
+                            {% if 'username' in session %}
+                                <h1 class="h3 fw-bold mb-3">Termin Übersicht - {{ available.title }}</h1>
+                                <p class="text-muted mb-4">Hier können sie alle Buchungen die Bereits eingegenagen sind verwalten.</p>
+                            {% else %}
+                                <h1 class="h3 fw-bold mb-3">Termin buchen - {{ available.title }}</h1>
+                                <p class="text-muted mb-4">Wählen Sie im Kalender einen freien Slot aus. Den gewählten Termin können Sie danach direkt wie in einem Kalender-Block verschieben.</p>
+                            {% endif %}
+                            
                             <div class="p-3 rounded-3 bg-light mb-3">
                                 <div class="fw-semibold">Zeitraum</div>
                                 <div>{{ available.date_start }} bis {{ available.date_end }}</div>
@@ -58,11 +63,13 @@
                                 <div class="fw-semibold">Slot-Länge</div>
                                 <div>{{ available.slot_lenght }} Minuten</div>
                             </div>
-
+                            
+                            {% if 'username' in session %}
                             <div class="p-3 rounded-3 bg-light mb-3">
                                 <div class="fw-semibold mb-2">Gewählter Termin</div>
                                 <div id="selected-slot-badge" class="text-muted small">Noch kein Slot ausgewählt.</div>
                             </div>
+                            {% endif %}
 
                             {% if available.slots_booked %}
                             <div class="p-3 rounded-3 bg-light">
