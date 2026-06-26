@@ -208,6 +208,11 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
         slots_int = 0
         
     try:
+        custom_fields.pop(-1)
+    except :
+        pass
+
+    try:
         slot_length_int = int(slot_length)
     except (ValueError, TypeError):
         slot_length_int = 45
