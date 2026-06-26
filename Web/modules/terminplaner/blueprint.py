@@ -307,19 +307,11 @@ def configure():
             flash('Fehler beim Erstellen des Terminplans.', 'error')
             return redirect(url_for('terminplaner.configure'))
 
-        # Resolve the URL string here using Flask's native url_for instead of relying on the database layer
-        generated_link = url_for(
-            'terminplaner.client', 
-            appointment_id=str(inserted_id), 
-            tenant=_current_tenant_id() or None, 
-            _external=True
-        )
-
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
-            generated_link=generated_link,
+            generated_link=inserted_id['link'],
             calendar_link=None, # Update with calendar service link generation if needed
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
