@@ -374,7 +374,6 @@ def main():
     upcoming_events = appointment_service.get_user_upcoming_events(current_user) if current_user else []
     tenant_id = _current_tenant_id()
 
-    flash(f'{upcoming_events[0].title}' if upcoming_events else 'No upcoming events', 'info')
 
     return render_template(
         'terminplaner.html',

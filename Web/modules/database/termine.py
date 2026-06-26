@@ -279,13 +279,11 @@ def get_upcoming_for_user(user: str, limit: int = 25):
         items = db['appointments']
 
         today = datetime.date.today().strftime('%Y-%m-%d')
-        
-        encrypted_user = dp.encrypt_text(str(user or '').strip())
 
         cursor = items.find(
             _active_record_query(
                 {
-                    'user': encrypted_user,
+                    'user': user,
                     'date_end': {'$gte': today},
                 }
             )
@@ -294,7 +292,7 @@ def get_upcoming_for_user(user: str, limit: int = 25):
         results = []
         for item in cursor:
             item['_id'] = str(item.get('_id'))
-            results.append(_decrypt_appointment(item))
+            results.append(item)
             if len(results) >= max(1, int(limit)):
                 break
 
