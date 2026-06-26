@@ -307,12 +307,13 @@ def configure():
             flash('Fehler beim Erstellen des Terminplans.', 'error')
             return redirect(url_for('terminplaner.configure'))
 
-        flash('Der Terminplan wurde angelegt.', 'success')
+        #flash('Der Terminplan wurde angelegt.', 'success')
+        flash(f'{inserted_id['link']}', 'warning')
         return render_template(
             'termin_configure.html',
             school_periods=cfg.SCHOOL_PERIODS,
             generated_link=inserted_id['link'],
-            calendar_link=None, # Update with calendar service link generation if needed
+            calendar_link=None, 
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
             title=title,
