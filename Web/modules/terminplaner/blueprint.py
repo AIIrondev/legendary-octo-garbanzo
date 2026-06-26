@@ -288,7 +288,7 @@ def configure():
             )
 
         # Call the database service function (standardized to match your underlying code)
-        inserted_id = appointment_service.add(
+        inserted_id = appointment_service.new(
             date_start=start, 
             date_end=end, 
             time_span=time, 
