@@ -94,43 +94,106 @@
                 <div class="col-12 col-lg-8">
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5 bg-white">
-                            <h2 class="h4 fw-bold mb-3">Termin im Kalender auswählen</h2>
-
-                            <div class="day-slider-wrap mb-3">
-                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                    <span class="small text-muted">Tag wählen</span>
-                                    <strong id="day-slider-label" class="small"></strong>
-                                </div>
-                                <input id="day-slider" type="range" class="form-range m-0" min="0" max="0" value="0">
-                            </div>
-
-                            <div id="client-slot-calendar" class="mb-4"></div>
-
-                            <form id="client-booking-form" method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" class="vstack gap-3">
-                                <div>
-                                    <label for="start_day_time" class="form-label fw-semibold">Gewünschter Zeitpunkt</label>
-                                    <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="Bitte im Kalender auswählen" readonly required>
-                                    <div class="form-text">Klicken Sie auf einen freien Slot oder verschieben Sie den gewählten Block.</div>
-                                </div>
-                                <div>
-                                    <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
-                                    <input type="text" id="client_name" name="client_name" class="form-control form-control-lg" placeholder="Vor- und Nachname" required>
-                                </div>
                             
-                                {% if custom_fields %}
-                                    {% for field_label in custom_fields %}
-                                    <div>
-                                        <label class="form-label fw-semibold">{{ field_label }}</label>
-                                        <input type="text" name="custom_answers" class="form-control form-control-lg" placeholder="{{ field_label }} eingeben" required>
-                                    </div>
-                                    {% endfor %}
+                            {% if can_view_booking_names %}
+                                <!-- ADMIN / AUTOREN ANSICHT: Buchungstabelle -->
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <h2 class="h4 fw-bold mb-0">Eingegangene Buchungen</h2>
+                                    <span class="badge bg-primary rounded-pill fs-6 px-3">
+                                        {{ available.slots_total - available.slots_left }} Gebucht
+                                    </span>
+                                </div>
+
+                                {% if available.slots_booked %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle border-top">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th scope="col" class="py-3">Zeitpunkt</th>
+                                                <th scope="col" class="py-3">Name</th>
+                                                <!-- Dynamische Spaltenüberschriften für Custom Fields -->
+                                                {% for field_label in custom_fields %}
+                                                <th scope="col" class="py-3">{{ field_label }}</th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for booking in available.slots_booked %}
+                                            <tr>
+                                                <td class="fw-semibold text-primary py-3">
+                                                    {{ booking[0] }}
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold">{{ booking[1] }}</span>
+                                                </td>
+                                                <!-- Custom Fields Antworten auslesen -->
+                                                {% if booking|length > 2 and booking[2] %}
+                                                    {% for answer in booking[2] %}
+                                                    <td>{{ answer if answer else '<span class="text-muted small">-</span>'|safe }}</td>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <!-- Fallback falls alte Buchung ohne Custom Fields existiert -->
+                                                    {% for field in custom_fields %}
+                                                    <td><span class="text-muted small">-</span></td>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <div class="text-center py-5 text-muted">
+                                    <i class="bi bi-calendar-x display-4 d-block mb-3"></i>
+                                    <p class="mb-0">Bisher sind noch keine Buchungen für diesen Terminplaner eingegangen.</p>
+                                </div>
                                 {% endif %}
                                 
-                                <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
-                                    <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
+                                <div class="pt-4 border-top mt-4">
                                     <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main', tenant=tenant_id) }}">Zur Übersicht</a>
                                 </div>
-                            </form>
+
+                            {% else %}
+                                <!-- CLIENT ANSICHT: Normaler Buchungs-Workflow -->
+                                <h2 class="h4 fw-bold mb-3">Termin im Kalender auswählen</h2>
+
+                                <div class="day-slider-wrap mb-3">
+                                    <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                        <span class="small text-muted">Tag wählen</span>
+                                        <strong id="day-slider-label" class="small"></strong>
+                                    </div>
+                                    <input id="day-slider" type="range" class="form-range m-0" min="0" max="0" value="0">
+                                </div>
+
+                                <div id="client-slot-calendar" class="mb-4"></div>
+
+                                <form id="client-booking-form" method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" class="vstack gap-3">
+                                    <div>
+                                        <label for="start_day_time" class="form-label fw-semibold">Gewünschter Zeitpunkt</label>
+                                        <input type="text" id="start_day_time" name="start_day_time" class="form-control form-control-lg" placeholder="Bitte im Kalender auswählen" readonly required>
+                                        <div class="form-text">Klicken Sie auf einen freien Slot oder verschieben Sie den gewählten Block.</div>
+                                    </div>
+                                    <div>
+                                        <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
+                                        <input type="text" id="client_name" name="client_name" class="form-control form-control-lg" placeholder="Vor- und Nachname" required>
+                                    </div>
+                                
+                                    {% if custom_fields %}
+                                        {% for field_label in custom_fields %}
+                                        <div>
+                                            <label class="form-label fw-semibold">{{ field_label }}</label>
+                                            <input type="text" name="custom_answers" class="form-control form-control-lg" placeholder="{{ field_label }} eingeben" required>
+                                        </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                    
+                                    <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
+                                        <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
+                                        <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main', tenant=tenant_id) }}">Zur Übersicht</a>
+                                    </div>
+                                </form>
+                            {% endif %}
+
                         </div>
                     </div>
                 </div>
