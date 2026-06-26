@@ -50,6 +50,10 @@ def client(appointment_id):
     current_user = str(session.get('username', '') or '').strip()
     appointment_item = termin.get_item(appointment_id) or {}
     appointment_owner = str(appointment_item.get('user', '') or '').strip()
+    
+    # Extract the custom fields defined by the appointment owner
+    custom_fields = appointment_item.get('custom_fields', [])
+
     can_view_booking_names = False
     if current_user:
         try:
@@ -72,6 +76,9 @@ def client(appointment_id):
     if request.method == 'POST':
         start_daytime = request.form.get('start_day_time')
         username = request.form.get('client_name')
+        
+        custom_answers = request.form.getlist('custom_answers')
+
         if not start_daytime or not username:
             flash('Bitte Name und gewünschte Uhrzeit angeben.', 'error')
             return render_template(
@@ -81,9 +88,10 @@ def client(appointment_id):
                 current_user=session.get('username', ''),
                 tenant_id=_current_tenant_id(),
                 can_view_booking_names=can_view_booking_names,
+                custom_fields=custom_fields 
             )
 
-        if appointment_service.book_slot(appointment_id, start_daytime, username):
+        if appointment_service.book_slot(appointment_id, start_daytime, username, custom=custom_answers):
             return redirect(
                 url_for(
                     'terminplaner.client_success',
@@ -103,6 +111,7 @@ def client(appointment_id):
         current_user=session.get('username', ''),
         tenant_id=_current_tenant_id(),
         can_view_booking_names=can_view_booking_names,
+        custom_fields=custom_fields
     )
 
 
@@ -174,6 +183,7 @@ def configure():
         note = request.form.get('note', '')
         add_to_calendar = request.form.get('add_to_calendar') == 'on'
         title = request.form.get('title', '').strip()
+        custom = request.form.getlist('custom_fields')
 
         if not start or not end or not time or not slots_amount or not slot_length or not title:
             flash('Bitte alle Pflichtfelder ausfüllen.', 'error')
@@ -185,7 +195,7 @@ def configure():
             )
 
         # Variablen im Funktionsaufruf aktualisiert
-        result = appointment_service.new(start, end, time, slots_amount, slot_length, session["username"], mail, note, calendar_enabled=add_to_calendar, title=title)
+        result = appointment_service.new(start, end, time, slots_amount, slot_length, session["username"], mail, note, calendar_enabled=add_to_calendar, title=title, custom_fields=custom)
         flash('Der Terminplan wurde angelegt.', 'success')
         return render_template(
             'termin_configure.html',

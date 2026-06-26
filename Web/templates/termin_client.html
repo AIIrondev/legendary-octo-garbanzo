@@ -109,6 +109,16 @@
                                     <label for="client_name" class="form-label fw-semibold">Ihr Name</label>
                                     <input type="text" id="client_name" name="client_name" class="form-control form-control-lg" placeholder="Vor- und Nachname" required>
                                 </div>
+                            
+                                {% if custom_fields %}
+                                    {% for field_label in custom_fields %}
+                                    <div>
+                                        <label class="form-label fw-semibold">{{ field_label }}</label>
+                                        <input type="text" name="custom_answers" class="form-control form-control-lg" placeholder="{{ field_label }} eingeben" required>
+                                    </div>
+                                    {% endfor %}
+                                {% endif %}
+                                
                                 <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
                                     <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
                                     <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main', tenant=tenant_id) }}">Zur Übersicht</a>

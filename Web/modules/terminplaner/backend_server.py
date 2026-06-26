@@ -198,7 +198,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     return '\r\n'.join(ics_lines)
 
 
-def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="") -> dict:
+def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = ()) -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
     """
@@ -215,7 +215,7 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail or [])
     
-    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title)
+    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title, custom_fields=custom_fields)
     id_str = str(id)
     tenant_id = _current_tenant_id()
 
@@ -254,7 +254,7 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
     }
     
         
-def book_slot(id, date_start_time, name):
+def book_slot(id, date_start_time, name, custom:list=()):
     try:
         item = termin.get_item(id)
         if not item:
@@ -273,7 +273,7 @@ def book_slot(id, date_start_time, name):
                 if existing[0] == date_start_time and existing[1] == name:
                     return False
 
-        slots.append((date_start_time, name))
+        slots.append((date_start_time, name, custom))
         success = termin.update(id, slots)
         return bool(success)
     except Exception as e:
@@ -418,6 +418,7 @@ def get_user_upcoming_events(user: str, limit: int = 25) -> list[dict]:
                 'link': link,
                 'calendar_link': calendar_link if item.get('calendar_enabled') else None,
                 'title': str(item.get('title') or ''),
+                'custom_fields': list(item.get('custom_fields')),
             }
         )
 

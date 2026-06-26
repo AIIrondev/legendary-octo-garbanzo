@@ -77,6 +77,16 @@
                                 <div class="form-text">Wird aus der gebuchten Zeit (abzüglich Pausen) und der Slot-Länge berechnet.</div>
                             </div>
                         </div>
+                        <div id="custom-fields-container" class="mt-4">
+                            <h3 class="mb-3">Custom Fields</h3>
+
+                            <div class="mb-3 custom-field-row">
+                                <input type="text" 
+                                       name="custom_fields" 
+                                       class="form-control form-control-lg custom-dynamic-input" 
+                                       placeholder="Zusatzfeld hinzufügen (z.B. Firma, Kundennummer...)">
+                            </div>
+                        </div>
 
                         {% if mail_service_enabled %}
                             <div>
@@ -350,6 +360,39 @@
 
         syncTextarea();
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const container = document.getElementById('custom-fields-container');
+        
+        // Monitor inputs inside the container using event delegation
+        container.addEventListener('input', function (event) {
+            // Only trigger if the user is typing inside our dynamic inputs
+            if (event.target.classList.contains('custom-dynamic-input')) {
+                const allInputs = container.querySelectorAll('.custom-dynamic-input');
+                const lastInput = allInputs[allInputs.length - 1];
+            
+                // If the user typed something into the absolute last input field, spawn a new one
+                if (lastInput.value.trim() !== '') {
+                    createNewFieldRow(container);
+                }
+            }
+        });
+    
+        // Helper function to generate and append a clean new input row
+        function createNewFieldRow(targetContainer) {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'mb-3 custom-field-row';
+            
+            rowDiv.innerHTML = `
+                <input type="text" 
+                       name="custom_fields" 
+                       class="form-control form-control-lg custom-dynamic-input" 
+                       placeholder="Nächstes Zusatzfeld...">
+            `;
+            
+            targetContainer.appendChild(rowDiv);
+        }
+    });
 
     // Event Listeners Registration
     buildButton.addEventListener('click', renderRows);
