@@ -37,7 +37,7 @@ def _current_tenant_id():
 @appoint_bp.route('/client/<appointment_id>', methods=['POST', 'GET'])
 def client(appointment_id):
     """
-    The Route for the terminplaner to work with the client
+    The Route for the terminplaner to work with the client and allow owners to manage it.
     """
     guard = _require_module_enabled()
     if guard:
@@ -74,35 +74,60 @@ def client(appointment_id):
         available_for_view['slots_booked'] = sanitized_bookings
 
     if request.method == 'POST':
-        start_daytime = request.form.get('start_day_time')
-        username = request.form.get('client_name')
-        
-        custom_answers = request.form.getlist('custom_answers')
+        action = request.form.get('action', 'book')
 
-        if not start_daytime or not username:
-            flash('Bitte Name und gewünschte Uhrzeit angeben.', 'error')
-            return render_template(
-                'termin_client.html',
-                appointment_id=appointment_id,
-                available=available_for_view,
-                current_user=session.get('username', ''),
-                tenant_id=_current_tenant_id(),
-                can_view_booking_names=can_view_booking_names,
-                custom_fields=custom_fields 
-            )
+        # Fall 1: ADMIN/AUTOR storniert einen Termin
+        if action == 'delete' and can_view_booking_names:
+            slot_time = request.form.get('slot_time')
+            client_name = request.form.get('target_client_name')
+            
+            # Aktuelle Buchungen direkt aus dem DB-Item holen
+            current_slots = appointment_item.get('slots_booked', []) or []
+            
+            # Filtere den zu löschenden Slot heraus (Prüfung auf Zeit und Name)
+            updated_slots = [
+                slot for slot in current_slots 
+                if not (isinstance(slot, (list, tuple)) and slot[0] == slot_time and slot[1] == client_name)
+            ]
+            
+            # In DB schreiben via deiner existierenden termin.update() Funktion
+            if termin.update(appointment_id, updated_slots):
+                flash('Buchung wurde erfolgreich gelöscht.', 'success')
+            else:
+                flash('Fehler beim Löschen der Buchung.', 'error')
+                
+            return redirect(url_for('terminplaner.client', appointment_id=appointment_id, tenant=_current_tenant_id() or None))
 
-        if appointment_service.book_slot(appointment_id, start_daytime, username, custom=custom_answers):
-            return redirect(
-                url_for(
-                    'terminplaner.client_success',
+        # Fall 2: NORMALER CLIENT bucht einen Termin
+        elif action == 'book':
+            start_daytime = request.form.get('start_day_time')
+            username = request.form.get('client_name')
+            custom_answers = request.form.getlist('custom_answers')
+
+            if not start_daytime or not username:
+                flash('Bitte Name und gewünschte Uhrzeit angeben.', 'error')
+                return render_template(
+                    'termin_client.html',
                     appointment_id=appointment_id,
-                    tenant=_current_tenant_id() or None,
-                    start=start_daytime,
-                    name=username,
+                    available=available_for_view,
+                    current_user=session.get('username', ''),
+                    tenant_id=_current_tenant_id(),
+                    can_view_booking_names=can_view_booking_names,
+                    custom_fields=custom_fields 
                 )
-            )
 
-        flash('Der Termin konnte nicht gespeichert werden.', 'error')
+            if appointment_service.book_slot(appointment_id, start_daytime, username, custom=custom_answers):
+                return redirect(
+                    url_for(
+                        'terminplaner.client_success',
+                        appointment_id=appointment_id,
+                        tenant=_current_tenant_id() or None,
+                        start=start_daytime,
+                        name=username,
+                    )
+                )
+
+            flash('Der Termin konnte nicht gespeichert werden.', 'error')
 
     return render_template(
         'termin_client.html',

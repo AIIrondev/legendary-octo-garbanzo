@@ -39,13 +39,14 @@
     <div class="row justify-content-center">
         <div class="col-12 col-xxl-11">
             <div class="row g-4">
+                
                 <div class="col-12 col-lg-4">
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5">
                             <p class="text-uppercase text-muted fw-semibold mb-2">Terminplaner</p>
-                            {% if 'username' in session %}
+                            {% if can_view_booking_names %}
                                 <h1 class="h3 fw-bold mb-3">Termin Übersicht - {{ available.title }}</h1>
-                                <p class="text-muted mb-4">Hier können sie alle Buchungen die Bereits eingegenagen sind verwalten.</p>
+                                <p class="text-muted mb-4">Hier können Sie alle Buchungen, die bereits eingegangen sind, einsehen und verwalten.</p>
                             {% else %}
                                 <h1 class="h3 fw-bold mb-3">Termin buchen - {{ available.title }}</h1>
                                 <p class="text-muted mb-4">Wählen Sie im Kalender einen freien Slot aus. Den gewählten Termin können Sie danach direkt wie in einem Kalender-Block verschieben.</p>
@@ -64,7 +65,7 @@
                                 <div>{{ available.slot_lenght }} Minuten</div>
                             </div>
                             
-                            {% if 'username' in session %}
+                            {% if not can_view_booking_names %}
                             <div class="p-3 rounded-3 bg-light mb-3">
                                 <div class="fw-semibold mb-2">Gewählter Termin</div>
                                 <div id="selected-slot-badge" class="text-muted small">Noch kein Slot ausgewählt.</div>
@@ -74,14 +75,13 @@
                             {% if available.slots_booked %}
                             <div class="p-3 rounded-3 bg-light">
                                 <div class="fw-semibold mb-2">Bereits gebucht</div>
-                                <ul class="mb-0 small">
+                                <ul class="mb-0 small text-muted">
                                     {% for booking in available.slots_booked %}
                                     <li>
-                                        {{ booking.start }}
-                                        {% if can_view_booking_names and booking.name %}
-                                        - {{ booking.name }}
+                                        {% if booking is mapping %}
+                                            {{ booking.get('start', '') }} - Belegt
                                         {% else %}
-                                        - Belegt
+                                            {{ booking[0] }} - {% if can_view_booking_names %}<span class="fw-semibold text-dark">{{ booking[1] }}</span>{% else %}Belegt{% endif %}
                                         {% endif %}
                                     </li>
                                     {% endfor %}
@@ -91,60 +91,90 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="col-12 col-lg-8">
                     <div class="card border-0 shadow-lg rounded-4 h-100">
                         <div class="card-body p-4 p-md-5 bg-white">
                             
                             {% if can_view_booking_names %}
-                                <!-- ADMIN / AUTOREN ANSICHT: Buchungstabelle -->
-                                <div class="d-flex justify-content-between align-items-center mb-4">
-                                    <h2 class="h4 fw-bold mb-0">Eingegangene Buchungen</h2>
-                                    <span class="badge bg-primary rounded-pill fs-6 px-3">
-                                        {{ available.slots_total - available.slots_left }} Gebucht
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                                    <div>
+                                        <h2 class="h4 fw-bold mb-0">Eingegangene Buchungen</h2>
+                                        <div class="text-muted small">Verwalten Sie die Termine Ihrer Klienten</div>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill fs-6 px-3 align-self-start align-self-md-center">
+                                        {{ available.slots_total - available.slots_left }} von {{ available.slots_total }} belegt
                                     </span>
+                                </div>
+
+                                <div class="bg-light p-3 rounded-3 mb-4">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-12 col-md-8">
+                                            <label for="table-search" class="form-label small fw-semibold text-muted mb-1">Live-Filter (Name, Uhrzeit, Zusatzfelder...)</label>
+                                            <input type="text" id="table-search" class="form-control form-control-lg bg-white border" placeholder="Suchbegriff eingeben...">
+                                        </div>
+                                        <div class="col-12 col-md-4 d-flex align-items-end h-100 mt-md-4">
+                                            <button type="button" id="clear-filter-btn" class="btn btn-outline-secondary w-100 btn-lg">Filter zurücksetzen</button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {% if available.slots_booked %}
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle border-top">
+                                    <table class="table table-hover align-middle border-top" id="admin-booking-table">
                                         <thead class="table-light">
                                             <tr>
                                                 <th scope="col" class="py-3">Zeitpunkt</th>
                                                 <th scope="col" class="py-3">Name</th>
-                                                <!-- Dynamische Spaltenüberschriften für Custom Fields -->
                                                 {% for field_label in custom_fields %}
                                                 <th scope="col" class="py-3">{{ field_label }}</th>
                                                 {% endfor %}
+                                                <th scope="col" class="py-3 text-end">Aktion</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody id="booking-table-body">
                                             {% for booking in available.slots_booked %}
-                                            <tr>
-                                                <td class="fw-semibold text-primary py-3">
-                                                    {{ booking[0] }}
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold">{{ booking[1] }}</span>
-                                                </td>
-                                                <!-- Custom Fields Antworten auslesen -->
-                                                {% if booking|length > 2 and booking[2] %}
-                                                    {% for answer in booking[2] %}
-                                                    <td>{{ answer if answer else '<span class="text-muted small">-</span>'|safe }}</td>
-                                                    {% endfor %}
-                                                {% else %}
-                                                    <!-- Fallback falls alte Buchung ohne Custom Fields existiert -->
-                                                    {% for field in custom_fields %}
-                                                    <td><span class="text-muted small">-</span></td>
-                                                    {% endfor %}
+                                                {% if booking is not mapping %}
+                                                <tr>
+                                                    <td class="fw-semibold text-primary py-3 text-nowrap">
+                                                        {{ booking[0] }}
+                                                    </td>
+                                                    <td>
+                                                        <span class="fw-bold text-dark">{{ booking[1] }}</span>
+                                                    </td>
+                                                    
+                                                    {% if booking|length > 2 and booking[2] %}
+                                                        {% for answer in booking[2] %}
+                                                        <td>{{ answer if answer else '<span class="text-muted small">-</span>'|safe }}</td>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        {% for field in custom_fields %}
+                                                        <td><span class="text-muted small">-</span></td>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                    
+                                                    <td class="text-end">
+                                                        <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" onsubmit="return confirm('Möchten Sie diesen Termin wirklich löschen?');" class="d-inline">
+                                                            <input type="hidden" name="action" value="delete">
+                                                            <input type="hidden" name="slot_time" value="{{ booking[0] }}">
+                                                            <input type="hidden" name="target_client_name" value="{{ booking[1] }}">
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger px-3 rounded-3">
+                                                                Löschen
+                                                            </button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
                                                 {% endif %}
-                                            </tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
+                                
+                                <div id="no-results-msg" class="text-center py-4 text-muted d-none">
+                                    Keine Buchungen entsprechen Ihrem Filter.
+                                </div>
                                 {% else %}
                                 <div class="text-center py-5 text-muted">
-                                    <i class="bi bi-calendar-x display-4 d-block mb-3"></i>
                                     <p class="mb-0">Bisher sind noch keine Buchungen für diesen Terminplaner eingegangen.</p>
                                 </div>
                                 {% endif %}
@@ -154,7 +184,6 @@
                                 </div>
 
                             {% else %}
-                                <!-- CLIENT ANSICHT: Normaler Buchungs-Workflow -->
                                 <h2 class="h4 fw-bold mb-3">Termin im Kalender auswählen</h2>
 
                                 <div class="day-slider-wrap mb-3">
@@ -188,6 +217,7 @@
                                     {% endif %}
                                     
                                     <div class="d-flex flex-column flex-sm-row gap-2 pt-2">
+                                        <input type="hidden" name="action" value="book">
                                         <button type="submit" class="btn btn-primary btn-lg">Termin buchen</button>
                                         <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('terminplaner.main', tenant=tenant_id) }}">Zur Übersicht</a>
                                     </div>
@@ -197,6 +227,7 @@
                         </div>
                     </div>
                 </div>
+                
             </div>
         </div>
     </div>
@@ -222,6 +253,52 @@
     </div>
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('table-search');
+    const clearBtn = document.getElementById('clear-filter-btn');
+    const tableBody = document.getElementById('booking-table-body');
+    const noResultsMsg = document.getElementById('no-results-msg');
+
+    if (searchInput && tableBody) {
+        const rows = tableBody.querySelectorAll('tr');
+
+        searchInput.addEventListener('input', function () {
+            const query = this.value.toLowerCase().trim();
+            let visibleRowsCount = 0;
+
+            rows.forEach(row => {
+                // Liest den Textinhalt aller Spalten der Zeile aus
+                const rowText = row.textContent.toLowerCase();
+                
+                if (rowText.includes(query)) {
+                    row.classList.remove('d-none');
+                    visibleRowsCount++;
+                } else {
+                    row.classList.add('d-none');
+                }
+            });
+
+            // Falls kein Filterergebnis gefunden wurde, Nachricht einblenden
+            if (visibleRowsCount === 0 && query !== '') {
+                noResultsMsg.classList.remove('d-none');
+            } else {
+                noResultsMsg.classList.add('d-none');
+            }
+        });
+
+        // Filter zurücksetzen Button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                searchInput.value = '';
+                rows.forEach(row => row.classList.remove('d-none'));
+                noResultsMsg.classList.add('d-none');
+                searchInput.focus();
+            });
+        }
+    }
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
     (function () {
