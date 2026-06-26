@@ -198,7 +198,7 @@ def build_client_slot_ics(appointment_id: str, slot_start: str, client_name: str
     return '\r\n'.join(ics_lines)
 
 
-def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = (), client_per_slot: int=1) -> dict:
+def new(date_start: str, date_end: str, time_span: list, slots, slot_length, user: str, mail: list=None, note:str="", calendar_enabled: bool=False, title: str="", custom_fields: list = (), clients_per_slot: int=1) -> dict:
     """
     Generates a link for the executive to send to his clients to book a time Slot
     """
@@ -220,7 +220,7 @@ def new(date_start: str, date_end: str, time_span: list, slots, slot_length, use
     normalized_time_span = _normalize_time_span(time_span)
     normalized_mail = _normalize_mail_list(mail or [])
     
-    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title, custom_fields=custom_fields, clients_p_slot=client_per_slot)
+    id = termin.add(date_start, date_end, normalized_time_span, slots_int, slot_length_int, user, normalized_mail, note, calendar_enabled=calendar_enabled, title=title, custom_fields=custom_fields, clients_p_slot=clients_per_slot)
     id_str = str(id)
     tenant_id = _current_tenant_id()
 
