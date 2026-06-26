@@ -155,7 +155,7 @@
     const slotLengthInput = document.getElementById('slot_length');
     const clientsperslot = document.getElementById('clients_per_slot')
     const slotsAmountsInput = document.getElementById('slots_amounts');
-    const slotsAmountsDisplay = document.getElementById('slots_amounts_display'); // Neu: Anzeige-Element
+    const slotsAmountsDisplay = document.getElementById('slots_amounts_display'); 
 
     if (!startDateInput || !endDateInput || !buildButton || !daysContainer || !timeFrameTextarea) {
         return;
@@ -442,6 +442,19 @@
     if (startDateInput.value && endDateInput.value) {
         renderRows();
     }
+
+
+    const configForm = document.querySelector('form');
+    if (configForm) {
+        configForm.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                if (event.target.tagName === 'TEXTAREA') return;
+                if (event.target.tagName === 'BUTTON' && event.target.type === 'submit') return;
+                event.preventDefault();
+            }
+        });
+    }
+
 })();
 </script>
 {% endblock %}
