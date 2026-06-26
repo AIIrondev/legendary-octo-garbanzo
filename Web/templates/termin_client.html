@@ -126,6 +126,7 @@
                                             <tr>
                                                 <th scope="col" class="py-3">Zeitpunkt</th>
                                                 <th scope="col" class="py-3">Name</th>
+                                                <!-- Spaltenüberschriften für Custom Fields -->
                                                 {% for field_label in custom_fields %}
                                                 <th scope="col" class="py-3">{{ field_label }}</th>
                                                 {% endfor %}
@@ -133,58 +134,45 @@
                                             </tr>
                                         </thead>
                                         <tbody id="booking-table-body">
-                                            {% for booking in available.slots_booked %}
-                                                <tr>
-                                                    <td class="fw-semibold text-primary py-3 text-nowrap">
-                                                        {% if booking is mapping %}
-                                                            {{ booking.start }}
+                                            {# Wir loopen jetzt über die rohen DB-Daten statt über die beschnittene Service-Funktion #}
+                                            {% for booking in appointment_item.get('slots_booked', []) %}
+                                            <tr>
+                                                <!-- 1. ZEITPUNKT -->
+                                                <td class="fw-semibold text-primary py-3 text-nowrap">
+                                                    {{ booking[0] }}
+                                                </td>
+                                            
+                                                <!-- 2. CLIENT NAME -->
+                                                <td>
+                                                    <span class="fw-bold text-dark">{{ booking[1] }}</span>
+                                                </td>
+                                                
+                                                <!-- 3. CUSTOM FIELDS (Präziser Index-Abgleich gegen Spaltenkopf) -->
+                                                {% for field in custom_fields %}
+                                                    <td>
+                                                        {# Prüft ob für dieses Feld eine Antwort am exakt gleichen Index existiert #}
+                                                        {% if booking|length > 2 and booking[2] and booking[2]|length > loop.index0 %}
+                                                            {% set answer = booking[2][loop.index0] %}
+                                                            {{ answer if answer else '<span class="text-muted small">-</span>'|safe }}
                                                         {% else %}
-                                                            {{ booking[0] }}
+                                                            <span class="text-muted small">-</span>
                                                         {% endif %}
                                                     </td>
+                                                {% endfor %}
                                                 
-                                                    <td>
-                                                        <span class="fw-bold text-dark">
-                                                            {% if booking is mapping %}
-                                                                {{ booking.name }}
-                                                            {% else %}
-                                                                {{ booking[1] }}
-                                                            {% endif %}
-                                                        </span>
-                                                    </td>
-                                                    
-                                                    {% set answers = none %}
-                                                    {% if booking is mapping %}
-                                                        {# Versucht alle gängigen Bezeichnungen für das Antwort-Array zu treffen #}
-                                                        {% set answers = booking.custom or booking.custom_fields or booking.custom_answers %}
-                                                    {% elif booking|length > 2 %}
-                                                        {% set answers = booking[2] %}
-                                                    {% endif %}
-                                                    
-                                                    {% if answers %}
-                                                        {% for answer in answers %}
-                                                        <td>{{ answer if answer else '<span class="text-muted small">-</span>'|safe }}</td>
-                                                        {% endfor %}
-                                                    {% else %}
-                                                        {# Fallback: Zeige Striche, wenn keine Antworten da sind #}
-                                                        {% for field in custom_fields %}
-                                                        <td><span class="text-muted small">-</span></td>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                    
-                                                    <td class="text-end">
-                                                        <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" onsubmit="return confirm('Möchten Sie diesen Termin wirklich löschen?');" class="d-inline">
-                                                            <input type="hidden" name="action" value="delete">
-                                                            
-                                                            <input type="hidden" name="slot_time" value="{% if booking is mapping %}{{ booking.start }}{% else %}{{ booking[0] }}{% endif %}">
-                                                            <input type="hidden" name="target_client_name" value="{% if booking is mapping %}{{ booking.name }}{% else %}{{ booking[1] }}{% endif %}">
-                                                            
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger px-3 rounded-3">
-                                                                Löschen
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
+                                                <!-- 4. AKTION (LÖSCHEN) -->
+                                                <td class="text-end">
+                                                    <form method="post" action="{{ url_for('terminplaner.client', appointment_id=appointment_id, tenant=tenant_id) }}" onsubmit="return confirm('Möchten Sie diesen Termin wirklich löschen?');" class="d-inline">
+                                                        <input type="hidden" name="action" value="delete">
+                                                        <input type="hidden" name="slot_time" value="{{ booking[0] }}">
+                                                        <input type="hidden" name="target_client_name" value="{{ booking[1] }}">
+                                                        
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger px-3 rounded-3">
+                                                            Löschen
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>

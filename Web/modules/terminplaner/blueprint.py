@@ -136,7 +136,8 @@ def client(appointment_id):
         current_user=session.get('username', ''),
         tenant_id=_current_tenant_id(),
         can_view_booking_names=can_view_booking_names,
-        custom_fields=custom_fields
+        custom_fields=custom_fields,
+        appointment_item=appointment_item
     )
 
 
