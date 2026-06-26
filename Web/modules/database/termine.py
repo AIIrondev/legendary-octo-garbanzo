@@ -265,7 +265,9 @@ def remove_done():
 
 
 def get_upcoming_for_user(user: str, limit: int = 25):
-    """Return upcoming appointment plans for a user, matching by encrypted username."""
+    """
+    Return upcoming appointment plans for a user, handling encrypted database records.
+    """
     try:
         if hasattr(globals(), 'remove_done'):
             remove_done()
@@ -279,20 +281,26 @@ def get_upcoming_for_user(user: str, limit: int = 25):
         items = db['appointments']
 
         today = datetime.date.today().strftime('%Y-%m-%d')
+        target_user = str(user or '').strip()
 
         cursor = items.find(
-            _active_record_query(
-                {
-                    'user': user,
-                    'date_end': {'$gte': today},
-                }
-            )
+            _active_record_query({
+                'date_end': {'$gte': today},
+            })
         ).sort('date_start', 1)
 
         results = []
         for item in cursor:
-            item['_id'] = str(item.get('_id'))
-            results.append(item)
+            decrypted_item = _decrypt_appointment(item)
+            if not decrypted_item:
+                continue
+
+            if decrypted_item.get('user', '').strip() != target_user:
+                continue
+
+            decrypted_item['_id'] = str(decrypted_item.get('_id'))
+            results.append(decrypted_item)
+            
             if len(results) >= max(1, int(limit)):
                 break
 
