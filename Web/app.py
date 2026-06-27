@@ -5138,6 +5138,7 @@ def upload_item():
         anschaffungs_jahr = sanitize_form_value(request.form.getlist('anschaffungsjahr'))
         anschaffungs_kosten = sanitize_form_value(request.form.getlist('anschaffungskosten'))
         code_4 = sanitize_form_value(request.form.getlist('code_4'))
+        app.logger.info(f"Upload attempt by {encrypt_text(username)}: name={name!r}, ort={ort!r}, beschreibung length={len(beschreibung)}, images count={len(images)}, filters={filter_upload}, filters2={filter_upload2}, filters3={filter_upload3}, anschaffungs_jahr={anschaffungs_jahr}, anschaffungs_kosten={anschaffungs_kosten}, code_4={code_4}")
         isbn_raw = sanitize_form_value(request.form.get('isbn', ''))
         upload_mode = sanitize_form_value(request.form.get('upload_mode', 'item'))
         individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))

@@ -24,7 +24,7 @@ import Web.modules.database.settings as cfg
 from Web.modules.database.settings import MongoClient
 
 
-LIBRARY_ITEM_TYPES = ('book', 'cd', 'dvd', 'media')
+LIBRARY_ITEM_TYPES = ('book', 'cd', 'dvd', 'media', 'schulbuch')
 
 
 def _non_library_query(extra_query=None):
