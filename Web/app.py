@@ -660,7 +660,7 @@ def _csrf_error_response(message='CSRF token fehlt oder ist ungültig.'):
     if request.is_json or request.path.startswith('/api/') or request.path in {'/download_book_cover', '/proxy_image', '/log_mobile_issue'}:
         return jsonify({'error': message}), 400
     flash(message, 'error')
-    return redirect(request.referrer or url_for('home'))
+    return redirect(url_for('login'))
 
 def _get_current_module(path):
     """Resolve the active UI module for navbar separation."""
@@ -4738,7 +4738,7 @@ def get_items():
             'has_more': pagination_requested and ((offset + count) < total_count)
         })
     except Exception as e:
-        return jsonify({'items': [], 'error': str(e)}), 500
+        return jsonify({'items': []}), 500
     finally:
         if client:
             client.close()
@@ -4829,7 +4829,7 @@ def get_bookings():
 
         return jsonify({'ok': True, 'bookings': result})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e), 'bookings': []}), 500
+        return jsonify({'ok': False, 'bookings': []}), 500
     finally:
         if client:
             client.close()
@@ -4919,7 +4919,7 @@ def get_user_appointments():
 
         return jsonify({'ok': True, 'bookings': result})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e), 'bookings': []}), 500
+        return jsonify({'ok': False, 'bookings': []}), 500
     finally:
         if client:
             client.close()
@@ -7300,7 +7300,7 @@ def get_planned_bookings(item_id):
         client.close()
         return jsonify({'ok': True, 'bookings': bookings})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False}), 500
 
 
 @app.route('/get_planned_bookings_public/<item_id>')
@@ -7326,7 +7326,7 @@ def get_planned_bookings_public(item_id):
         client.close()
         return jsonify({'ok': True, 'bookings': bookings})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False}), 500
 
 
 @app.route('/check_availability')
@@ -7407,7 +7407,7 @@ def check_availability():
         client.close()
         return jsonify({'ok': True, 'available': len(conflicts) == 0, 'conflicts': conflicts})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False}), 500
 
 
 # def create_qr_code(id):
@@ -7682,7 +7682,7 @@ def add_booking():
         
         return jsonify({'success': True, 'booking_id': str(booking_id)})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False})
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):
@@ -8188,7 +8188,7 @@ def admin_image_cache_stats():
         })
     except Exception as e:
         app.logger.error(f"Error getting cache stats: {str(e)}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False}), 500
 
 
 @app.route('/admin/image_cache_cleanup', methods=['POST'])
@@ -8237,7 +8237,7 @@ def admin_image_cache_cleanup():
         })
     except Exception as e:
         app.logger.error(f"Error during image cache cleanup: {str(e)}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False}), 500
 
 """-----------------------------------------------------------Borrowing Management Routes-------------------------------------------------------"""
 
@@ -11646,7 +11646,7 @@ def cleanup_old_optimized_images(max_age_days=30):
         }
     except Exception as e:
         app.logger.error(f"Error during optimized image cleanup: {str(e)}")
-        return {'deleted': 0, 'freed_mb': 0, 'error': str(e)}
+        return {'deleted': 0, 'freed_mb': 0}
 
 
 @app.route('/log_mobile_issue', methods=['POST'])
@@ -11691,7 +11691,7 @@ def log_mobile_issue():
         return jsonify({'success': True})
     except Exception as e:
         app.logger.error(f"Error logging mobile issue: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False})
 
 def delete_item_images(filenames):
     """
@@ -11843,7 +11843,7 @@ def subscribe_to_push():
             
     except Exception as e:
         app.logger.error(f'Error subscribing to push: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False}), 500
 
 
 @app.route('/api/push/unsubscribe', methods=['POST'])
@@ -11880,7 +11880,7 @@ def unsubscribe_from_push():
             
     except Exception as e:
         app.logger.error(f'Error unsubscribing from push: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False}), 500
 
 
 @app.route('/api/push/subscriptions', methods=['GET'])
@@ -11914,7 +11914,7 @@ def get_push_subscriptions():
         
     except Exception as e:
         app.logger.error(f'Error getting push subscriptions: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False}), 500
 
 
 @app.route('/api/push/vapid-key', methods=['GET'])
@@ -11939,7 +11939,7 @@ def get_vapid_key():
         
     except Exception as e:
         app.logger.error(f'Error getting VAPID key: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False}), 500
 
 
 @app.route('/api/push/test', methods=['POST'])
@@ -11978,4 +11978,4 @@ def test_push_notification():
             
     except Exception as e:
         app.logger.error(f'Error sending test push: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False}), 500
