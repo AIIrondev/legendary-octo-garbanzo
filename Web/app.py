@@ -1635,7 +1635,7 @@ def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
                         
                         file_content.seek(0)  # Reset file pointer after reading
                 except Exception as e:
-                    error_msg = f"Error validating image content for {filename}: {str(e)}"
+                    error_msg = f"Error validating image content for {filename}"
                     app.logger.error(error_msg)
                     
                     if extension == 'png':
@@ -1675,9 +1675,9 @@ def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
                         except Exception as raw_err:
                             app.logger.error(f"PNG DEBUG: Error during raw file analysis: {str(raw_err)}")
                         
-                        traceback.print_exc()
+                        
                     
-                    return False, f"Datei '{filename}' konnte nicht als Bild erkannt werden. Fehler: {str(e)}"
+                    return False, f"Datei '{filename}' konnte nicht als Bild erkannt werden. "
                     
             # Add more content type validations as needed for other file types
                 
@@ -2835,8 +2835,8 @@ def catch_all_files(filename):
         # If we get here, the file wasn't found
         return Response(f"File {filename} not found", status=404)
     except Exception as e:
-        print(f"Error in catch-all route for {filename}: {str(e)}")
-        return Response(f"Error serving file: {str(e)}", status=500)
+        app.logger.error(f"Error in catch-all route for {filename}: {str(e)}")
+        return Response(f"Error serving file {filename}", status=500)
 
 """-------------------------------------------------------------Main Views-----------------------------------------------------------------------------"""
 
@@ -3350,7 +3350,7 @@ def api_library_items():
         }), 200
     except Exception as e:
         app.logger.error(f"Error fetching library items: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while fetching library items'}), 500
 
 
 @app.route('/api/library_scan_action', methods=['POST'])
@@ -3615,7 +3615,7 @@ def api_item_detail(item_id):
         return detail_html, 200
     except Exception as e:
         app.logger.error(f"Error fetching item detail: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An error occurred while fetching the item detail'}), 500
 
 
 @app.route('/api/library_item/<item_id>/update', methods=['POST'])
@@ -4229,7 +4229,8 @@ def student_card_barcode_download():
             download_name=f'schuelerausweise_all_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         )
     except Exception as e:
-        flash(f'Fehler beim PDF-Download: {str(e)}', 'error')
+        app.logger.error(f"Error occurred while generating PDF for card {card['AusweisId']}: {e}")
+        flash('Fehler beim PDF-Download', 'error')
         return redirect(url_for('student_cards_admin'))
 
 
@@ -4401,7 +4402,8 @@ def student_card_single_barcode_download(card_id):
             download_name=f'ausweis_{card["AusweisId"]}.pdf'
         )
     except Exception as e:
-        flash(f'Fehler beim PDF-Download: {str(e)}', 'error')
+        app.logger.error(f"Error occurred while generating PDF for card {card['AusweisId']}: {e}")
+        flash('Fehler beim PDF-Download', 'error')
         return redirect(url_for('student_cards_admin'))
 
 
@@ -4755,7 +4757,8 @@ def get_item_json(id):
         item['_id'] = str(item['_id'])
         return jsonify(item)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f"Error occurred while fetching item {id}: {e}")
+        return jsonify({'error': 'An error occurred while fetching the item'}), 500
 
 
 @app.route('/get_bookings')
@@ -4963,7 +4966,8 @@ def api_booking_conflicts():
         client.close()
         return jsonify({'conflicts': result, 'count': len(result)})
     except Exception as e:
-        return jsonify({'error': str(e), 'conflicts': []}), 500
+        app.logger.error(f"Error occurred while fetching booking conflicts: {e}")
+        return jsonify({'error': 'An error occurred while fetching booking conflicts', 'conflicts': []}), 500
 
 """Favorites management endpoints (persistent + session cache)."""
 def _ensure_session_favs():
@@ -5186,7 +5190,7 @@ def upload_item():
             except json.JSONDecodeError as e:
                 app.logger.error(f"Error parsing mobile data: {str(e)}")
     except Exception as e:
-        error_msg = f"Fehler beim Verarbeiten der Formulardaten: {str(e)}"
+        error_msg = f"Fehler beim Verarbeiten der Formulardaten"
         app.logger.error(error_msg)
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 400
@@ -5549,7 +5553,7 @@ def upload_item():
                         if is_png:
                             app.logger.error(f"PNG DEBUG: {image_log_prefix} Fallback PNG save also failed: {str(fallback_err)}")
                             app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(fallback_err).__name__}")
-                            traceback.print_exc()
+                            
                         error_count += 1
                         continue
             else:
@@ -5657,7 +5661,7 @@ def upload_item():
                         except Exception as webp_err:
                             app.logger.error(f"PNG DEBUG: {image_log_prefix} Final WebP conversion failed: {str(webp_err)}")
                             
-                        traceback.print_exc()
+                        
                     error_count += 1
                     continue
             
@@ -5716,7 +5720,7 @@ def upload_item():
                     if is_png:
                         app.logger.error(f"PNG DEBUG: {image_log_prefix} Could not get PNG dimensions: {str(dim_err)}")
                         app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(dim_err).__name__}")
-                        traceback.print_exc()
+                        
                 
                 app.logger.info(f"{image_log_prefix} Starting optimization for {saved_filename} ({original_size/1024:.1f}KB, {original_dimensions})")
                 
@@ -5766,7 +5770,6 @@ def upload_item():
                     app.logger.warning(f"{image_log_prefix} Optimization failed or returned no file")
             except Exception as e:
                 app.logger.error(f"{image_log_prefix} Optimization failed: {str(e)}")
-                traceback.print_exc()
                 
                 # No fallback thumbnail generation needed as we only use the main image
             
@@ -5778,7 +5781,6 @@ def upload_item():
             
         except Exception as e:
             app.logger.error(f"{image_log_prefix} Unexpected error: {str(e)}")
-            traceback.print_exc()
             error_count += 1
             # Continue with the next image
     
@@ -5915,7 +5917,7 @@ def upload_item():
                         app.logger.error(f"Error generating optimized versions for {new_filename}: {e}")
                         # If optimization fails, at least keep the original file
                         result = {'original': new_filename}
-                        traceback.print_exc()
+                        
                 
                 # If we didn't find the image, use a placeholder
                 else:
@@ -5951,7 +5953,7 @@ def upload_item():
                 app.logger.info(f"Processed image {i+1}/{original_count}: {new_filename}")
             except Exception as e:
                 app.logger.error(f"Error processing image {i+1}/{original_count} ({dup_img}): {str(e)}")
-                traceback.print_exc()
+                
                 error_count += 1
         
         # Log placeholder usage
@@ -6185,7 +6187,7 @@ def duplicate_item():
         
     except Exception as e:
         print(f"Error in duplicate_item: {e}")
-        traceback.print_exc()
+        
         return jsonify({'success': False, 'message': 'Serverfehler beim Duplizieren'}), 500
 
 
@@ -6338,7 +6340,7 @@ def delete_item(id):
         soft_deleted_borrows = int(delete_result.get('soft_deleted_borrows', 0))
         archived_files = int((delete_result.get('archive') or {}).get('archived_files', 0))
     except Exception as e:
-        app.logger.error(f"Error during soft-delete for item group {id}: {str(e)}")
+        app.logger.error(f"Error during soft-delete for item group {id}")
         delete_success = False
         archived_files = 0
     finally:
@@ -6470,7 +6472,7 @@ def bulk_delete_items():
             'group_item_ids': result.get('group_item_ids', []),
         })
     except Exception as e:
-        app.logger.error(f"Error during bulk delete: {str(e)}")
+        app.logger.error(f"Error during bulk delete for items {item_ids}: {e}")
         return jsonify({'success': False, 'message': 'Fehler beim Sammellöschen.'}), 500
     finally:
         if client:
@@ -7201,9 +7203,9 @@ def zurueckgeben(id):
             )
                 
         except Exception as e:
-            print(f"Error in return process: {e}")
+            app.logger.error(f"Error in return process: {e}")
             it.update_item_status(id, True)
-            flash(f'Element zurückgegeben, aber ein Fehler ist aufgetreten: {str(e)}', 'warning')
+            flash('Element zurückgegeben, aber ein Fehler ist aufgetreten', 'warning')
     else:
         flash('Sie sind nicht berechtigt, dieses Element zurückzugeben, oder es ist bereits verfügbar', 'error')
 
@@ -7578,16 +7580,15 @@ def plan_booking():
                 }
             else:
                 # All failed
-                return {"success": False, "errors": errors}, 400
+                return {"success": False}, 500
         else:
             # All succeeded
             return {"success": True, "booking_ids": booking_ids}
             
     except Exception as e:
         import traceback
-        print(f"Error in plan_booking: {e}")
-        traceback.print_exc()
-        return {"success": False, "error": f"Serverfehler: {str(e)}"}, 500
+        app.logger.error(f"Error in plan_booking: {e}")
+        return {"success": False, "error": f"Fehler beim Planen der Buchung"}, 500
 
 def process_day_bookings(item_id, booking_date, periods, notes):
     """
@@ -7735,7 +7736,7 @@ def terminplan():
     except Exception as e:
         import traceback
         print(f"Error rendering terminplan: {e}")
-        traceback.print_exc()
+        
         flash('Ein Fehler ist beim Anzeigen des Kalenders aufgetreten.', 'error')
         return redirect(url_for('home'))
 
@@ -7921,15 +7922,17 @@ def delete_user():
 
         client.close()
     except Exception as e:
-        flash(f'Warnung: Ausleihungen/Reservierungen für {username} konnten nicht vollständig zurückgesetzt werden: {str(e)}', 'warning')
+        app.logger.error(f"Error resetting borrowings for user {encrypt_text(username)}: {e}")
+        flash(f'Warnung: Ausleihungen/Reservierungen für {username} konnten nicht vollständig zurückgesetzt werden', 'warning')
 
     # Delete the user
     try:
         us.delete_user(username)
         flash(f'Benutzer {username} erfolgreich gelöscht', 'success')
     except Exception as e:
-        flash(f'Fehler beim Löschen des Benutzers: {str(e)}', 'error')
-    
+        app.logger.error(f"Error deleting user {encrypt_text(username)}: {e}")
+        flash('Fehler beim Löschen des Benutzers', 'error')
+
     return redirect(url_for('user_del'))
 
 
@@ -8306,7 +8309,8 @@ def admin_reset_borrowing(borrow_id):
 
         client.close()
     except Exception as e:
-        flash(f'Fehler beim Zurücksetzen: {str(e)}', 'error')
+        app.logger.error(f"Error resetting borrowing status for {borrow_id}: {e}")
+        flash('Fehler beim Zurücksetzen', 'error')
 
     return redirect(url_for('admin_borrowings'))
 
@@ -8920,10 +8924,11 @@ def admin_reset_user_password():
     # Reset the password
     try:
         us.update_password(username, new_password)
-        flash(f'Passwort für {username} wurde erfolgreich zurückgesetzt auf: {new_password}', 'success')
+        flash(f'Passwort für {encrypt_text(username)} wurde erfolgreich zurückgesetzt auf: {new_password}', 'success')
     except Exception as e:
-        flash(f'Fehler beim Zurücksetzen des Passworts: {str(e)}', 'error')
-    
+        app.logger.error(f'Error resetting password for {encrypt_text(username)}: {e}')
+        flash('Fehler beim Zurücksetzen des Passworts', 'error')
+
     return redirect(url_for('user_del'))
 
 
@@ -9423,7 +9428,8 @@ def search_word(word):
 
         return jsonify({"success": True, "response": list(id_set)})
     except Exception as e:
-        return jsonify({"success": False, "response": str(e)})
+        app.logger.error(f"Error searching for word: {e}")
+        return jsonify({"success": False})
 
 def _fetch_from_google_books(clean_isbn):
     """Source 1: Google Books API (Free, No Key required for basic use)"""
@@ -9722,8 +9728,8 @@ def fetch_book_info(isbn):
         return jsonify({"error": f"Kein Buch zu dieser ISBN gefunden: {clean_isbn}"}), 404
         
     except Exception as e:
-        print(f"Error fetching book data: {e}")
-        return jsonify({"error": f"Failed to fetch book information: {str(e)}"}), 500
+        app.logger.error(f"Error fetching book data: {e}")
+        return jsonify({"error": f"Failed to fetch book information"}), 500
 
 @app.route('/download_book_cover', methods=['POST'])
 def download_book_cover():
@@ -9807,12 +9813,12 @@ def download_book_cover():
         })
         
     except requests.exceptions.RequestException as e:
-        print(f"Network error downloading book cover: {e}")
+        app.logger.error(f"Network error downloading book cover: {e}")
         return jsonify({"error": "Netzwerkfehler beim Herunterladen des Bildes."}), 500
     except Exception as e:
-        print(f"Error downloading book cover: {e}")
+        app.logger.error(f"Error downloading book cover: {e}")
         # Fixed syntax here: Removed the injected HTML that was appended to this line
-        return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to download image"}), 500
 """
 @app.route('/proxy_image')
 def proxy_image():
@@ -9871,8 +9877,8 @@ def proxy_image():
             }
         )
     except Exception as e:
-        print(f"Error in proxy_image: {e}")
-        return jsonify({"error": f"Error fetching image: {str(e)}"}), 500
+        app.logger.error(f"Error in proxy_image: {e}")
+        return jsonify({"error": f"Error fetching image"}), 500
 """
 
 
@@ -10720,8 +10726,8 @@ def schedule_appointment():
             if has_conflict:
                 return jsonify({'success': False, 'message': 'Termin kollidiert mit bestehender Buchung'}), 409
         except Exception as e:
-            print(f"Error checking for booking conflicts: {e}")
-            return jsonify({'success': False, 'message': f'Fehler beim Prüfen der Verfügbarkeit: {str(e)}'}), 500
+            app.logger.error(f"Error checking for booking conflicts: {e}")
+            return jsonify({'success': False, 'message': f'Fehler beim Prüfen der Verfügbarkeit'}), 500
             
         # Check if the appointment should already be active
         now = datetime.datetime.now()
@@ -10792,8 +10798,8 @@ def schedule_appointment():
             if not appointment_id:
                 return jsonify({'success': False, 'message': 'Termin konnte nicht erstellt werden'}), 500
         except Exception as e:
-            print(f"Error creating booking: {e}")
-            return jsonify({'success': False, 'message': f'Fehler beim Erstellen des Termins: {str(e)}'}), 500
+            app.logger.error(f"Error creating booking: {e}")
+            return jsonify({'success': False, 'message': f'Fehler beim Erstellen des Termins'}), 500
         
         # If we got this far, we have a valid appointment_id
         try:
@@ -10827,14 +10833,14 @@ def schedule_appointment():
                 return jsonify({'success': False, 'message': 'Element konnte nicht mit Termininformationen aktualisiert werden'}), 500
                 
         except Exception as e:
-            print(f"Error updating item with appointment info: {e}")
-            return jsonify({'success': False, 'message': f'Fehler beim Aktualisieren des Elements: {str(e)}'}), 500
+            app.logger.error(f"Error updating item with appointment info: {e}")
+            return jsonify({'success': False, 'message': f'Fehler beim Aktualisieren des Elements'}), 500
             
     except Exception as e:
-        print(f"Error creating appointment: {e}")
+        app.logger.error(f"Error creating appointment: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Serverfehler aufgetreten: {str(e)}'}), 500
+        
+        return jsonify({'success': False, 'message': f'Serverfehler aufgetreten'}), 500
 
 @app.route('/cancel_ausleihung/<id>', methods=['POST'])
 def cancel_ausleihung_route(id):
@@ -10908,16 +10914,16 @@ def cancel_ausleihung_route(id):
                         next_appt = item_doc.get('NextAppointment', {})
                         if next_appt and str(next_appt.get('appointment_id')) == str(id):
                             cleared = it.clear_item_next_appointment(item_id)
-                            print(f"Cleared NextAppointment for item {item_id}: {cleared}")
+                            app.logger.info(f"Cleared NextAppointment for item {item_id}: {cleared}")
             except Exception as clear_err:
-                print(f"Warning: could not clear NextAppointment for cancelled ausleihung {id}: {clear_err}")
+                app.logger.warning(f"Warning: could not clear NextAppointment for cancelled ausleihung {id}: {clear_err}")
         else:
-            print(f"Failed to cancel ausleihung with ID: {id}")
+            app.logger.warning(f"Failed to cancel ausleihung with ID: {id}")
             flash('Fehler beim Stornieren der Ausleihung', 'error')
             
     except Exception as e:
-        print(f"Error canceling ausleihung: {e}")
-        flash(f'Fehler: {str(e)}', 'error')
+        app.logger.warning(f"Error canceling ausleihung: {e}")
+        flash(f'Fehler', 'error')
         
     return redirect(url_for('my_borrowed_items'))
 
@@ -10960,10 +10966,10 @@ def reset_item(id):
     except Exception as e:
         print(f"Error in reset_item route: {e}")
         import traceback
-        traceback.print_exc()
+        
         return jsonify({
             'success': False,
-            'error': f'Serverfehler: {str(e)}'
+            'error': f'Serverfehler'
         }), 500
 
 # New image and video optimization functions
@@ -11109,7 +11115,6 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
             return True
             
     except Exception as e:
-        print(f"Error creating image thumbnail for {image_path}: {str(e)}")
         return False
 
 
@@ -11150,11 +11155,11 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
                 
             return success
         else:
-            print(f"ffmpeg failed for {video_path}: {result.stderr}")
+            app.logger.error(f"ffmpeg failed for {video_path}: {result.stderr}")
             return False
             
     except Exception as e:
-        print(f"Error creating video thumbnail for {video_path}: {str(e)}")
+        app.logger.error(f"Error creating video thumbnail for {video_path}: {str(e)}")
         return False
 
 
@@ -11381,7 +11386,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         
         except Exception as e:
             app.logger.error(f"{log_prefix} Failed to process image: {str(e)}")
-            traceback.print_exc()
+            
             # Just copy the original file as is
             if not is_webp_ext and os.path.exists(original_path) and not os.path.exists(converted_path):
                 try:
@@ -11410,7 +11415,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         
     except Exception as e:
         app.logger.error(f"{log_prefix} Unhandled exception in optimization: {str(e)}")
-        traceback.print_exc()
+        
         
         # If anything went wrong but the original file exists, just use it
         if os.path.exists(original_path):
