@@ -5306,7 +5306,7 @@ def upload_item():
     # Validate every code in our master list against the database
     for code in all_item_codes:
         if not it.is_code_unique(code):
-            
+            app.logger.info(f"DEBUG: Code '{code}' is not unique.")
             # Special case: If they only uploaded ONE item, redirect them to that existing item
             if item_count == 1:
                 existing_item = it._get_items_collection().find_one({"code_4": code})
@@ -5339,13 +5339,13 @@ def upload_item():
         if not base_code:
             return None
 
-        candidate = base_code if position == 1 else f"{base_code}-{position}"
+        candidate = base_code if position == 1 else f"{base_code}"
         if it.is_code_unique(candidate):
             return candidate
 
         suffix = 1
         while suffix <= 1000:
-            alternative = f"{candidate}-{suffix}"
+            alternative = f"{candidate}"
             if it.is_code_unique(alternative):
                 return alternative
             suffix += 1
@@ -6013,6 +6013,17 @@ def upload_item():
 
     for position in range(1, item_count + 1):
         unique_code = None
+        if position <= len(individual_codes):
+            unique_code = individual_codes[position - 1]
+        else:
+            unique_code = generate_unique_batch_code(base_code, position)
+
+        if (base_code or individual_codes) and not unique_code:
+            error_msg = 'Fehler bei der Code-Erzeugung für mehrere Artikel.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for(success_redirect_endpoint))
 
         parent_item_id = str(created_item_ids[0]) if created_item_ids else None
         item_id = it.add_item(
@@ -6030,7 +6041,6 @@ def upload_item():
             isbn=item_isbn,
             item_type=item_type
         )
-        app.logger.info(f"Created item {position}/{item_count}: ID={item_id}, parent={parent_item_id}, series_group={series_group_id}")
         if not item_id:
             break
         created_item_ids.append(item_id)
