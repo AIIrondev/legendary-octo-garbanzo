@@ -8049,7 +8049,7 @@ def admin_audit_dashboard():
         al.ensure_audit_indexes(db)
         verify_result = al.verify_audit_chain(db)
 
-        audit_rows = list(db['audit_log'].find(...).sort('chain_index', -1).limit(200))
+        audit_rows = list(db['audit_log'].find({}).sort('chain_index', -1).limit(200))
 
         # DEC_START: Decrypt the sensitive fields for display
         for row in audit_rows:
