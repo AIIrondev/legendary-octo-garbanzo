@@ -1,12 +1,20 @@
-from flask import Blueprint, render_template, request, session, url_for, redirect, flash
-from flask import Response
+from flask import Blueprint, render_template, request, session, url_for, redirect, flash, make_response, Response, send_file
 import Web.modules.terminplaner.backend_server as appointment_service
 import Web.modules.database.settings as cfg
 import Web.modules.database.termine as termin
 import Web.modules.database.user as us
 import csv
 import io
-from flask import make_response, flash, redirect, url_for, session
+import qrcode
+import os
+import tempfile
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib.colors import grey, HexColor
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from Web.app import _get_school_info_for_export
+
 
 # Create a blueprint instance
 appoint_bp = Blueprint('terminplaner', __name__)
@@ -363,6 +371,125 @@ def client_slot_calendar_export(appointment_id):
     response = Response(ics_content, mimetype='text/calendar; charset=utf-8')
     response.headers['Content-Disposition'] = f'attachment; filename=termin-{title}-{appointment_id}-{slot_start.replace(" ", "_").replace(":", "")}.ics'
     return response
+
+
+@appoint_bp.route('/export_pdf_brief/<plan_id>', methods=['GET'])
+def export_pdf_brief(plan_id):
+    # 1. Daten holen (Hier als Beispiel, passe dies auf deine Datenbank an)
+    # terminplan = Terminplan.query.get(plan_id)
+
+    school_info = _get_school_info_for_export()
+
+    school_name = school_info.get('name', 'Schulname')
+    address = school_info.get('address', 'Adresse')
+    postal_code = school_info.get('postal_code', 'PLZ')
+    city = school_info.get('city', 'Stadt')
+    
+    schul_daten = {
+        "schulname": school_name,
+        "strasse": address,
+        "plz_ort": f"{postal_code} {city}"
+    }
+    
+    plan_daten = {
+        "titel": termin.get_item(plan_id).get('title', 'Terminplan'), # terminplan.title
+        "link": termin.get_item(plan_id).get('link', ''), # terminplan.link
+        "notizen": termin.get_item(plan_id).get('note', '') # terminplan.note
+    }
+
+    # 2. QR-Code Bild im temporären Ordner erstellen
+    qr = qrcode.QRCode(version=1, box_size=10, border=0)
+    qr.add_data(plan_daten["link"])
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    fd, qr_path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    img.save(qr_path)
+
+    # 3. PDF im Speicher aufbauen (BytesIO)
+    pdf_buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        pdf_buffer,
+        pagesize=A4,
+        rightMargin=2*cm,
+        leftMargin=2.5*cm,
+        topMargin=2.5*cm,
+        bottomMargin=2*cm
+    )
+    
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='Sender', fontSize=8, textColor=grey))
+    styles.add(ParagraphStyle(name='Address', fontSize=10, leading=14))
+    styles.add(ParagraphStyle(name='Date', fontSize=10, alignment=2))
+    styles.add(ParagraphStyle(name='Subject', fontSize=14, fontName='Helvetica-Bold', spaceAfter=16, textColor=HexColor('#0f4c5c')))
+    styles.add(ParagraphStyle(name='Body', fontSize=11, leading=16, spaceAfter=12))
+    styles.add(ParagraphStyle(name='Notes', fontSize=10, leading=14, textColor=HexColor("#444444")))
+    
+    elements = []
+    
+    # Absenderzeile
+    sender_text = f"<u>{schul_daten['schulname']} • {schul_daten['strasse']} • {schul_daten['plz_ort']}</u>"
+    elements.append(Paragraph(sender_text, styles['Sender']))
+    elements.append(Spacer(1, 1.5*cm))
+    
+    # Sichtfenster-Adresse (Generisch)
+    elements.append(Paragraph("An die<br/>Teilnehmerinnen und Teilnehmer<br/>des Termins", styles['Address']))
+    elements.append(Spacer(1, 2*cm))
+    
+    # Datum (Hier statisch zum Test, ggf. dynamisch per datetime)
+    import datetime
+    heute = datetime.datetime.now().strftime("%d.%m.%Y")
+    elements.append(Paragraph(f"München, den {heute}", styles['Date']))
+    elements.append(Spacer(1, 1*cm))
+    
+    # Betreff
+    elements.append(Paragraph(f"Einladung zur Terminbuchung: {plan_daten['titel']}", styles['Subject']))
+    
+    # Text
+    elements.append(Paragraph("Sehr geehrte Damen und Herren,", styles['Body']))
+    elements.append(Paragraph("hiermit möchten wir Sie herzlich einladen, einen Termin für unsere anstehende Veranstaltung zu buchen. Um den Prozess für alle Beteiligten so einfach und effizient wie möglich zu gestalten, nutzen wir unser Online-Buchungssystem.", styles['Body']))
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Link
+    elements.append(Paragraph("<b>Ihr persönlicher Buchungslink:</b>", styles['Body']))
+    link_html = f'<a href="{plan_daten["link"]}" color="#16697a">{plan_daten["link"]}</a>'
+    elements.append(Paragraph(link_html, styles['Body']))
+    
+    # Das vorhin erstellte QR-Code Bild einfügen
+    elements.append(Spacer(1, 0.2*cm))
+    elements.append(Image(qr_path, width=3*cm, height=3*cm, hAlign='LEFT'))
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Notizen (falls vorhanden)
+    if plan_daten.get('notizen'):
+        elements.append(Paragraph("<b>Zusätzliche Informationen zum Termin:</b>", styles['Body']))
+        elements.append(Paragraph(plan_daten['notizen'], styles['Notes']))
+        
+    elements.append(Spacer(1, 1.5*cm))
+    
+    # Grußformel
+    elements.append(Paragraph("Mit freundlichen Grüßen,", styles['Body']))
+    elements.append(Spacer(1, 1.5*cm))
+    elements.append(Paragraph(f"<b>{schul_daten['schulname']}</b>", styles['Body']))
+    
+    # PDF fertigstellen
+    doc.build(elements)
+    
+    # Temporäres Bild löschen
+    if os.path.exists(qr_path):
+        os.remove(qr_path)
+    
+    # Buffer auf Anfang zurücksetzen
+    pdf_buffer.seek(0)
+    
+    # An Nutzer ausliefern
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f"Einladung_{plan_daten['titel'].replace(' ', '_')}.pdf"
+    )
 
 @appoint_bp.route('/')
 def main():

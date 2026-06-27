@@ -311,3 +311,4 @@ def get_upcoming_for_user(user: str, limit: int = 25):
     finally:
         if client:
             client.close()
+
