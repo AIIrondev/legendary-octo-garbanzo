@@ -10,6 +10,7 @@ import hashlib
 import json
 import random
 import time
+from Web.modules.inventarsystem.data_protection import encrypt_document_fields, decrypt_document_fields
 
 from pymongo.errors import DuplicateKeyError
 
@@ -24,21 +25,34 @@ def _entry_hash(prev_hash, payload):
     base = f"{prev_hash}|{_stable_json(payload)}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
-
-def append_audit_event(db, event_type, actor, payload, request_ip=None, source="web", max_retries=5):
+def get_decrypted_audit_logs(db, query=None, decrypt_fields=None):
     """
-    Append an audit event to a tamper-evident chain.
-
+    Retrieve and decrypt audit logs for analysis.
+    
     Args:
-        db: MongoDB database handle.
-        event_type (str): Event category.
-        actor (str): User/system who performed the action.
-        payload (dict): Event details.
-        request_ip (str, optional): Request origin.
-        source (str): Source subsystem.
+        query (dict): MongoDB query filter.
+        decrypt_fields (list): Fields within the 'payload' that should be decrypted.
+    """
+    logs = db["audit_log"]
+    cursor = logs.find(query or {}).sort("chain_index", 1)
+    
+    results = []
+    for entry in cursor:
+        # Decrypt specific fields if provided
+        if decrypt_fields:
+            decrypt_document_fields(entry.get("payload", {}), decrypt_fields)
+        results.append(entry)
+        
+    return results
 
-    Returns:
-        dict: Inserted audit entry.
+
+def append_audit_event(db, event_type, actor, payload, request_ip=None, source="web", max_retries=5, encrypt_fields=None):
+    """
+    Append an audit event, optionally encrypting specific payload fields.
+    
+    Args:
+        ...
+        encrypt_fields (list, optional): List of keys in 'payload' to encrypt.
     """
     logs = db["audit_log"]
     attempts = 0
@@ -49,15 +63,24 @@ def append_audit_event(db, event_type, actor, payload, request_ip=None, source="
         chain_index = int(previous.get("chain_index", 0)) + 1 if previous else 1
 
         timestamp = datetime.datetime.utcnow()
+        
+        # 1. Create the payload dictionary
+        event_payload = payload or {}
+        
+        # 2. Encrypt sensitive fields in-place if requested
+        if encrypt_fields:
+            encrypt_document_fields(event_payload, encrypt_fields)
+
         entry_payload = {
             "event_type": event_type,
             "actor": actor or "system",
             "source": source,
             "ip": request_ip or "",
-            "payload": payload or {},
+            "payload": event_payload,
             "timestamp": timestamp.isoformat() + "Z",
         }
 
+        # 3. Hash the payload (which now contains encrypted values)
         entry_hash = _entry_hash(prev_hash, entry_payload)
 
         entry = {

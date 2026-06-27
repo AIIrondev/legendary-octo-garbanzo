@@ -388,6 +388,8 @@ ALLOWED_COVER_DOMAINS = {
     "www.googleapis.com"
 }
 
+SENSITIVE_AUDIT_FIELDS = ["email", "username", "full_name", "phone"]
+
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
 RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
@@ -726,9 +728,9 @@ def _append_audit_event_standalone(event_type, payload):
             al.append_audit_event(
                 db=db,
                 event_type=event_type,
-                actor=encrypt_text(session.get('username', 'system')),
-                payload=encrypt_text(str(payload)),
-                request_ip=encrypt_text(request.remote_addr),
+                actor=session.get('username', 'system'),
+                payload=str(payload),
+                request_ip=request.remote_addr,
                 source='web',
             )
         except Exception as exc:
@@ -8044,23 +8046,14 @@ def admin_audit_dashboard():
         al.ensure_audit_indexes(db)
         verify_result = al.verify_audit_chain(db)
 
-        audit_rows = list(
-            db['audit_log'].find(
-                {},
-                {
-                    'chain_index': 1,
-                    'event_type': 1,
-                    'actor': 1,
-                    'source': 1,
-                    'ip': 1,
-                    'timestamp': 1,
-                    'created_at': 1,
-                    'entry_hash': 1,
-                    'prev_hash': 1,
-                    'payload': 1,
-                }
-            ).sort('chain_index', -1).limit(200)
-        )
+        audit_rows = list(db['audit_log'].find(...).sort('chain_index', -1).limit(200))
+
+        # DEC_START: Decrypt the sensitive fields for display
+        for row in audit_rows:
+            if "payload" in row:
+                # decrypt_document_fields acts in-place
+                decrypt_document_fields(row["payload"], SENSITIVE_AUDIT_FIELDS)
+        # DEC_END
 
         return render_template(
             'admin_audit.html',
@@ -8105,28 +8098,18 @@ def admin_audit_export_pdf_official():
             ])
         )
 
-        audit_rows = list(
-            db['audit_log'].find(
-                {},
-                {
-                    'chain_index': 1,
-                    'event_type': 1,
-                    'actor': 1,
-                    'source': 1,
-                    'ip': 1,
-                    'timestamp': 1,
-                    'created_at': 1,
-                    'entry_hash': 1,
-                    'prev_hash': 1,
-                    'payload': 1,
-                }
-            ).sort('chain_index', -1).limit(limit)
-        )
+        audit_rows = list(db['audit_log'].find(...).sort('chain_index', -1).limit(limit))
+
+        # DEC_START: Decrypt sensitive fields for the PDF report
+        for row in audit_rows:
+            if "payload" in row:
+                decrypt_document_fields(row["payload"], SENSITIVE_AUDIT_FIELDS)
+        # DEC_END
 
         # Get school information from settings or use defaults
         school_info = _get_school_info_for_export()
 
-        # Generate PDF
+        # Generate PDF with now-decrypted audit_rows
         pdf_content = pdf_export.generate_audit_pdf(
             verify_result=verify_result,
             event_counts=event_counts,
@@ -8134,7 +8117,7 @@ def admin_audit_export_pdf_official():
             export_type='official',
             school_info=school_info
         )
-
+    
         response = make_response(pdf_content)
         response.headers['Content-Type'] = 'application/pdf'
         response.headers['Content-Disposition'] = f'attachment; filename=audit-official-report-{datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.pdf'
