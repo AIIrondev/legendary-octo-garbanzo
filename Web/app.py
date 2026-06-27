@@ -5156,6 +5156,8 @@ def upload_item():
         if individual_codes_raw:
             individual_codes = [c.strip() for c in str(individual_codes_raw).replace(',', '\n').splitlines() if c.strip()]
         
+        app.logger.info(f"DEBUG: Parsed individual codes: {individual_codes}, count: {len(individual_codes)}")
+
         # Check if this is a duplication
         is_duplicating = request.form.get('is_duplicating') == 'true'
         
@@ -5271,6 +5273,8 @@ def upload_item():
         for c in extra_codes:
             if c not in all_item_codes:
                 all_item_codes.append(c)
+    
+    app.logger.info(f"DEBUG: Unified item codes: {all_item_codes}, total count: {len(all_item_codes)}")
 
     # -------------------------------------------------------------------
     # 2. OVERRIDE ITEM COUNT
@@ -6009,10 +6013,6 @@ def upload_item():
 
     for position in range(1, item_count + 1):
         unique_code = None
-        if position <= len(individual_codes):
-            unique_code = individual_codes[position - 1]
-        else:
-            unique_code = generate_unique_batch_code(base_code, position)
 
         if (base_code or individual_codes) and not unique_code:
             error_msg = 'Fehler bei der Code-Erzeugung für mehrere Artikel.'
@@ -6037,6 +6037,7 @@ def upload_item():
             isbn=item_isbn,
             item_type=item_type
         )
+        app.logger.info(f"Created item {position}/{item_count}: ID={item_id}, parent={parent_item_id}, series_group={series_group_id}")
         if not item_id:
             break
         created_item_ids.append(item_id)
