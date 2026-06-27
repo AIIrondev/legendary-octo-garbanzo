@@ -3567,13 +3567,17 @@ def api_item_detail(item_id):
         for rec in borrow_records:
             if rec.get('Status') == 'active' and rec.get('User'):
                 try:
-                    borrower_value = decrypt_text(rec.get('User'))
+                    user_raw = rec.get('User')
+                    if user_raw:
+                        borrower_value = decrypt_text(str(user_raw))
                 except Exception:
                     borrower_value = rec.get('User')
                 break
         if not borrower_value and item.get('User'):
             try:
-                borrower_value = decrypt_text(item.get('User'))
+                item_user = item.get('User')
+                if item_user:
+                    borrower_value = decrypt_text(str(item_user))
             except Exception:
                 borrower_value = item.get('User')
 
