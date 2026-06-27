@@ -5082,7 +5082,8 @@ def debug_favorites():
         try:
             db_favs = us.get_favorites(username)
         except Exception as e:
-            return jsonify({'ok': False, 'error': f'db_error: {e}', 'session': session_favs})
+            app.logger.error(f"Error fetching DB favorites: {e}")
+            return jsonify({'ok': False, 'error': 'Failed to fetch DB favorites', 'session': session_favs})
     merged = sorted(set(session_favs) | set(db_favs))
     return jsonify({'ok': True, 'user': username, 'session': session_favs, 'db': db_favs, 'merged': merged})
 
@@ -7507,8 +7508,9 @@ def plan_booking():
             if booking_type == 'single':
                 end_date = start_date
         except ValueError as e:
-            return {"success": False, "error": f"Invalid date format: {e}"}, 400
-            
+            app.logger.error(f"Invalid date format: {e}")
+            return {"success": False, "error": "Invalid date format"}, 400
+
         # Check if item exists
         item = it.get_item(item_id)
         if not item:
@@ -7734,9 +7736,7 @@ def terminplan():
             
         return render_template('terminplan.html', school_periods=SCHOOL_PERIODS)
     except Exception as e:
-        import traceback
-        print(f"Error rendering terminplan: {e}")
-        
+        app.logger.error(f"Error rendering terminplan: {e}")
         flash('Ein Fehler ist beim Anzeigen des Kalenders aufgetreten.', 'error')
         return redirect(url_for('home'))
 
@@ -8030,7 +8030,7 @@ def admin_verify_audit_chain():
         status_code = 200 if result.get('ok') else 409
         return jsonify(result), status_code
     except Exception as exc:
-        return jsonify({'ok': False, 'error': str(exc)}), 500
+        return jsonify({'ok': False, 'error': 'Internal server error'}), 500
     finally:
         if client:
             client.close()
@@ -8128,7 +8128,7 @@ def admin_audit_export_pdf_official():
 
     except Exception as exc:
         app.logger.error(f"PDF Official Report export error: {str(exc)}\n{traceback.format_exc()}")
-        return jsonify({'ok': False, 'error': str(exc)}), 500
+        return jsonify({'ok': False, 'error': 'Internal server error'}), 500
     finally:
         if client:
             client.close()
@@ -10914,7 +10914,6 @@ def cancel_ausleihung_route(id):
                         next_appt = item_doc.get('NextAppointment', {})
                         if next_appt and str(next_appt.get('appointment_id')) == str(id):
                             cleared = it.clear_item_next_appointment(item_id)
-                            app.logger.info(f"Cleared NextAppointment for item {item_id}: {cleared}")
             except Exception as clear_err:
                 app.logger.warning(f"Warning: could not clear NextAppointment for cancelled ausleihung {id}: {clear_err}")
         else:
@@ -10954,13 +10953,13 @@ def reset_item(id):
         if result['success']:
             return jsonify({
                 'success': True,
-                'message': result['message'],
+                'message': 'Item reset successfully',
                 'details': result.get('details', {})
             })
         else:
             return jsonify({
                 'success': False,
-                'message': result['message']
+                'message': 'Failed to reset item'
             }), 400
             
     except Exception as e:
