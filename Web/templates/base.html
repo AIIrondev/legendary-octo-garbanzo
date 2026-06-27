@@ -1144,6 +1144,17 @@
                         <li class="nav-item dropdown ms-lg-auto">
                             <a class="nav-link dropdown-toggle" href="#" id="termMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Weitere Optionen">Mehr Optionen</a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="termMoreDropdown">
+                                {% if 'username' in session %}
+                                {% if current_permissions.pages.get('tutorial_page', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_school_settings') }}">Schulstammdaten</a></li>
+                                {% if current_permissions.actions.get('can_view_logs', True) and current_permissions.pages.get('admin_audit_dashboard', True) %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_audit_dashboard') }}">Audit Dashboard</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
+                                
                                 {% if current_permissions.pages.get('home', True) %}
                                 <li><a class="dropdown-item" href="{{ url_for('home') }}">Inventarsystem</a></li>
                                 {% endif %}
@@ -1155,6 +1166,42 @@
                             </ul>
                         </li>
                     </ul>
+                    <div class="d-flex">
+                        {% if 'username' in session %}
+                            <div class="function-search-wrap">
+                                <form class="function-search-form" data-function-search="true">
+                                    <input
+                                        class="function-search-input"
+                                        type="search"
+                                        name="function_search"
+                                        placeholder="Funktion suchen..."
+                                        list="function-search-options"
+                                        autocomplete="off"
+                                    >
+                                    <button class="function-search-btn" type="submit">Los</button>
+                                </form>
+                            </div>
+                            {% if current_tenant_db %}
+                            <span class="navbar-text tenant-badge" title="Aktive Tenant-Datenbank">{{ current_tenant_db }}</span>
+                        {% endif %}
+                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                            <div class="dropdown me-2 user-menu-wrap">
+                                <button class="btn btn-secondary dropdown-toggle user-menu-btn" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-notification-button="true">
+                                    👤
+                                    <span class="user-notification-dot {% if unread_notification_count and unread_notification_count > 0 %}visible{% endif %}" aria-hidden="true"></span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
+                                    {% if current_permissions.pages.get('notifications_view', True) %}
+                                    <li><a class="dropdown-item" href="{{ url_for('notifications_view') }}">Benachrichtigungen</a></li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </nav>

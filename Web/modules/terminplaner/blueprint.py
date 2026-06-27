@@ -215,7 +215,8 @@ def client(appointment_id):
                     current_user=session.get('username', ''),
                     tenant_id=_current_tenant_id(),
                     can_view_booking_names=can_view_booking_names,
-                    custom_fields=custom_fields 
+                    custom_fields=custom_fields,
+                    appointment_module_enabled=cfg.MODULES.is_enabled('terminplan')
                 )
 
             if appointment_service.book_slot(appointment_id, start_daytime, username, custom=custom_answers):
@@ -239,7 +240,8 @@ def client(appointment_id):
         tenant_id=_current_tenant_id(),
         can_view_booking_names=can_view_booking_names,
         custom_fields=custom_fields,
-        appointment_item=appointment_item
+        appointment_item=appointment_item,
+        appointment_module_enabled=cfg.MODULES.is_enabled('terminplan')
     )
 
 
@@ -356,6 +358,7 @@ def configure():
             add_to_calendar=add_to_calendar,
             email_service_enabled=cfg.EMAIL_ENABLED,
             title=title,
+            appointment_module_enabled=cfg.MODULES.is_enabled('terminplan')
         )
 
     return render_template(
@@ -366,6 +369,7 @@ def configure():
         add_to_calendar=False,
         email_service_enabled=cfg.EMAIL_ENABLED,
         title=None,
+        appointment_module_enabled=cfg.MODULES.is_enabled('terminplan')
     )
 
 
@@ -553,4 +557,5 @@ def main():
         current_user=current_user,
         upcoming_events=upcoming_events,
         tenant_id=tenant_id,
+        appointment_module_enabled=cfg.MODULES.is_enabled('terminplan')
     )
