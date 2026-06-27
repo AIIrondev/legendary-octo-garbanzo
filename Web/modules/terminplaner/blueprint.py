@@ -13,11 +13,42 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.colors import grey, HexColor
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-from Web.app import _get_school_info_for_export
 
 
 # Create a blueprint instance
 appoint_bp = Blueprint('terminplaner', __name__)
+
+
+def _get_school_info_for_export():
+    """
+    Get school information for PDF exports from configuration or database.
+    Returns default info if not configured.
+    """
+    try:
+        if hasattr(cfg, 'get_school_info'):
+            return cfg.get_school_info()
+
+        school_info = {
+            'name': 'Schulname',
+            'address': 'Schuladresse',
+            'postal_code': 'PLZ',
+            'city': 'Stadt',
+            'school_number': '000000',
+            'it_admin': 'IT-Beauftragter/in',
+            'logo_path': '',
+        }
+        return school_info
+    except Exception:
+        # Return defaults if anything fails
+        return {
+            'name': 'Schulname',
+            'address': 'Schuladresse', 
+            'postal_code': 'PLZ',
+            'city': 'Stadt',
+            'school_number': '000000',
+            'it_admin': 'IT-Beauftragter/in',
+            'logo_path': '',
+        }
 
 
 def _require_module_enabled():
