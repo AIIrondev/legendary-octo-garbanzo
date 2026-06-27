@@ -3604,7 +3604,6 @@ def api_item_detail(item_id):
         # Basic detail HTML
         detail_html = f"""
         <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
-        <p><strong>Autor/Künstler:</strong> {html.escape(item.get('Autor', item.get('Author', '-')))}</p>
         <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
         <p><strong>Status:</strong> {html.escape(status_label)}</p>
