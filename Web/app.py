@@ -375,6 +375,13 @@ PERMISSION_ACTION_ENDPOINTS = {
     'logs': 'can_view_logs',
 }
 
+ALLOWED_COVER_DOMAINS = {
+    "books.google.com",
+    "covers.openlibrary.org",
+    "images-na.ssl-images-amazon.com",
+    "m.media-amazon.com"
+}
+
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
 RELEASE_STATE_FILE = os.path.join(os.path.dirname(BASE_DIR), '.release-version')
@@ -9737,9 +9744,6 @@ def fetch_book_info(isbn):
 def download_book_cover():
     """
     API endpoint to download and save a book cover image from URL
-    
-    Returns:
-        dict: Success status and filename or error message
     """
     if 'username' not in session:
         return jsonify({"error": "Not authorized"}), 403
@@ -9759,17 +9763,17 @@ def download_book_cover():
         if parsed_url.scheme != 'https' or not parsed_url.netloc:
             return jsonify({"error": "Only public HTTPS URLs are allowed"}), 400
 
-        hostname = parsed_url.hostname or ''
-        if not _is_public_host(hostname):
-            return jsonify({"error": "Target host is not allowed"}), 400
+        # 2. SSRF Protection: Strict Allowlist Check
+        if parsed_url.netloc not in ALLOWED_COVER_DOMAINS:
+            return jsonify({"error": "Target host is not an allowed book cover provider"}), 403
         
-        # Download the image
+        # Download the image (allow_redirects=False prevents redirecting to internal IPs)
         response = requests.get(image_url, stream=True, timeout=10, allow_redirects=False)
         
         if response.status_code != 200:
             return jsonify({"error": f"Failed to download image: Status {response.status_code}"}), 400
         
-        # Check content type to ensure it's an image of allowed format
+        # Check content type
         content_type = response.headers.get('content-type', '')
         allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
         
@@ -9778,6 +9782,7 @@ def download_book_cover():
                 "error": f"Nicht unterstütztes Bildformat: {content_type}. Erlaubte Formate: JPG, JPEG, PNG, GIF"
             }), 400
 
+        # Check content length header
         content_length = response.headers.get('Content-Length')
         if content_length:
             try:
@@ -9786,14 +9791,10 @@ def download_book_cover():
             except ValueError:
                 pass
         
-        # Generate a fully unique filename using UUID
-        import uuid
-        import time
-        
+        # Generate a fully unique filename
         unique_id = str(uuid.uuid4())
         timestamp = time.strftime("%Y%m%d%H%M%S")
         
-        # Use appropriate extension based on content type
         extension = '.jpg'  # default
         if 'image/png' in content_type.lower():
             extension = '.png'
@@ -9801,15 +9802,16 @@ def download_book_cover():
             extension = '.gif'
             
         filename = f"book_cover_{unique_id}_{timestamp}{extension}"
-        
-        # Save the image to uploads folder
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
+        # Save image in chunks (prevents memory exhaustion and enforces size limits)
         with open(filepath, 'wb') as f:
             written = 0
             for chunk in response.iter_content(chunk_size=8192):
                 written += len(chunk)
                 if written > 5 * 1024 * 1024:
+                    # Clean up the partial file before aborting
+                    os.remove(filepath)
                     return jsonify({"error": "Image is too large"}), 413
                 f.write(chunk)
         
@@ -9819,9 +9821,12 @@ def download_book_cover():
             "message": "Image downloaded successfully"
         })
         
+    except requests.exceptions.RequestException as e:
+        print(f"Network error downloading book cover: {e}")
+        return jsonify({"error": "Netzwerkfehler beim Herunterladen des Bildes."}), 500
     except Exception as e:
         print(f"Error downloading book cover: {e}")
-       
+        # Fixed syntax here: Removed the injected HTML that was appended to this line
         return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
 """
 @app.route('/proxy_image')
