@@ -388,7 +388,7 @@ ALLOWED_COVER_DOMAINS = {
     "www.googleapis.com"
 }
 
-SENSITIVE_AUDIT_FIELDS = ["email", "username", "full_name", "phone"]
+SENSITIVE_AUDIT_FIELDS = ["email", "username", "full_name", "phone", "borrower", "ip"]
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
@@ -8101,7 +8101,7 @@ def admin_audit_export_pdf_official():
             ])
         )
 
-        audit_rows = list(db['audit_log'].find(...).sort('chain_index', -1).limit(limit))
+        audit_rows = list(db['audit_log'].find({}).sort('chain_index', -1).limit(limit))
 
         # DEC_START: Decrypt sensitive fields for the PDF report
         for row in audit_rows:
