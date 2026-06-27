@@ -13,6 +13,7 @@ import logging
 
 import Web.modules.database.settings as cfg
 from Web.modules.database.settings import MongoClient
+from Web.modules.inventarsystem.data_protection import encrypt_text, decrypt_text
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +45,20 @@ if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
             serialization.PublicFormat.UncompressedPoint
         )
         
-        VAPID_PUBLIC_KEY = b64urlencode(raw_pub)
+        VAPID_PUBLIC_KEY = b64urlencode(raw_pub).decode('utf-8')
         VAPID_PRIVATE_KEY = VAPID_PRIVATE_PEM
     except Exception as e:
         logger.error(f'Could not load or generate VAPID keys: {e}')
 
 # Push service endpoint (typically Firebase or Web Push Service)
-PUSH_SERVICE_URL = 'https://fcm.googleapis.com/fcm/send'  # Firebase Cloud Messaging
 FCM_API_KEY = os.getenv('FCM_API_KEY', '')  # Firebase API key
+
+
+def _get_username_hash(username):
+    """Generates a deterministic hash for database lookups."""
+    if not username:
+        return None
+    return hashlib.sha256(username.encode('utf-8')).hexdigest()
 
 
 def get_push_subscriptions_collection(db=None):
@@ -64,71 +71,68 @@ def get_push_subscriptions_collection(db=None):
 
 def get_user_subscriptions(username):
     """
-    Get all active push subscriptions for a user
-    
-    Args:
-        username (str): Username
-        
-    Returns:
-        list: List of subscription documents
+    Get all active push subscriptions for a user, decrypting data on the fly.
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         subs_col = get_push_subscriptions_collection(db)
         
-        subscriptions = list(subs_col.find({
-            'Username': username,
+        # Query using the deterministic hash, NOT the encrypted text directly
+        user_hash = _get_username_hash(username)
+        
+        encrypted_subscriptions = list(subs_col.find({
+            'UsernameHash': user_hash,
             'IsActive': True
         }))
         
         client.close()
-        return subscriptions
+        
+        # Decrypt endpoints and keys before returning
+        decrypted_subs = []
+        for sub in encrypted_subscriptions:
+            try:
+                sub['Endpoint'] = decrypt_text(sub.get('Endpoint'))
+                
+                # Keys are stored as encrypted JSON strings
+                decrypted_keys_str = decrypt_text(sub.get('Keys'))
+                sub['Keys'] = json.loads(decrypted_keys_str) if decrypted_keys_str else {}
+                
+                decrypted_subs.append(sub)
+            except Exception as e:
+                logger.error(f"Failed to decrypt subscription payload for hash {user_hash}: {e}")
+                
+        return decrypted_subs
     except Exception as e:
-        logger.error(f'Error getting push subscriptions for {username}: {e}')
+        logger.error(f'Error getting push subscriptions for user: {e}')
         return []
 
 
 def save_push_subscription(username, subscription_obj):
     """
-    Save a new push subscription for a user
-    
-    Args:
-        username (str): Username
-        subscription_obj (dict): Subscription object from Service Worker
-        {
-            'endpoint': 'https://...',
-            'keys': {
-                'p256dh': '...',
-                'auth': '...'
-            }
-        }
-        
-    Returns:
-        bool: Success status
+    Save a new push subscription for a user with field-level encryption.
     """
     try:
-        if not subscription_obj.get('endpoint'):
-            logger.warning(f'Invalid subscription object for {username}')
+        endpoint = subscription_obj.get('endpoint')
+        if not endpoint:
+            logger.warning('Invalid subscription object: missing endpoint')
             return False
         
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         subs_col = get_push_subscriptions_collection(db)
         
-        # Create unique hash of subscription to avoid duplicates
+        # Create unique hash of subscription using plaintext data to avoid duplicates
         sub_hash = hashlib.shake_256(
-            f"{username}:{subscription_obj['endpoint']}".encode()
+            f"{username}:{endpoint}".encode('utf-8')
         ).hexdigest()
         
-        # Check if subscription already exists
+        # Check if subscription already exists by Hash
         existing = subs_col.find_one({
-            'Username': username,
             'SubscriptionHash': sub_hash
         })
         
         if existing:
-            # Update last used time
             subs_col.update_one(
                 {'_id': existing['_id']},
                 {'$set': {
@@ -136,15 +140,19 @@ def save_push_subscription(username, subscription_obj):
                     'IsActive': True
                 }}
             )
-            logger.info(f'Updated existing subscription for {username}')
+            logger.info('Updated existing push subscription')
             client.close()
             return True
         
-        # Save new subscription
+        # Format keys as JSON string for your encrypt_text module
+        keys_str = json.dumps(subscription_obj.get('keys', {}))
+        
+        # Save new subscription, encrypting sensitive fields
         subscription_doc = {
-            'Username': username,
-            'Endpoint': subscription_obj['endpoint'],
-            'Keys': subscription_obj.get('keys', {}),
+            'UsernameHash': _get_username_hash(username),
+            'Username': encrypt_text(username),
+            'Endpoint': encrypt_text(endpoint),
+            'Keys': encrypt_text(keys_str),
             'SubscriptionHash': sub_hash,
             'IsActive': True,
             'CreatedAt': datetime.datetime.now(),
@@ -153,36 +161,31 @@ def save_push_subscription(username, subscription_obj):
         }
         
         subs_col.insert_one(subscription_doc)
-        logger.info(f'Saved new push subscription for {username}')
+        logger.info('Saved new encrypted push subscription')
         client.close()
         return True
         
     except Exception as e:
-        logger.error(f'Error saving push subscription for {username}: {e}')
+        logger.error(f'Error saving push subscription: {e}')
         return False
 
 
 def remove_push_subscription(username, endpoint):
     """
-    Remove a push subscription
-    
-    Args:
-        username (str): Username
-        endpoint (str): Subscription endpoint URL
-        
-    Returns:
-        bool: Success status
+    Remove a push subscription by making it inactive.
     """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         subs_col = get_push_subscriptions_collection(db)
         
+        # Recreate the deterministic hash to find the specific subscription
+        sub_hash = hashlib.shake_256(
+            f"{username}:{endpoint}".encode('utf-8')
+        ).hexdigest()
+        
         result = subs_col.update_one(
-            {
-                'Username': username,
-                'Endpoint': endpoint
-            },
+            {'SubscriptionHash': sub_hash},
             {'$set': {'IsActive': False}}
         )
         
@@ -190,31 +193,19 @@ def remove_push_subscription(username, endpoint):
         return result.modified_count > 0
         
     except Exception as e:
-        logger.error(f'Error removing push subscription for {username}: {e}')
+        logger.error(f'Error removing push subscription: {e}')
         return False
 
 
 def send_push_notification(username, title, body, icon=None, url='/', reference=None, tag='notification'):
     """
-    Send a push notification to all user's subscriptions
-    
-    Args:
-        username (str): Target username
-        title (str): Notification title
-        body (str): Notification body
-        icon (str, optional): Icon URL
-        url (str, optional): URL to open on click
-        reference (dict, optional): Reference data (item_id, etc)
-        tag (str, optional): Notification tag for grouping
-        
-    Returns:
-        int: Number of successfully sent notifications
+    Send a push notification to all user's subscriptions.
     """
     try:
         subscriptions = get_user_subscriptions(username)
         
         if not subscriptions:
-            logger.debug(f'No active push subscriptions for {username}')
+            logger.debug('No active push subscriptions for user')
             return 0
         
         sent_count = 0
@@ -232,19 +223,18 @@ def send_push_notification(username, title, body, icon=None, url='/', reference=
             if success:
                 sent_count += 1
             else:
-                # Mark subscription as inactive if send fails
                 _mark_subscription_inactive(subscription['_id'])
         
-        logger.info(f'Sent push notification to {username}: {sent_count}/{len(subscriptions)} subscriptions')
+        logger.info(f'Sent push notification: {sent_count}/{len(subscriptions)} subscriptions')
         return sent_count
         
     except Exception as e:
-        logger.error(f'Error sending push notification to {username}: {e}')
+        logger.error(f'Error sending push notification: {e}')
         return 0
 
 
 def _send_to_subscription(subscription, title, body, icon, url, reference, tag):
-    """Send push notification to a specific subscription"""
+    """Send push notification to a specific decrypted subscription"""
     try:
         payload = {
             'title': title,
@@ -256,20 +246,17 @@ def _send_to_subscription(subscription, title, body, icon, url, reference, tag):
             'reference': reference or {},
         }
         
-        # If using Firebase Cloud Messaging
         if FCM_API_KEY and subscription.get('Endpoint', '').startswith('https://fcm.'):
             return _send_fcm_notification(subscription, payload)
         
-        # Otherwise use standard Web Push Protocol
         return _send_web_push_notification(subscription, payload)
         
     except Exception as e:
-        logger.error(f'Error sending to subscription {subscription.get("_id")}: {e}')
+        logger.error(f'Error sending to subscription: {e}')
         return False
 
 
 def _send_fcm_notification(subscription, payload):
-    """Send notification via Firebase Cloud Messaging"""
     try:
         if not FCM_API_KEY:
             logger.warning('FCM_API_KEY not configured')
@@ -311,9 +298,7 @@ def _send_fcm_notification(subscription, payload):
 
 
 def _send_web_push_notification(subscription, payload):
-    """Send notification using standard Web Push Protocol"""
     try:
-        # This requires pywebpush library
         from pywebpush import webpush
         
         webpush(
@@ -325,13 +310,13 @@ def _send_web_push_notification(subscription, payload):
             vapid_private_key=VAPID_PRIVATE_KEY,
             vapid_claims={'sub': VAPID_SUBJECT},
             timeout=10,
-            ttl=3600  # Notification expires after 1 hour if device is offline
+            ttl=3600 
         )
         
         return True
         
     except ImportError:
-        logger.warning('pywebpush not installed, install with: pip install pywebpush')
+        logger.warning('pywebpush not installed. pip install pywebpush')
         return False
     except Exception as e:
         logger.error(f'Web push error: {e}')
@@ -339,7 +324,6 @@ def _send_web_push_notification(subscription, payload):
 
 
 def _mark_subscription_inactive(subscription_id):
-    """Mark a subscription as inactive (e.g., after failed send)"""
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
@@ -349,37 +333,21 @@ def _mark_subscription_inactive(subscription_id):
             {'_id': ObjectId(subscription_id)},
             {'$set': {'IsActive': False}}
         )
-        
         client.close()
     except Exception as e:
         logger.error(f'Error marking subscription inactive: {e}')
 
 
 def send_push_to_all_admins(title, body, icon=None, url='/', reference=None):
-    """
-    Send a push notification to all admin users
-    
-    Args:
-        title (str): Notification title
-        body (str): Notification body
-        icon (str, optional): Icon URL
-        url (str, optional): URL to open on click
-        reference (dict, optional): Reference data
-        
-    Returns:
-        int: Total notifications sent
-    """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         users_col = db['users']
         
-        # Get all admin users
         admin_users = list(users_col.find(
             {'Admin': True},
             {'Username': 1}
         ))
-        
         client.close()
         
         total_sent = 0
@@ -404,10 +372,6 @@ def send_push_to_all_admins(title, body, icon=None, url='/', reference=None):
 
 
 def cleanup_inactive_subscriptions():
-    """
-    Remove inactive subscriptions older than 30 days
-    Run this periodically as a maintenance task
-    """
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
@@ -429,18 +393,15 @@ def cleanup_inactive_subscriptions():
         return 0
 
 
-# Database collection schema
 def ensure_push_subscriptions_collection():
-    """Ensure the push_subscriptions collection exists with proper indexes"""
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         subs_col = get_push_subscriptions_collection(db)
         
-        # Create indexes
-        subs_col.create_index('Username')
-        subs_col.create_index([('Username', 1), ('IsActive', 1)])
-        subs_col.create_index([('CreatedAt', 1)])  # TTL-like usage
+        subs_col.create_index('UsernameHash')
+        subs_col.create_index([('UsernameHash', 1), ('IsActive', 1)])
+        subs_col.create_index([('CreatedAt', 1)]) 
         subs_col.create_index('SubscriptionHash', unique=True)
         
         logger.info('Push subscriptions collection indexes created')

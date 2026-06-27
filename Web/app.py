@@ -79,6 +79,7 @@ from Web.modules.inventarsystem.data_protection import (
     decrypt_text,
     encrypt_document_fields,
     encrypt_soft_deleted_media_pack,
+    encrypt_text,
 )
 from Web.modules.terminplaner.blueprint import appoint_bp as terminplaner_bp
 
@@ -669,7 +670,6 @@ def _get_current_module(path):
     last_module = session.get('last_module')
     if last_module and cfg.MODULES.is_enabled(last_module):
         return last_module
-        
     if cfg.MODULES.is_enabled('inventory'):
         return 'inventory'
     return 'library' if cfg.MODULES.is_enabled('library') else 'inventory'
@@ -726,9 +726,9 @@ def _append_audit_event_standalone(event_type, payload):
             al.append_audit_event(
                 db=db,
                 event_type=event_type,
-                actor=session.get('username', 'system'),
-                payload=payload,
-                request_ip=request.remote_addr,
+                actor=encrypt_text(session.get('username', 'system')),
+                payload=encrypt_text(str(payload)),
+                request_ip=encrypt_text(request.remote_addr),
                 source='web',
             )
         except Exception as exc:
@@ -950,7 +950,7 @@ def _create_notification(db, *, audience, notif_type, title, message, target_use
                 tag=f'notification-{notif_type}'
             )
         except Exception as e:
-            app.logger.warning(f'Failed to send push notification to {target_user}: {e}')
+            app.logger.warning(f'Failed to send push notification to {encrypt_text(target_user)}: {e}')
     elif audience == 'admin':
         _bump_notification_version('admin')
         # Send push notification to all admins
@@ -1053,7 +1053,7 @@ def _get_cached_unread_status(username, is_admin=False):
             if cached:
                 return json.loads(cached), version_tag
         except Exception as exc:
-            app.logger.warning(f'Could not read notification status cache for {username}: {exc}')
+            app.logger.warning(f'Could not read notification status cache for {encrypt_text(username)}: {exc}')
         return None, version_tag
 
     now = time.time()
@@ -1076,7 +1076,7 @@ def _set_cached_unread_status(username, is_admin, version_tag, payload):
             cache_client.setex(key, NOTIFICATION_STATUS_CACHE_TTL, json.dumps(payload, default=str))
             return
         except Exception as exc:
-            app.logger.warning(f'Could not write notification status cache for {username}: {exc}')
+            app.logger.warning(f'Could not write notification status cache for {encrypt_text(username)}: {exc}')
 
     with _NOTIFICATION_CACHE_LOCK:
         _NOTIFICATION_LOCAL_CACHE[key] = {
@@ -2144,7 +2144,7 @@ def _upload_student_cards_excel():
             created_total += 1
     except Exception as exc:
         app.logger.error(f'Error importing student cards from Excel: {exc}')
-        flash(f'Fehler beim Import der Bibliotheksausweise: {exc}', 'error')
+        flash(f'Fehler beim Import der Bibliotheksausweise', 'error')
         return redirect(url_for('student_cards_admin'))
     finally:
         client.close()
@@ -3442,7 +3442,7 @@ def api_library_scan_action():
                     'channel': 'library_scan',
                     'item_id': item_id,
                     'item_name': item_doc.get('Name', ''),
-                    'borrower': borrower_name,
+                    'borrower':borrower_name,
                     'student_card_id': student_card_id,
                     'borrow_duration_days': borrow_duration_days,
                 }
@@ -3610,7 +3610,6 @@ def api_item_detail(item_id):
         {borrows_html}
         """
         client.close()
-        return detail_html, 200
         return detail_html, 200
     except Exception as e:
         app.logger.error(f"Error fetching item detail: {e}")
@@ -4421,19 +4420,17 @@ def login():
         ctx = get_tenant_context()
         current_tenant_id = ctx.tenant_id if ctx else None
         current_tenant_db = ctx.db_name if ctx else cfg.MONGODB_DB
-        app.logger.info(f"Login attempt: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
-        app.logger.info(f"Debug login context: headers={dict(request.headers)} tenant_config={ctx.config if ctx else None} remote_addr={request.remote_addr} host={request.host}")
-        app.logger.info(f"Raw login payload: username={username!r} password={password!r}")
+        app.logger.info(f"Login attempt: username={encrypt_text(username)!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={encrypt_text(request.remote_addr)}")
         app.logger.info(f"Active MongoDB config: uri={getattr(cfg, 'MONGODB_URI', None)!r} host={cfg.MONGODB_HOST!r} port={cfg.MONGODB_PORT!r} default_db={cfg.MONGODB_DB!r}")
         if not username or not password:
-            app.logger.warning(f"Login blocked: missing credentials tenant={current_tenant_id or 'default'} host={request.host} ip={request.remote_addr}")
+            app.logger.warning(f"Login blocked: missing credentials tenant={current_tenant_id or 'default'} host={request.host} ip={encrypt_text(request.remote_addr)}")
             flash('Bitte alle Felder ausfüllen', 'error')
             return redirect(url_for('login'))
         
         user = us.check_nm_pwd(username, password)
 
         if user:
-            app.logger.info(f"Login success: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
+            app.logger.info(f"Login success: username={encrypt_text(username)!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={encrypt_text(request.remote_addr)}")
             session['username'] = username
             is_admin_user = bool(user.get('Admin', False))
             session['admin'] = is_admin_user
@@ -4454,7 +4451,7 @@ def login():
             else:
                 return redirect(url_for('home'))
         else:
-            app.logger.warning(f"Login failed: username={username!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={request.remote_addr}")
+            app.logger.warning(f"Login failed: username={encrypt_text(username)!r} tenant={current_tenant_id or 'default'} db={current_tenant_db} host={request.host} ip={encrypt_text(request.remote_addr)}")
             flash('Ungültige Anmeldedaten', 'error')
             get_flashed_messages()
     return render_template('login.html')
@@ -5118,7 +5115,7 @@ def upload_item():
     
     # Log mobile request for debugging
     if is_mobile:
-        app.logger.info(f"Mobile upload from {request.headers.get('User-Agent', 'unknown')} by {username}")
+        app.logger.info(f"Mobile upload from {request.headers.get('User-Agent', 'unknown')} by {encrypt_text(username)}")
     
     try:
         # Strip whitespace from all text fields
@@ -5351,7 +5348,7 @@ def upload_item():
     
     # Create a structured log entry for upload session
     upload_session_id = str(uuid.uuid4())[:8]
-    app.logger.info(f"Starting image upload session {upload_session_id} - Files: {len(images)}, User: {username}")
+    app.logger.info(f"Starting image upload session {upload_session_id} - Files: {len(images)}, User: {encrypt_text(username)}")
     
     # Ensure all required directories exist
     for directory in [app.config['UPLOAD_FOLDER']]:
@@ -6105,7 +6102,7 @@ def duplicate_item():
         
         # Log mobile duplication for debugging
         if is_mobile:
-            app.logger.info(f"Mobile duplication from {request.headers.get('User-Agent', 'unknown')} by {username}")
+            app.logger.info(f"Mobile duplication from {request.headers.get('User-Agent', 'unknown')} by {encrypt_text(username)}")
         
         # Get original item ID
         original_item_id = request.form.get('original_item_id')
@@ -9988,11 +9985,6 @@ def my_borrowed_items():
         'Status': 'planned'
     }))
     
-    # DEBUG: Log the number of planned appointments found
-    app.logger.info(f"Found {len(planned_ausleihungen)} planned appointments for user {username}")
-    for appt in planned_ausleihungen:
-        app.logger.info(f"Planned appointment: ID={str(appt['_id'])}, Item={str(appt.get('Item'))}, Start={appt.get('Start')}")
-    
     # Process items
     active_items = []
     planned_items = []
@@ -10198,7 +10190,7 @@ def mark_all_notifications_read():
         if result.modified_count > 0:
             _bump_notification_version(f'user:{username}')
     except Exception as exc:
-        app.logger.warning(f"Could not mark all notifications as read for {username}: {exc}")
+        app.logger.warning(f"Could not mark all notifications as read for {encrypt_text(username)}: {exc}")
     finally:
         if client:
             client.close()
@@ -10277,7 +10269,7 @@ def notifications_unread_status():
         etag_value = _build_unread_status_etag(version_tag, payload)
         return _build_cached_json_response(payload, etag_value)
     except Exception as exc:
-        app.logger.warning(f"Could not fetch unread notification status for {username}: {exc}")
+        app.logger.warning(f"Could not fetch unread notification status for {encrypt_text(username)}: {exc}")
         return jsonify({'ok': False, 'error': 'status_fetch_failed'}), 500
     finally:
         if client:
@@ -11573,10 +11565,10 @@ def log_mobile_action(action, request, success=True, details=None):
     if details:
         message += f" - Details: {details}"
     
-    if success:
-        app.logger.info(message)
-    else:
-        app.logger.error(message)
+    # if success:
+    #     app.logger.info(message)
+    # else:
+    #     app.logger.error(message)
         
 # Add explicit static file routes to handle CSS serving issues
 @app.route('/static/<path:filename>')
@@ -11858,7 +11850,7 @@ def subscribe_to_push():
         success = pn.save_push_subscription(username, subscription)
         
         if success:
-            app.logger.info(f'Push subscription saved for {username}')
+            app.logger.info(f'Push subscription saved for {encrypt_text(username)}')
             return jsonify({
                 'success': True,
                 'message': 'Successfully subscribed to push notifications'
@@ -11895,7 +11887,7 @@ def unsubscribe_from_push():
         success = pn.remove_push_subscription(username, endpoint)
         
         if success:
-            app.logger.info(f'Push subscription removed for {username}')
+            app.logger.info(f'Push subscription removed for {encrypt_text(username)}')
             return jsonify({
                 'success': True,
                 'message': 'Successfully unsubscribed from push notifications'
