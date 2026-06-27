@@ -3605,6 +3605,10 @@ def api_item_detail(item_id):
         detail_html = f"""
         <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
         <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
+        <p><strong>Anzahl:</strong> {html.escape(item.get('SeriesCount', '-'))}</p>
+        <p><strong>Ort:</strong> {html.escape(item.get('Ort', '-'))}</p>
+        <p><strong>Typ:</strong> {html.escape(item.get('ItemType', '-'))}</p>
+        <p><strong>Kategorie:</strong> {html.escape(item.get('library_category', item.get('Author', '-')))}</p>
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
         <p><strong>Status:</strong> {html.escape(status_label)}</p>
         {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
@@ -5143,6 +5147,7 @@ def upload_item():
         individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))
         item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
         item_type_input = sanitize_form_value(request.form.get('item_type_input', ''))
+        library_category = sanitize_form_value(request.form.get('library_category', ''))
         
         app.logger.info(f"Upload attempt by {encrypt_text(username)}: name={name!r}, ort={ort!r}, beschreibung length={len(beschreibung)}, images count={len(images)}, filters={filter_upload}, filters2={filter_upload2}, filters3={filter_upload3}, anschaffungs_jahr={anschaffungs_jahr}, anschaffungs_kosten={anschaffungs_kosten}, code_4={code_4}, isbn={isbn_raw!r}, upload_mode={upload_mode!r}, item_count={item_count_raw!r}, item_type_input={item_type_input!r}, individual_codes={individual_codes_raw!r}")
         try:
@@ -6039,7 +6044,8 @@ def upload_item():
             is_grouped_sub_item=(position > 1),
             parent_item_id=parent_item_id,
             isbn=item_isbn,
-            item_type=item_type
+            item_type=item_type,
+            library_category=library_category
         )
         if not item_id:
             break
