@@ -1235,5 +1235,5 @@ def reset_item_completely(item_id):
     except Exception as e:
         return {
             'success': False,
-            'message': f'Fehler beim Zurücksetzen: {str(e)}'
+            'message': f'Fehler beim Zurücksetzen.'
         }

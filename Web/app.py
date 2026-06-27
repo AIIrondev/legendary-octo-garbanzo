@@ -10953,8 +10953,7 @@ def reset_item(id):
         if result['success']:
             return jsonify({
                 'success': True,
-                'message': 'Item reset successfully',
-                'details': result.get('details', {})
+                'message': 'Item reset successfully'
             })
         else:
             return jsonify({
