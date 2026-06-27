@@ -117,7 +117,7 @@ def save_push_subscription(username, subscription_obj):
         subs_col = get_push_subscriptions_collection(db)
         
         # Create unique hash of subscription to avoid duplicates
-        sub_hash = hashlib.md5(
+        sub_hash = hashlib.shake_256(
             f"{username}:{subscription_obj['endpoint']}".encode()
         ).hexdigest()
         
