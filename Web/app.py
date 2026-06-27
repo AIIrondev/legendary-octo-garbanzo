@@ -3568,18 +3568,19 @@ def api_item_detail(item_id):
             if rec.get('Status') == 'active' and rec.get('User'):
                 try:
                     user_raw = rec.get('User')
-                    if user_raw:
+                    if user_raw is not None:
                         borrower_value = decrypt_text(str(user_raw))
                 except Exception:
-                    borrower_value = rec.get('User')
+                    borrower_value = str(rec.get('User', ''))
                 break
+        
         if not borrower_value and item.get('User'):
             try:
                 item_user = item.get('User')
-                if item_user:
+                if item_user is not None:
                     borrower_value = decrypt_text(str(item_user))
             except Exception:
-                borrower_value = item.get('User')
+                borrower_value = str(item.get('User', ''))
 
         # Helper to format datetimes
         def fmt_dt(dt):
@@ -3593,15 +3594,19 @@ def api_item_detail(item_id):
         if borrow_records:
             rows = []
             for rec in borrow_records:
-                user_raw = rec.get('User') or ''
+                user_raw = rec.get('User')
                 try:
-                    user = decrypt_text(user_raw) if user_raw else ''
+                    # FIX: Cast to string before decrypting
+                    user = decrypt_text(str(user_raw)) if user_raw is not None else ''
                 except Exception:
-                    user = user_raw
+                    # FIX: Ensure the fallback is also a string for html.escape
+                    user = str(user_raw) if user_raw is not None else ''
+                
                 status = rec.get('Status', '')
                 start = fmt_dt(rec.get('Start'))
                 end = fmt_dt(rec.get('End'))
                 notes = html.escape(str(rec.get('Notes') or ''))
+                
                 rows.append(f"<li><strong>{html.escape(user or '-')}</strong> — {html.escape(status)} — {html.escape(start)} → {html.escape(end)}{(' — ' + notes) if notes else ''}</li>")
             borrows_html = f"<h3>Ausleihhistorie</h3><ul>{''.join(rows)}</ul>"
 
@@ -3615,7 +3620,7 @@ def api_item_detail(item_id):
         <p><strong>Kategorie:</strong> {html.escape(item.get('library_category', '-'))}</p>
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
         <p><strong>Status:</strong> {html.escape(status_label)}</p>
-        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
+        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(borrower_value)}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
         {borrows_html}
         """
         client.close()
