@@ -485,7 +485,7 @@ def export_pdf_brief(plan_id):
     # Datum (Hier statisch zum Test, ggf. dynamisch per datetime)
     import datetime
     heute = datetime.datetime.now().strftime("%d.%m.%Y")
-    elements.append(Paragraph(f"{schul_daten['stadt']}, den {heute}", styles['Date']))
+    elements.append(Paragraph(f"{schul_daten['plz_ort']}, den {heute}", styles['Date']))
     elements.append(Spacer(1, 1*cm))
     
     # Betreff
