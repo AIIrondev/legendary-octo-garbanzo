@@ -5144,7 +5144,7 @@ def upload_item():
         item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
         item_type_input = sanitize_form_value(request.form.get('item_type_input', ''))
         
-        app.logger.info(f"Upload attempt by {encrypt_text(username)}: name={name!r}, ort={ort!r}, beschreibung length={len(beschreibung)}, images count={len(images)}, filters={filter_upload}, filters2={filter_upload2}, filters3={filter_upload3}, anschaffungs_jahr={anschaffungs_jahr}, anschaffungs_kosten={anschaffungs_kosten}, code_4={code_4}, isbn={isbn_raw!r}, upload_mode={upload_mode!r}, item_count={item_count_raw!r}, item_type_input={item_type_input!r}, individual_codes length={len(individual_codes_raw)}")
+        app.logger.info(f"Upload attempt by {encrypt_text(username)}: name={name!r}, ort={ort!r}, beschreibung length={len(beschreibung)}, images count={len(images)}, filters={filter_upload}, filters2={filter_upload2}, filters3={filter_upload3}, anschaffungs_jahr={anschaffungs_jahr}, anschaffungs_kosten={anschaffungs_kosten}, code_4={code_4}, isbn={isbn_raw!r}, upload_mode={upload_mode!r}, item_count={item_count_raw!r}, item_type_input={item_type_input!r}, individual_codes={individual_codes_raw!r}")
         try:
             item_count = int(item_count_raw) if item_count_raw else 1
         except (TypeError, ValueError):
