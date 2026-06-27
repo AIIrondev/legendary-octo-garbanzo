@@ -3608,7 +3608,7 @@ def api_item_detail(item_id):
         <p><strong>Anzahl:</strong> {html.escape(item.get('SeriesCount', '-'))}</p>
         <p><strong>Ort:</strong> {html.escape(item.get('Ort', '-'))}</p>
         <p><strong>Typ:</strong> {html.escape(item.get('ItemType', '-'))}</p>
-        <p><strong>Kategorie:</strong> {html.escape(item.get('library_category', item.get('Author', '-')))}</p>
+        <p><strong>Kategorie:</strong> {html.escape(item.get('library_category', '-'))}</p>
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
         <p><strong>Status:</strong> {html.escape(status_label)}</p>
         {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
