@@ -379,7 +379,12 @@ ALLOWED_COVER_DOMAINS = {
     "books.google.com",
     "covers.openlibrary.org",
     "images-na.ssl-images-amazon.com",
-    "m.media-amazon.com"
+    "m.media-amazon.com",
+    "www.isbn.de",
+    "covers.openlibrary.org",
+    "openlibrary.org",
+    "lobid.org",
+    "www.googleapis.com"
 }
 
 # Apply the configuration for general use throughout the app
