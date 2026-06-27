@@ -3,6 +3,7 @@ import Web.modules.terminplaner.backend_server as appointment_service
 import Web.modules.database.settings as cfg
 import Web.modules.database.termine as termin
 import Web.modules.database.user as us
+from Web.modules.terminplaner.backend_server import _resolve_public_base_url
 import csv
 import io
 import qrcode
@@ -415,16 +416,29 @@ def export_pdf_brief(plan_id):
     address = school_info.get('address', 'Adresse')
     postal_code = school_info.get('postal_code', 'PLZ')
     city = school_info.get('city', 'Stadt')
-    
+    school_number = school_info.get('school_number', '000000')
+    it_admin = school_info.get('it_admin', 'IT-Beauftragter/in')
+    tenant_id = _current_tenant_id()
+
+    try:
+        link = url_for('terminplaner.client', appointment_id=plan_id, tenant=tenant_id or None, _external=True)
+    except Exception:
+        host = _resolve_public_base_url()
+        link = host + "/terminplaner/client/" + plan_id
+        if tenant_id:
+            link += f"?tenant={tenant_id}"
+
     schul_daten = {
         "schulname": school_name,
         "strasse": address,
-        "plz_ort": f"{postal_code} {city}"
+        "plz_ort": f"{postal_code} {city}",
+        "schulnummer": school_number,
+        "it_admin": it_admin
     }
     
     plan_daten = {
         "titel": termin.get_item(plan_id).get('title', 'Terminplan'), # terminplan.title
-        "link": termin.get_item(plan_id).get('link', ''), # terminplan.link
+        "link": link, # terminplan.link
         "notizen": termin.get_item(plan_id).get('note', '') # terminplan.note
     }
 
@@ -471,7 +485,7 @@ def export_pdf_brief(plan_id):
     # Datum (Hier statisch zum Test, ggf. dynamisch per datetime)
     import datetime
     heute = datetime.datetime.now().strftime("%d.%m.%Y")
-    elements.append(Paragraph(f"München, den {heute}", styles['Date']))
+    elements.append(Paragraph(f"{schul_daten['stadt']}, den {heute}", styles['Date']))
     elements.append(Spacer(1, 1*cm))
     
     # Betreff
@@ -484,7 +498,7 @@ def export_pdf_brief(plan_id):
     
     # Link
     elements.append(Paragraph("<b>Ihr persönlicher Buchungslink:</b>", styles['Body']))
-    link_html = f'<a href="{plan_daten["link"]}" color="#16697a">{plan_daten["link"]}</a>'
+    link_html = f'<a href="{plan_daten["link"]}?" color="#16697a">{plan_daten["link"]}</a>'
     elements.append(Paragraph(link_html, styles['Body']))
     
     # Das vorhin erstellte QR-Code Bild einfügen
