@@ -3589,40 +3589,41 @@ def api_item_detail(item_id):
             except Exception:
                 return str(dt) if dt else ''
 
-        # Build HTML for borrow records (if any)
         borrows_html = ''
         if borrow_records:
             rows = []
             for rec in borrow_records:
                 user_raw = rec.get('User')
                 try:
-                    # FIX: Cast to string before decrypting
-                    user = decrypt_text(str(user_raw)) if user_raw is not None else ''
+                    user = decrypt_text(user_raw) if user_raw is not None else ''
                 except Exception:
-                    # FIX: Ensure the fallback is also a string for html.escape
-                    user = str(user_raw) if user_raw is not None else ''
-                
+                    user = user_raw
                 status = rec.get('Status', '')
                 start = fmt_dt(rec.get('Start'))
                 end = fmt_dt(rec.get('End'))
                 notes = html.escape(str(rec.get('Notes') or ''))
                 
-                rows.append(f"<li><strong>{html.escape(user or '-')}</strong> — {html.escape(status)} — {html.escape(start)} → {html.escape(end)}{(' — ' + notes) if notes else ''}</li>")
+                rows.append(
+                    f"<li><strong>{html.escape(str(user or '-'))}</strong> — "
+                    f"{html.escape(str(status))} — "
+                    f"{html.escape(str(start))} → {html.escape(str(end))}"
+                    f"{(' — ' + notes) if notes else ''}</li>"
+                )
             borrows_html = f"<h3>Ausleihhistorie</h3><ul>{''.join(rows)}</ul>"
 
-        # Basic detail HTML
         detail_html = f"""
-        <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
-        <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
-        <p><strong>Anzahl:</strong> {html.escape(item.get('SeriesCount', '-'))}</p>
-        <p><strong>Ort:</strong> {html.escape(item.get('Ort', '-'))}</p>
-        <p><strong>Typ:</strong> {html.escape(item.get('ItemType', '-'))}</p>
-        <p><strong>Kategorie:</strong> {html.escape(item.get('library_category', '-'))}</p>
-        <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
-        <p><strong>Status:</strong> {html.escape(status_label)}</p>
-        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(borrower_value)}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
+        <h2>{html.escape(str(item.get('Name', 'Untitled')))}</h2>
+        <p><strong>ISBN:</strong> {html.escape(str(item.get('ISBN', item.get('Code4', '-'))))}</p>
+        <p><strong>Anzahl:</strong> {html.escape(str(item.get('SeriesCount', '-')))}</p>
+        <p><strong>Ort:</strong> {html.escape(str(item.get('Ort', '-')))}</p>
+        <p><strong>Typ:</strong> {html.escape(str(item.get('ItemType', '-')))}</p>
+        <p><strong>Kategorie:</strong> {html.escape(str(item.get('library_category', '-')))}</p>
+        <p><strong>Beschreibung:</strong> {html.escape(str(item.get('Beschreibung', '-')))}</p>
+        <p><strong>Status:</strong> {html.escape(str(status_label))}</p>
+        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
         {borrows_html}
         """
+        
         client.close()
         return detail_html, 200
     except Exception as e:
@@ -5158,7 +5159,6 @@ def upload_item():
         item_type_input = sanitize_form_value(request.form.get('item_type_input', ''))
         library_category = sanitize_form_value(request.form.get('library_category', ''))
         
-        app.logger.info(f"Upload attempt by {encrypt_text(username)}: name={name!r}, ort={ort!r}, beschreibung length={len(beschreibung)}, images count={len(images)}, filters={filter_upload}, filters2={filter_upload2}, filters3={filter_upload3}, anschaffungs_jahr={anschaffungs_jahr}, anschaffungs_kosten={anschaffungs_kosten}, code_4={code_4}, isbn={isbn_raw!r}, upload_mode={upload_mode!r}, item_count={item_count_raw!r}, item_type_input={item_type_input!r}, individual_codes={individual_codes_raw!r}")
         try:
             item_count = int(item_count_raw) if item_count_raw else 1
         except (TypeError, ValueError):
@@ -5170,14 +5170,12 @@ def upload_item():
         if individual_codes_raw:
             individual_codes = [c.strip() for c in str(individual_codes_raw).replace(',', '\n').splitlines() if c.strip()]
         
-        app.logger.info(f"DEBUG: Parsed individual codes: {individual_codes}, count: {len(individual_codes)}")
 
         # Check if this is a duplication
         is_duplicating = request.form.get('is_duplicating') == 'true'
         
         # Get duplicate_images if duplicating
         duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
-        print(f"DEBUG: Duplicate images from form: {duplicate_images}, count: {len(duplicate_images)}")
         
         # Make sure duplicate_images is always a list, even if there's only one
         if is_duplicating and duplicate_images and not isinstance(duplicate_images, list):
@@ -5287,8 +5285,6 @@ def upload_item():
         for c in extra_codes:
             if c not in all_item_codes:
                 all_item_codes.append(c)
-    
-    app.logger.info(f"DEBUG: Unified item codes: {all_item_codes}, total count: {len(all_item_codes)}")
 
     # -------------------------------------------------------------------
     # 2. OVERRIDE ITEM COUNT
@@ -6009,9 +6005,6 @@ def upload_item():
             app.logger.info(f"Copied book cover from {book_cover_image} to {new_filename}")
         else:
             app.logger.warning(f"Book cover image not found: {book_cover_image}")
-    
-    # Log image processing stats
-    app.logger.info(f"Upload stats: processed={processed_count}, errors={error_count}, skipped={skipped_count}, duplicates={len(duplicate_images) if duplicate_images else 0}")
     
     # If location is not in the predefined list, add it
     predefined_locations = it.get_predefined_locations()
