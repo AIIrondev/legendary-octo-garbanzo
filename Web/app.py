@@ -6014,13 +6014,6 @@ def upload_item():
     for position in range(1, item_count + 1):
         unique_code = None
 
-        if (base_code or individual_codes) and not unique_code:
-            error_msg = 'Fehler bei der Code-Erzeugung für mehrere Artikel.'
-            if is_mobile:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'error')
-            return redirect(url_for(success_redirect_endpoint))
-
         parent_item_id = str(created_item_ids[0]) if created_item_ids else None
         item_id = it.add_item(
             name, ort, beschreibung, image_filenames, filter_upload,
