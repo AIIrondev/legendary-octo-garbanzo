@@ -49,7 +49,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
              ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True,
              series_group_id=None, series_count=1, series_position=1,
              is_grouped_sub_item=False, parent_item_id=None,
-             isbn=None, item_type='general'):
+             isbn=None, item_type='general', library_category=None):
     """
     Add a new item to the inventory.
     
@@ -70,6 +70,9 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
         series_position (int, optional): Position inside the batch (1-based)
         is_grouped_sub_item (bool, optional): Whether this item is hidden as sub-item
         parent_item_id (str, optional): Parent item id if this is a sub-item
+        isbn (str, optional): ISBN for books or media items
+        item_type (str, optional): Type of the item (e.g., 'general', 'book', 'cd')
+        library_category (str, optional): Library category for the item
         
     Returns:
         ObjectId: ID of the new item or None if failed
@@ -97,6 +100,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
             'ISBN': isbn,
+            'library_category': library_category,
             'ItemType': item_type,
             'SeriesGroupId': series_group_id,
             'SeriesCount': series_count,
