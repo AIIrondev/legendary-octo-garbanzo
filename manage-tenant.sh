@@ -880,6 +880,193 @@ PY
         fi
         ;;
 
+    backup)
+        TENANT_ID="${2:-}"
+        if [ -z "$TENANT_ID" ]; then
+            echo "Error: Please provide a tenant_id."
+            exit 1
+        fi
+        
+        OUTPUT_FILE="${3:-backup_${TENANT_ID}_$(date +%Y%m%d_%H%M%S).zip}"
+        
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
+        if [ -z "$APP_CONTAINER" ]; then
+            echo "Error: Application container not running."
+            exit 1
+        fi
+        
+        echo "Creating complete backup (.zip) for tenant '$TENANT_ID'..."
+        
+        # We generate the zip temporarily inside the container
+        CONTAINER_TMP_ZIP="/tmp/backup_${TENANT_ID}_$(date +%s).zip"
+        
+        docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" "$CONTAINER_TMP_ZIP" <<'PY'
+import sys, os, zipfile
+from bson import json_util
+sys.path.insert(0, '/app')
+sys.path.insert(0, '/app/Web')
+from Web.modules.database import settings
+from pymongo import MongoClient
+
+tenant_id = sys.argv[1]
+zip_path = sys.argv[2]
+
+# CHANGE THIS if your app stores files in a different directory
+UPLOADS_BASE = f"/app/uploads/{tenant_id}"
+
+sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
+db_name = f"inventar_{sanitized}"
+
+try:
+    client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
+    db = client[db_name]
+
+    dump = {}
+    for coll_name in db.list_collection_names():
+        if coll_name.startswith('system.'): 
+            continue
+        dump[coll_name] = list(db[coll_name].find())
+
+    db_json = json_util.dumps(dump)
+
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # 1. Write the database dump
+        zf.writestr('database.json', db_json)
+        
+        # 2. Add uploaded photos/invoices if the directory exists
+        if os.path.isdir(UPLOADS_BASE):
+            for root, dirs, files in os.walk(UPLOADS_BASE):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    # Create a relative path for the zip internal structure
+                    arcname = os.path.relpath(file_path, start=UPLOADS_BASE)
+                    zf.write(file_path, arcname=f"uploads/{arcname}")
+                    
+except Exception as e:
+    print(f"Error creating backup: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+        
+        if [ $? -eq 0 ]; then
+            # Copy the zip out of the container to the host
+            docker cp "$APP_CONTAINER:$CONTAINER_TMP_ZIP" "$OUTPUT_FILE"
+            # Cleanup inside the container
+            docker exec "$APP_CONTAINER" rm -f "$CONTAINER_TMP_ZIP"
+            echo "Backup successfully created: $OUTPUT_FILE"
+        else
+            echo "Error: Backup failed."
+            docker exec "$APP_CONTAINER" rm -f "$CONTAINER_TMP_ZIP"
+            exit 1
+        fi
+        ;;
+
+    restore)
+        TENANT_ID="${2:-}"
+        INPUT_FILE="${3:-}"
+        
+        if [ -z "$TENANT_ID" ] || [ -z "$INPUT_FILE" ]; then
+            echo "Error: Usage: $0 restore <tenant_id> <backup_file.zip>"
+            exit 1
+        fi
+        
+        if [ ! -f "$INPUT_FILE" ]; then
+            echo "Error: Backup file '$INPUT_FILE' not found."
+            exit 1
+        fi
+        
+        echo -n "WARNING: This will DROP the existing database and completely overwrite data AND files for tenant '$TENANT_ID'. Are you sure? (y/N) "
+        read confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo "Restore canceled."
+            exit 0
+        fi
+        
+        APP_CONTAINER=$(docker ps -qf "name=app" | head -n 1)
+        if [ -z "$APP_CONTAINER" ]; then
+            echo "Error: Application container not running."
+            exit 1
+        fi
+        
+        echo "Uploading backup archive to container..."
+        CONTAINER_TMP_ZIP="/tmp/restore_${TENANT_ID}_$(date +%s).zip"
+        docker cp "$INPUT_FILE" "$APP_CONTAINER:$CONTAINER_TMP_ZIP"
+        
+        echo "Restoring database and files for tenant '$TENANT_ID'..."
+        
+        docker exec "$APP_CONTAINER" python3 - "$TENANT_ID" "$CONTAINER_TMP_ZIP" <<'PY'
+import sys, os, zipfile, shutil
+from bson import json_util
+sys.path.insert(0, '/app')
+sys.path.insert(0, '/app/Web')
+from Web.modules.database import settings
+from pymongo import MongoClient
+
+tenant_id = sys.argv[1]
+zip_path = sys.argv[2]
+
+# CHANGE THIS if your app stores files in a different directory
+UPLOADS_BASE = f"/app/uploads/{tenant_id}"
+
+sanitized = "".join(c for c in tenant_id if c.isalnum() or c == "_")
+db_name = f"inventar_{sanitized}"
+
+try:
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        # 1. Restore Database
+        db_json = zf.read('database.json').decode('utf-8')
+        data = json_util.loads(db_json)
+        
+        client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
+        client.drop_database(db_name)
+        db = client[db_name]
+        
+        restored_count = 0
+        for coll_name, docs in data.items():
+            if docs:
+                db[coll_name].insert_many(docs)
+                restored_count += len(docs)
+        
+        # 2. Restore Files
+        # Wipe existing uploads to ensure an exact replica of the backup
+        if os.path.exists(UPLOADS_BASE):
+            shutil.rmtree(UPLOADS_BASE)
+            
+        for item in zf.namelist():
+            # Extract only file items that were saved under 'uploads/'
+            if item.startswith('uploads/') and not item.endswith('/'):
+                rel_path = item[len('uploads/'):]
+                target_path = os.path.join(UPLOADS_BASE, rel_path)
+                
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                with open(target_path, 'wb') as f:
+                    f.write(zf.read(item))
+
+    print(f"Successfully restored {restored_count} database documents and tenant files.")
+except Exception as e:
+    print(f"Error restoring backup: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+
+        if [ $? -eq 0 ]; then
+            # Clean up tmp zip inside container
+            docker exec "$APP_CONTAINER" rm -f "$CONTAINER_TMP_ZIP"
+            echo "Restore completed successfully."
+            
+            echo "Clearing session cache..."
+            docker exec "$APP_CONTAINER" python3 -c "
+import sys; sys.path.insert(0, '/app'); sys.path.insert(0, '/app/Web'); from Web.modules.database import settings; from pymongo import MongoClient
+client = MongoClient(settings.MONGODB_HOST, int(settings.MONGODB_PORT))
+db = client[f'inventar_{"".join(c for c in sys.argv[1] if c.isalnum() or c == "_")}']
+db.sessions.drop()
+" "$TENANT_ID"
+            
+        else
+            echo "Error: Restore failed."
+            docker exec "$APP_CONTAINER" rm -f "$CONTAINER_TMP_ZIP"
+            exit 1
+        fi
+        ;;
+
     *)
         echo "Unknown command: $COMMAND"
         show_help
