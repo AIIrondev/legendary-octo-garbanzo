@@ -1209,28 +1209,21 @@
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
 
-        // Gruppen-Logik für die Anzeige der gesamten Range
+        // Gruppen-Info-Box Logik
         const warningDiv = document.getElementById('editLibraryGroupWarning');
         const codesContainer = document.getElementById('editLibraryAllCodes');
 
         if (item.SeriesGroupId) {
-            // Alle Mitglieder der Gruppe finden (sortiert nach SeriesPosition)
             const groupMembers = libraryItems
                 .filter(i => i.SeriesGroupId === item.SeriesGroupId)
                 .sort((a, b) => a.SeriesPosition - b.SeriesPosition);
 
-            // Codes für die Anzeige formatieren
-            const codesHtml = groupMembers.map(member => {
-                const isCurrent = member._id === itemId;
-                return `<span style="background: ${isCurrent ? '#0ea5e9' : '#e0e0e0'}; 
-                         color: ${isCurrent ? '#fff' : '#333'}; 
-                         padding: 2px 8px; border-radius: 4px; margin-right: 5px; font-size: 12px;">
-                         ${member.Code_4 || 'n/a'}
-                         </span>`;
-            }).join('');
-
             document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
-            codesContainer.innerHTML = codesHtml;
+
+            codesContainer.innerHTML = groupMembers.map(member => {
+                const isCurrent = member._id === itemId;
+                return `<span style="background: ${isCurrent ? '#0ea5e9' : '#e0e0e0'}; color: ${isCurrent ? '#fff' : '#333'}; padding: 2px 8px; border-radius: 4px; margin-right: 5px; font-size: 12px;">${member.Code_4 || 'n/a'}</span>`;
+            }).join('');
 
             warningDiv.style.display = 'block';
         } else {
@@ -1244,56 +1237,63 @@
         document.getElementById('editLibraryModal').style.display = 'none';
     }
 
-    document.getElementById('editLibraryForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const itemId = document.getElementById('editLibraryItemId').value;
-        
-        // Daten sammeln
-        const updateData = {
-            id: itemId,
-            name: document.getElementById('editLibraryName').value,
-            item_type: document.getElementById('editLibraryType').value,
-            isbn: document.getElementById('editLibraryIsbn').value,
-            code_4: document.getElementById('editLibraryCode4').value,
-            ort: document.getElementById('editLibraryLocation').value,
-            beschreibung: document.getElementById('editLibraryDescription').value
-        };
-    
-        // Fetch zum Backend
-        const response = await fetch('/api/update-item', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updateData)
-        });
-    
-        if (response.ok) {
-            // Lokale Synchronisierung im Array (für sofortiges UI-Update)
-            const editedItem = libraryItems.find(i => i._id === itemId);
-            if (editedItem && editedItem.SeriesGroupId) {
-                libraryItems.forEach(item => {
-                    if (item.SeriesGroupId === editedItem.SeriesGroupId) {
-                        // Alle Felder synchronisieren
-                        item.Name = updateData.name;
-                        item.ItemType = updateData.item_type;
-                        item.ISBN = updateData.isbn;
-                        item.Ort = updateData.ort;
-                        item.Beschreibung = updateData.beschreibung;
-                        
-                        // Code nur für das aktive Item setzen
-                        if (item._id === itemId) {
-                            item.Code_4 = updateData.code_4;
+    // --- Sicherer Event-Listener für das Formular ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const editForm = document.getElementById('editLibraryForm');
+
+        if (editForm) {
+            editForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const itemId = document.getElementById('editLibraryItemId').value;
+                const updateData = {
+                    id: itemId,
+                    name: document.getElementById('editLibraryName').value,
+                    item_type: document.getElementById('editLibraryType').value,
+                    isbn: document.getElementById('editLibraryIsbn').value,
+                    code_4: document.getElementById('editLibraryCode4').value,
+                    ort: document.getElementById('editLibraryLocation').value,
+                    beschreibung: document.getElementById('editLibraryDescription').value
+                };
+
+                try {
+                    const response = await fetch('/api/update-item', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                    });
+
+                    if (response.ok) {
+                        const editedItem = libraryItems.find(i => i._id === itemId);
+
+                        // Lokale Daten im Array synchronisieren
+                        if (editedItem && editedItem.SeriesGroupId) {
+                            libraryItems.forEach(item => {
+                                if (item.SeriesGroupId === editedItem.SeriesGroupId) {
+                                    item.Name = updateData.name;
+                                    item.ItemType = updateData.item_type;
+                                    item.ISBN = updateData.isbn;
+                                    item.Ort = updateData.ort;
+                                    item.Beschreibung = updateData.beschreibung;
+
+                                    if (item._id === itemId) item.Code_4 = updateData.code_4;
+                                }
+                            });
+                        } else if (editedItem) {
+                            Object.assign(editedItem, updateData);
                         }
+
+                        closeEditLibraryModal();
+                        // Optional: renderLibraryTable(); 
+                    } else {
+                        const err = await response.json();
+                        alert('Fehler beim Speichern: ' + (err.error || 'Unbekannter Fehler'));
                     }
-                });
-            } else if (editedItem) {
-                // Einzel-Update
-                Object.assign(editedItem, updateData);
-            }
-            
-            closeEditLibraryModal();
-            // Hier ggf. deine Render-Funktion aufrufen, um die Tabelle zu aktualisieren
-            renderLibraryTable(); 
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    alert('Netzwerkfehler.');
+                }
+            });
         }
     });
 </script>
