@@ -1199,7 +1199,7 @@
             alert('Fehler: Das Medium konnte nicht gefunden werden.');
             return;
         }
-    
+
         // 1. Formular-Felder normal befüllen
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
@@ -1208,28 +1208,28 @@
         document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
-    
+
         // 2. Gruppen-Logik: Hole ALLE Items der Gruppe
         const warningDiv = document.getElementById('editLibraryGroupWarning');
         const groupCodeContainer = document.getElementById('editLibraryAllCodes');
-        
+
         // Prüfen ob Gruppenmitgliedschaft besteht
         if (item.SeriesGroupId) {
             // Alle Items mit gleicher ID finden und nach Position sortieren
             const groupMembers = libraryItems
                 .filter(i => i.SeriesGroupId === item.SeriesGroupId)
                 .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0));
-        
+
             // Liste der Codes erstellen
             let codesListHtml = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top:10px;">
             `;
-                
+
             groupMembers.forEach(member => {
                 const isCurrent = member._id === itemId;
                 // Wenn Code_4 nicht existiert, zeige "Kein Code"
                 const codeVal = member.Code_4 || "---";
-                
+
                 codesListHtml += `
                     <div style="text-align: center; padding: 5px; border-radius: 4px; 
                          background: ${isCurrent ? '#0ea5e9' : '#f1f1f1'}; 
@@ -1241,15 +1241,15 @@
                 `;
             });
             codesListHtml += `</div>`;
-        
+
             document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
             groupCodeContainer.innerHTML = codesListHtml;
-            
+
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
         }
-    
+
         document.getElementById('editLibraryModal').style.display = 'flex'; 
     }
 
