@@ -1199,8 +1199,8 @@
             alert('Fehler: Das Medium konnte nicht gefunden werden.');
             return;
         }
-
-        // 1. Formular-Felder normal befüllen
+    
+        // 1. Felder befüllen
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
         document.getElementById('editLibraryType').value = item.ItemType || 'book';
@@ -1208,125 +1208,109 @@
         document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
-
-        // 2. Gruppen-Logik: Hole ALLE Items der Gruppe
+    
+        // 2. Gruppen-Logik (Codes anzeigen)
         const warningDiv = document.getElementById('editLibraryGroupWarning');
-        const groupCodeContainer = document.getElementById('editLibraryAllCodes');
-
-        // Prüfen ob Gruppenmitgliedschaft besteht
+        const codesContainer = document.getElementById('editLibraryAllCodes');
+        
         if (item.SeriesGroupId) {
-            // Alle Items mit gleicher ID finden und nach Position sortieren
             const groupMembers = libraryItems
                 .filter(i => i.SeriesGroupId === item.SeriesGroupId)
                 .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0));
-
-            // Liste der Codes erstellen
-            let codesListHtml = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top:10px;">
-            `;
-
-            groupMembers.forEach(member => {
-                const isCurrent = member._id === itemId;
-                // Wenn Code_4 nicht existiert, zeige "Kein Code"
-                const codeVal = member.Code_4 || "---";
-
-                codesListHtml += `
-                    <div style="text-align: center; padding: 5px; border-radius: 4px; 
-                         background: ${isCurrent ? '#0ea5e9' : '#f1f1f1'}; 
-                         color: ${isCurrent ? '#fff' : '#333'};
-                         border: 1px solid ${isCurrent ? '#0ea5e9' : '#ccc'};">
-                        <span style="font-size: 10px; display:block;">Pos: ${member.SeriesPosition}</span>
-                        <strong style="font-size: 14px;">${codeVal}</strong>
-                    </div>
-                `;
-            });
-            codesListHtml += `</div>`;
-
+        
+            // Codes als komma-separierte Liste
+            const codeList = groupMembers
+                .map(member => member.Code_4 || "N/A")
+                .join(', ');
+        
             document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
-            groupCodeContainer.innerHTML = codesListHtml;
-
+            codesContainer.textContent = codeList;
+            
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
         }
-
+    
         document.getElementById('editLibraryModal').style.display = 'flex'; 
     }
-
+    
     function closeEditLibraryModal() {
         document.getElementById('editLibraryModal').style.display = 'none';
     }
-
-    document.getElementById('editLibraryForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const itemId = document.getElementById('editLibraryItemId').value;
-        const currentItem = libraryItems.find(i => i._id === itemId);
-        
-        if (!currentItem || !currentItem.SeriesGroupId) {
-            alert("Fehler: Gruppen-ID nicht gefunden.");
-            return;
-        }
-
-        // 1. Alle Items der Gruppe sammeln, um die Struktur für das Backend zu bauen
-        // Hier bauen wir die Liste für 'individual_items'
-        const groupMembers = libraryItems.filter(i => i.SeriesGroupId === currentItem.SeriesGroupId);
-        const individualUpdates = groupMembers.map(member => {
-            return {
-                id: member._id,
-                // Wenn es das aktuell bearbeitete Item ist, nimm den Wert aus dem Formular
-                // Sonst behalte den alten Code bei (oder lass ihn so, wie er ist)
-                code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
-            };
-        });
-
-        // 2. Payload zusammenstellen
-        const payload = {
-            series_group_id: currentItem.SeriesGroupId,
-            name: document.getElementById('editLibraryName').value,
-            ort: document.getElementById('editLibraryLocation').value,
-            beschreibung: document.getElementById('editLibraryDescription').value,
-            ansch_jahr: null, // Falls du diese Felder im Formular hast, hier einfügen
-            ansch_kost: null,
-            reservierbar: true,
-            isbn: document.getElementById('editLibraryIsbn').value,
-            item_type: document.getElementById('editLibraryType').value,
-            items: individualUpdates
-        };
-
-        // 3. Request senden
-        try {
-            const response = await fetch('/update_group', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // UI Update: Daten im Frontend Array aktualisieren
-                libraryItems.forEach(item => {
-                    if (item.SeriesGroupId === currentItem.SeriesGroupId) {
-                        item.Name = payload.name;
-                        item.Ort = payload.ort;
-                        item.Beschreibung = payload.beschreibung;
-                        item.ISBN = payload.isbn;
-                        item.ItemType = payload.item_type;
-
-                        // Code nur für das aktive Item updaten
-                        if (item._id === itemId) item.Code_4 = document.getElementById('editLibraryCode4').value;
-                    }
+    
+    /**
+     * Event-Listener für das Formular (Initialisierung)
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+        const editForm = document.getElementById('editLibraryForm');
+    
+        if (editForm) {
+            editForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+            
+                const itemId = document.getElementById('editLibraryItemId').value;
+                const currentItem = libraryItems.find(i => i._id === itemId);
+                
+                if (!currentItem) return;
+            
+                // 1. Payload für die /update_group Route zusammenstellen
+                // Wir sammeln alle Gruppenmitglieder, um die individuellen Codes zu senden
+                const groupMembers = libraryItems.filter(i => i.SeriesGroupId === currentItem.SeriesGroupId);
+                const individualItems = groupMembers.map(member => {
+                    return {
+                        id: member._id,
+                        // Wenn es das aktive Item ist, nimm den neuen Wert aus dem Input
+                        code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
+                    };
                 });
-
-                closeEditLibraryModal();
-                alert("Gruppe erfolgreich aktualisiert!");
-                // renderTable(); // Deine Render-Funktion aufrufen
-            } else {
-                alert('Fehler: ' + result.message);
-            }
-        } catch (error) {
-            console.error('Fetch error:', error);
+            
+                const payload = {
+                    series_group_id: currentItem.SeriesGroupId,
+                    name: document.getElementById('editLibraryName').value,
+                    ort: document.getElementById('editLibraryLocation').value,
+                    beschreibung: document.getElementById('editLibraryDescription').value,
+                    isbn: document.getElementById('editLibraryIsbn').value,
+                    item_type: document.getElementById('editLibraryType').value,
+                    items: individualItems
+                };
+            
+                // 2. Request an Backend
+                try {
+                    const response = await fetch('/update_group', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                
+                    const result = await response.json();
+                
+                    if (result.success) {
+                        // 3. UI-Synchronisierung (lokal im Browser)
+                        libraryItems.forEach(item => {
+                            if (item.SeriesGroupId === currentItem.SeriesGroupId) {
+                                item.Name = payload.name;
+                                item.Ort = payload.ort;
+                                item.Beschreibung = payload.beschreibung;
+                                item.ISBN = payload.isbn;
+                                item.ItemType = payload.item_type;
+                                
+                                // Nur den Code des aktiven Items lokal updaten
+                                if (item._id === itemId) item.Code_4 = document.getElementById('editLibraryCode4').value;
+                            }
+                        });
+                    
+                        closeEditLibraryModal();
+                        // Falls du eine Funktion zum Neuzeichnen der Tabelle hast, rufe sie hier auf:
+                        // renderTable(); 
+                        alert("Erfolgreich synchronisiert.");
+                    } else {
+                        alert('Fehler: ' + result.message);
+                    }
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    alert('Netzwerkfehler beim Speichern.');
+                }
+            });
         }
     });
 </script>
@@ -1393,6 +1377,22 @@
                 <button type="button" class="button" onclick="closeEditLibraryModal()">Abbrechen</button>
             </div>
         </form>
+    </div>
+</div>
+<div id="editLibraryGroupWarning" style="display:none; background-color: #fff; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #0ea5e9;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+        <strong style="color: #0ea5e9;">Gruppen-Range (Total: <span id="editLibraryGroupCount"></span>)</strong>
+    </div>
+    
+    <p style="margin: 5px 0; font-size: 12px; color: #555;">
+        Alle Codes in dieser Gruppe:
+    </p>
+    
+    <!-- Hier wird die Liste als Komma-Text eingefügt -->
+    <div id="editLibraryAllCodes" style="font-family: monospace; font-size: 14px; font-weight: bold; color: #333; margin-top: 5px;"></div>
+    
+    <div style="margin-top: 15px; font-size: 11px; background: #e0f2fe; padding: 8px; border-radius: 4px;">
+        <strong>Hinweis:</strong> Änderungen an Titel/Ort/Beschreibung werden auf <strong>alle</strong> Exemplare der Range übertragen.
     </div>
 </div>
 {% endblock %}
