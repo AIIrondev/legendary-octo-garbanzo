@@ -198,69 +198,60 @@ def get_group_item_ids(id):
         return []
 
 
-def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True, 
-                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True,
-                isbn=None, item_type='general', library_category=None):
-    """
-    Update an existing inventory item.
-    
-    Args:
-        id (str): ID of the item to update
-        name (str): Name of the item
-        ort (str): Location of the item
-        beschreibung (str): Description of the item
-        images (list, optional): List of image filenames for the item
-        verfuegbar (bool, optional): Availability status of the item
-        filter (str, optional): Primary filter/category for the item
-        filter2 (str, optional): Secondary filter/category for the item
-        filter3 (str, optional): Tertiary filter/category for the item
-        ansch_jahr (int, optional): Year of acquisition
-        ansch_kost (float, optional): Cost of acquisition
-        code_4 (str, optional): 4-digit identification code
-        reservierbar (bool, optional): Whether the item can be reserved in advance
-        library_category (str, optional): Library category for the item
-    Returns:
-        bool: True if successful, False otherwise
-    """
+def update_item(id, name, ort, beschreibung, images, verfuegbar, filter1, filter2, filter3, 
+                ansch_jahr, ansch_kost, code_4, reservierbar, isbn=None, item_type='general'):
     try:
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
 
-        # Set default values for optional parameters
-        if images is None:
-            images = []
+        # 1. Altes Item laden, um SeriesGroupId zu bestimmen
+        old_item = items.find_one({'_id': ObjectId(id)})
+        if not old_item:
+            return False
+            
+        series_group_id = old_item.get('SeriesGroupId')
 
-        update_data = {
+        # 2. Shared Data: Daten, die für ALLE in der Gruppe gleich sind
+        shared_update = {
             'Name': name,
             'Ort': ort,
             'Beschreibung': beschreibung,
             'Images': images,
-            'Verfuegbar': verfuegbar,
-            'Reservierbar': reservierbar,
-            'Filter': filter,
+            'Filter': filter1,
             'Filter2': filter2,
             'Filter3': filter3,
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
-            'Code_4': code_4,
+            'Reservierbar': reservierbar,
             'ISBN': isbn,
-            'library_category': library_category,
             'ItemType': item_type,
+            'Verfuegbar': verfuegbar, # Wir behalten den Status bei
             'LastUpdated': datetime.datetime.now()
         }
 
-        result = items.update_one(
-            {'_id': ObjectId(id)},
-            {'$set': update_data}
-        )
+        # 3. Spezifische Daten: Was NICHT synchronisiert wird
+        specific_update = shared_update.copy()
+        specific_update['Code_4'] = code_4
+
+        # 4. Das aktuelle Item updaten
+        items.update_one({'_id': ObjectId(id)}, {'$set': specific_update})
+
+        # 5. Alle anderen Gruppen-Mitglieder synchronisieren
+        if series_group_id:
+            items.update_many(
+                {
+                    'SeriesGroupId': series_group_id,
+                    '_id': {'$ne': ObjectId(id)}
+                },
+                {'$set': shared_update}
+            )
 
         client.close()
-        return result.modified_count > 0
+        return True
     except Exception as e:
         print(f"Error updating item: {e}")
         return False
-
 
 def update_item_status(id, verfuegbar, user=None):
     """

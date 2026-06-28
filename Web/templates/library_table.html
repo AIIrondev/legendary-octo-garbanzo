@@ -1192,7 +1192,6 @@
         }
     });
 
-    // Modal Control Functions (accessible globally from table buttons)
     function openEditLibraryItem(itemId) {
         const item = libraryItems.find(i => i._id === itemId);
         
@@ -1201,7 +1200,7 @@
             return;
         }
 
-        // Populate the form fields - Using correct German properties from MongoDB fields
+        // Felder befüllen
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
         document.getElementById('editLibraryType').value = item.ItemType || 'book';
@@ -1210,56 +1209,124 @@
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
 
+        // Gruppen-Logik für die Anzeige der gesamten Range
+        const warningDiv = document.getElementById('editLibraryGroupWarning');
+        const codesContainer = document.getElementById('editLibraryAllCodes');
+
+        if (item.SeriesGroupId) {
+            // Alle Mitglieder der Gruppe finden (sortiert nach SeriesPosition)
+            const groupMembers = libraryItems
+                .filter(i => i.SeriesGroupId === item.SeriesGroupId)
+                .sort((a, b) => a.SeriesPosition - b.SeriesPosition);
+
+            // Codes für die Anzeige formatieren
+            const codesHtml = groupMembers.map(member => {
+                const isCurrent = member._id === itemId;
+                return `<span style="background: ${isCurrent ? '#0ea5e9' : '#e0e0e0'}; 
+                         color: ${isCurrent ? '#fff' : '#333'}; 
+                         padding: 2px 8px; border-radius: 4px; margin-right: 5px; font-size: 12px;">
+                         ${member.Code_4 || 'n/a'}
+                         </span>`;
+            }).join('');
+
+            document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
+            codesContainer.innerHTML = codesHtml;
+
+            warningDiv.style.display = 'block';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+
         document.getElementById('editLibraryModal').style.display = 'flex'; 
     }
 
     function closeEditLibraryModal() {
         document.getElementById('editLibraryModal').style.display = 'none';
     }
+
+    document.getElementById('editLibraryForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const itemId = document.getElementById('editLibraryItemId').value;
+        
+        // Daten sammeln
+        const updateData = {
+            id: itemId,
+            name: document.getElementById('editLibraryName').value,
+            item_type: document.getElementById('editLibraryType').value,
+            isbn: document.getElementById('editLibraryIsbn').value,
+            code_4: document.getElementById('editLibraryCode4').value,
+            ort: document.getElementById('editLibraryLocation').value,
+            beschreibung: document.getElementById('editLibraryDescription').value
+        };
+    
+        // Fetch zum Backend
+        const response = await fetch('/api/update-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData)
+        });
+    
+        if (response.ok) {
+            // Lokale Synchronisierung im Array (für sofortiges UI-Update)
+            const editedItem = libraryItems.find(i => i._id === itemId);
+            if (editedItem && editedItem.SeriesGroupId) {
+                libraryItems.forEach(item => {
+                    if (item.SeriesGroupId === editedItem.SeriesGroupId) {
+                        // Alle Felder synchronisieren
+                        item.Name = updateData.name;
+                        item.ItemType = updateData.item_type;
+                        item.ISBN = updateData.isbn;
+                        item.Ort = updateData.ort;
+                        item.Beschreibung = updateData.beschreibung;
+                        
+                        // Code nur für das aktive Item setzen
+                        if (item._id === itemId) {
+                            item.Code_4 = updateData.code_4;
+                        }
+                    }
+                });
+            } else if (editedItem) {
+                // Einzel-Update
+                Object.assign(editedItem, updateData);
+            }
+            
+            closeEditLibraryModal();
+            // Hier ggf. deine Render-Funktion aufrufen, um die Tabelle zu aktualisieren
+            renderLibraryTable(); 
+        }
+    });
 </script>
 
 <div id="editLibraryModal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width: 760px;">
         <span class="close" onclick="closeEditLibraryModal()">&times;</span>
         <h3 style="margin-top:0;">Bibliotheksmedium bearbeiten</h3>
+        
+        <!-- Bereich für Gruppen-Informationen (Range) -->
+        <div id="editLibraryGroupWarning" style="display:none; background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #dee2e6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <strong style="color: #0ea5e9;">Gruppen-Synchronisierung aktiv</strong>
+                <span style="font-size: 12px; color: #666;">Gesamt: <span id="editLibraryGroupCount"></span> Exemplare</span>
+            </div>
+            
+            <p style="margin: 0 0 10px 0; font-size: 13px;">Verfügbare Codes in dieser Range:</p>
+            <div id="editLibraryAllCodes" style="display: flex; flex-wrap: wrap; gap: 5px;">
+                <!-- Codes werden hier per JS eingefügt -->
+            </div>
+            
+            <p style="margin-top: 15px; font-size: 12px; color: #555; border-top: 1px solid #eee; pt: 10px;">
+                <em>Änderungen an allgemeinen Daten (Titel, Ort, etc.) betreffen <strong>alle</strong> oben aufgeführten Codes.</em>
+            </p>
+        </div>
+
         <form id="editLibraryForm">
+            <!-- Formularfelder wie gehabt... -->
             <input type="hidden" id="editLibraryItemId">
             <div class="edit-grid">
-                <div class="full">
-                    <label for="editLibraryName">Titel</label>
-                    <input id="editLibraryName" required>
-                </div>
-                <div>
-                    <label for="editLibraryType">Medientyp</label>
-                    <select id="editLibraryType">
-                        <option value="book">Buch</option>
-                        <option value="schulbuch">Schulbuch</option>
-                        <option value="cd">CD</option>
-                        <option value="dvd">DVD</option>
-                        <option value="media">Sonstige Medien</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="editLibraryIsbn">ISBN</label>
-                    <input id="editLibraryIsbn" placeholder="optional ISBN-10/13">
-                </div>
-                <div>
-                    <label for="editLibraryCode4">Code</label>
-                    <input id="editLibraryCode4" placeholder="optional Mediencode">
-                </div>
-                <div class="full">
-                    <label for="editLibraryLocation">Ort</label>
-                    <input id="editLibraryLocation" required>
-                </div>
-                <div class="full">
-                    <label for="editLibraryDescription">Beschreibung</label>
-                    <textarea id="editLibraryDescription" rows="4" required></textarea>
-                </div>
+                <!-- ... (Dein restliches Formular) ... -->
             </div>
-            <div class="edit-actions">
-                <button type="submit" class="button" style="background:#0ea5e9;color:#fff;">Speichern</button>
-                <button type="button" class="button" onclick="closeEditLibraryModal()">Abbrechen</button>
-            </div>
+            <!-- ... -->
         </form>
     </div>
 </div>

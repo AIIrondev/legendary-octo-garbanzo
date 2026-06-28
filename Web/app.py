@@ -6601,17 +6601,26 @@ def edit_item(id):
     if ort and ort not in predefined_locations:
         it.add_predefined_location(ort)
     
-    # Update the item
     result = it.update_item(
-        id, name, ort, beschreibung, 
-        images, verfuegbar, filter1, filter2, filter3,
-        anschaffungs_jahr, anschaffungs_kosten, code_4, reservierbar,
+        id=id, 
+        name=name, 
+        ort=ort, 
+        beschreibung=beschreibung, 
+        images=images, 
+        verfuegbar=verfuegbar, 
+        filter1=filter1, 
+        filter2=filter2, 
+        filter3=filter3,
+        ansch_jahr=anschaffungs_jahr, 
+        ansch_kost=anschaffungs_kosten, 
+        code_4=code_4, 
+        reservierbar=reservierbar,
         isbn=item_isbn,
         item_type=item_type
     )
     
     if result:
-        flash('Element erfolgreich aktualisiert', 'success')
+        flash('Element erfolgreich aktualisiert (und ggf. Gruppe synchronisiert)', 'success')
     else:
         flash('Fehler beim Aktualisieren des Elements', 'error')
     
