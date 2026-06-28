@@ -1199,7 +1199,7 @@
             alert('Fehler: Das Medium konnte nicht gefunden werden.');
             return;
         }
-    
+
         // 1. Felder befüllen
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
@@ -1208,51 +1208,60 @@
         document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
-    
+
         // 2. Gruppen-Logik (Codes anzeigen)
         const warningDiv = document.getElementById('editLibraryGroupWarning');
         const codesContainer = document.getElementById('editLibraryAllCodes');
-        
+
         if (item.SeriesGroupId) {
-            const groupMembers = libraryItems
-                .filter(i => i.SeriesGroupId === item.SeriesGroupId)
-                .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0));
+            // DEBUG: Schau in der Konsole, wie viele Items gefunden werden
+            console.log("Suche Items mit SeriesGroupId:", item.SeriesGroupId);
+                
+            const groupMembers = libraryItems.filter(i => {
+                // Debug: Prüfen, ob die IDs matchen
+                const match = i.SeriesGroupId === item.SeriesGroupId;
+                if(match) console.log("Gefundenes Item:", i.Code_4);
+                return match;
+            });
         
-            // Codes als komma-separierte Liste
+            console.log("Anzahl gefundener Gruppenmitglieder:", groupMembers.length);
+        
+            // Sortierung und Extraktion
             const codeList = groupMembers
-                .map(member => member.Code_4 || "N/A")
+                .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0))
+                .map(member => member.Code_4 || "---")
                 .join(', ');
         
             document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
-            codesContainer.textContent = codeList;
+            document.getElementById('editLibraryAllCodes').textContent = codeList;
             
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
         }
-    
+
         document.getElementById('editLibraryModal').style.display = 'flex'; 
     }
-    
+
     function closeEditLibraryModal() {
         document.getElementById('editLibraryModal').style.display = 'none';
     }
-    
+
     /**
      * Event-Listener für das Formular (Initialisierung)
      */
     document.addEventListener('DOMContentLoaded', function() {
         const editForm = document.getElementById('editLibraryForm');
-    
+
         if (editForm) {
             editForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
-            
+
                 const itemId = document.getElementById('editLibraryItemId').value;
                 const currentItem = libraryItems.find(i => i._id === itemId);
-                
+
                 if (!currentItem) return;
-            
+
                 // 1. Payload für die /update_group Route zusammenstellen
                 // Wir sammeln alle Gruppenmitglieder, um die individuellen Codes zu senden
                 const groupMembers = libraryItems.filter(i => i.SeriesGroupId === currentItem.SeriesGroupId);
@@ -1263,7 +1272,7 @@
                         code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
                     };
                 });
-            
+
                 const payload = {
                     series_group_id: currentItem.SeriesGroupId,
                     name: document.getElementById('editLibraryName').value,
@@ -1273,7 +1282,7 @@
                     item_type: document.getElementById('editLibraryType').value,
                     items: individualItems
                 };
-            
+
                 // 2. Request an Backend
                 try {
                     const response = await fetch('/update_group', {
@@ -1281,9 +1290,9 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                
+
                     const result = await response.json();
-                
+
                     if (result.success) {
                         // 3. UI-Synchronisierung (lokal im Browser)
                         libraryItems.forEach(item => {
@@ -1293,12 +1302,12 @@
                                 item.Beschreibung = payload.beschreibung;
                                 item.ISBN = payload.isbn;
                                 item.ItemType = payload.item_type;
-                                
+
                                 // Nur den Code des aktiven Items lokal updaten
                                 if (item._id === itemId) item.Code_4 = document.getElementById('editLibraryCode4').value;
                             }
                         });
-                    
+
                         closeEditLibraryModal();
                         // Falls du eine Funktion zum Neuzeichnen der Tabelle hast, rufe sie hier auf:
                         // renderTable(); 
