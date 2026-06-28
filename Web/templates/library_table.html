@@ -1192,56 +1192,51 @@
         }
     });
 
-    function openEditLibraryItem(itemId) {
+    window.openEditLibraryItem = function(itemId) {
         const item = libraryItems.find(i => i._id === itemId);
-        
-        if (!item) {
-            alert('Fehler: Das Medium konnte nicht gefunden werden.');
-            return;
-        }
+        if (!item) return;
 
         // 1. Felder befüllen
-        document.getElementById('editLibraryItemId').value = item._id || '';
-        document.getElementById('editLibraryName').value = item.Name || '';
-        document.getElementById('editLibraryType').value = item.ItemType || 'book';
+        document.getElementById('editLibraryItemId').value = item._id;
+        document.getElementById('editLibraryName').value = item.Name;
+        document.getElementById('editLibraryType').value = item.ItemType;
         document.getElementById('editLibraryIsbn').value = item.ISBN || '';
-        document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
-        document.getElementById('editLibraryLocation').value = item.Ort || ''; 
-        document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
+        document.getElementById('editLibraryCode4').value = item.Code_4 || '';
+        document.getElementById('editLibraryLocation').value = item.Ort;
+        document.getElementById('editLibraryDescription').value = item.Beschreibung;
 
-        // 2. Gruppen-Logik (Codes anzeigen)
+        // 2. Gruppen-Logik
         const warningDiv = document.getElementById('editLibraryGroupWarning');
         const codesContainer = document.getElementById('editLibraryAllCodes');
 
         if (item.SeriesGroupId) {
-            // DEBUG: Schau in der Konsole, wie viele Items gefunden werden
-            console.log("Suche Items mit SeriesGroupId:", item.SeriesGroupId);
-                
-            const groupMembers = libraryItems.filter(i => {
-                // Debug: Prüfen, ob die IDs matchen
-                const match = i.SeriesGroupId === item.SeriesGroupId;
-                if(match) console.log("Gefundenes Item:", i.Code_4);
-                return match;
-            });
-        
-            console.log("Anzahl gefundener Gruppenmitglieder:", groupMembers.length);
-        
-            // Sortierung und Extraktion
-            const codeList = groupMembers
-                .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0))
-                .map(member => member.Code_4 || "---")
-                .join(', ');
-        
-            document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
-            document.getElementById('editLibraryAllCodes').textContent = codeList;
-            
+            // Filtern aus dem aktuell geladenen Array
+            let groupMembers = libraryItems.filter(i => i.SeriesGroupId === item.SeriesGroupId);
+
+            // SCHLÜSSEL: Wenn die Anzahl der gefundenen Elemente nicht mit SeriesCount übereinstimmt,
+            // haben wir die Gruppe noch nicht vollständig geladen.
+            if (groupMembers.length < (item.SeriesCount || 0)) {
+                console.warn("Gruppe noch nicht vollständig geladen. Anzeige ggf. unvollständig.");
+                // Optional: Zeige einen Ladehinweis im Modal
+                codesContainer.textContent = "Lade restliche Gruppenmitglieder...";
+            } else {
+                // Daten sind vollständig -> Anzeigen
+                const codeList = groupMembers
+                    .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0))
+                    .map(m => m.Code_4 || "---")
+                    .join(', ');
+
+                codesContainer.textContent = codeList;
+            }
+
+            document.getElementById('editLibraryGroupCount').textContent = groupMembers.length + " / " + (item.SeriesCount || "?");
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
         }
 
-        document.getElementById('editLibraryModal').style.display = 'flex'; 
-    }
+        document.getElementById('editLibraryModal').style.display = 'flex';
+    };
 
     function closeEditLibraryModal() {
         document.getElementById('editLibraryModal').style.display = 'none';
@@ -1252,7 +1247,6 @@
      */
     document.addEventListener('DOMContentLoaded', function() {
         const editForm = document.getElementById('editLibraryForm');
-
         if (editForm) {
             editForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1262,17 +1256,15 @@
 
                 if (!currentItem) return;
 
-                // 1. Payload für die /update_group Route zusammenstellen
-                // Wir sammeln alle Gruppenmitglieder, um die individuellen Codes zu senden
+                // 1. Alle Mitglieder der Gruppe finden, um die Code-Liste aufzubauen
                 const groupMembers = libraryItems.filter(i => i.SeriesGroupId === currentItem.SeriesGroupId);
-                const individualItems = groupMembers.map(member => {
-                    return {
-                        id: member._id,
-                        // Wenn es das aktive Item ist, nimm den neuen Wert aus dem Input
-                        code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
-                    };
-                });
+                const individualUpdates = groupMembers.map(member => ({
+                    id: member._id,
+                    // Wenn dies das bearbeitete Item ist, nimm den neuen Code, sonst den alten
+                    code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
+                }));
 
+                // 2. Payload für das Backend bauen
                 const payload = {
                     series_group_id: currentItem.SeriesGroupId,
                     name: document.getElementById('editLibraryName').value,
@@ -1280,10 +1272,10 @@
                     beschreibung: document.getElementById('editLibraryDescription').value,
                     isbn: document.getElementById('editLibraryIsbn').value,
                     item_type: document.getElementById('editLibraryType').value,
-                    items: individualItems
+                    items: individualUpdates
                 };
 
-                // 2. Request an Backend
+                // 3. Request an die Gruppen-Update Route
                 try {
                     const response = await fetch('/update_group', {
                         method: 'POST',
@@ -1292,34 +1284,20 @@
                     });
 
                     const result = await response.json();
-
                     if (result.success) {
-                        // 3. UI-Synchronisierung (lokal im Browser)
-                        libraryItems.forEach(item => {
-                            if (item.SeriesGroupId === currentItem.SeriesGroupId) {
-                                item.Name = payload.name;
-                                item.Ort = payload.ort;
-                                item.Beschreibung = payload.beschreibung;
-                                item.ISBN = payload.isbn;
-                                item.ItemType = payload.item_type;
-
-                                // Nur den Code des aktiven Items lokal updaten
-                                if (item._id === itemId) item.Code_4 = document.getElementById('editLibraryCode4').value;
-                            }
-                        });
-
+                        alert('Gruppe erfolgreich synchronisiert!');
                         closeEditLibraryModal();
-                        // Falls du eine Funktion zum Neuzeichnen der Tabelle hast, rufe sie hier auf:
-                        // renderTable(); 
-                        alert("Erfolgreich synchronisiert.");
+                        await loadLibraryItems(); // Daten neu laden
+                        // renderTable(); // Ggf. Tabelle neu rendern
                     } else {
                         alert('Fehler: ' + result.message);
                     }
                 } catch (error) {
-                    console.error('Fetch error:', error);
-                    alert('Netzwerkfehler beim Speichern.');
+                    console.error('Update failed:', error);
+                    alert('Netzwerkfehler.');
                 }
             });
+
         }
     });
 </script>
