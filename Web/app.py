@@ -6627,6 +6627,63 @@ def edit_item(id):
     return redirect(url_for('home_admin'))
 
 
+@app.route('/update_group', methods=['POST'])
+def update_group():
+    data = request.get_json()
+    series_group_id = data.get('series_group_id')
+    
+    if not series_group_id:
+        return jsonify({'success': False, 'message': 'Keine Gruppen-ID'}), 400
+
+    # 1. Shared Fields (Group Logic)
+    # These apply to every item in the group
+    shared_update = {
+        'Name': data.get('name'),
+        'Ort': data.get('ort'),
+        'Beschreibung': data.get('beschreibung'),
+        'Anschaffungsjahr': data.get('ansch_jahr'),
+        'Anschaffungskosten': data.get('ansch_kost'),
+        'Reservierbar': data.get('reservierbar'),
+        'ISBN': data.get('isbn'),
+        'ItemType': data.get('item_type'),
+        'LastUpdated': datetime.datetime.now()
+    }
+
+    # 2. Individual Updates (Specific Code Logic)
+    # Expected format: [{'id': '...', 'code_4': '...'}, ...]
+    individual_items = data.get('items', [])
+
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        items_col = db['items']
+
+        # A. Apply Shared Attributes to the whole group
+        items_col.update_many(
+            {'SeriesGroupId': series_group_id},
+            {'$set': shared_update}
+        )
+
+        # B. Apply Unique Codes to specific items
+        # We iterate through the provided list to update the specific code for each ID
+        for item in individual_items:
+            item_id = item.get('id')
+            new_code = item.get('code_4')
+            
+            if item_id:
+                items_col.update_one(
+                    {'_id': ObjectId(item_id), 'SeriesGroupId': series_group_id},
+                    {'$set': {'Code_4': new_code}}
+                )
+
+        client.close()
+        return jsonify({'success': True, 'message': 'Gruppe und individuelle Codes aktualisiert'})
+
+    except Exception as e:
+        app.logger.error(f"Error updating group {series_group_id}: {e}")
+        return jsonify({'success': False, 'message': 'Systemfehler beim Update'}), 500
+
+
 @app.route('/report_damage/<id>', methods=['POST'])
 def report_damage(id):
     """Register a damage report entry for an item (admin only)."""

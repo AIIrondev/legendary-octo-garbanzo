@@ -1257,80 +1257,101 @@
         document.getElementById('editLibraryModal').style.display = 'none';
     }
 
-    // --- Sicherer Event-Listener für das Formular ---
-    document.addEventListener('DOMContentLoaded', function() {
-        const editForm = document.getElementById('editLibraryForm');
+    document.getElementById('editLibraryForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-        if (editForm) {
-            editForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
+        const itemId = document.getElementById('editLibraryItemId').value;
+        const currentItem = libraryItems.find(i => i._id === itemId);
+        
+        if (!currentItem || !currentItem.SeriesGroupId) {
+            alert("Fehler: Gruppen-ID nicht gefunden.");
+            return;
+        }
 
-                const itemId = document.getElementById('editLibraryItemId').value;
-                const updateData = {
-                    id: itemId,
-                    name: document.getElementById('editLibraryName').value,
-                    item_type: document.getElementById('editLibraryType').value,
-                    isbn: document.getElementById('editLibraryIsbn').value,
-                    code_4: document.getElementById('editLibraryCode4').value,
-                    ort: document.getElementById('editLibraryLocation').value,
-                    beschreibung: document.getElementById('editLibraryDescription').value
-                };
+        // 1. Alle Items der Gruppe sammeln, um die Struktur für das Backend zu bauen
+        // Hier bauen wir die Liste für 'individual_items'
+        const groupMembers = libraryItems.filter(i => i.SeriesGroupId === currentItem.SeriesGroupId);
+        const individualUpdates = groupMembers.map(member => {
+            return {
+                id: member._id,
+                // Wenn es das aktuell bearbeitete Item ist, nimm den Wert aus dem Formular
+                // Sonst behalte den alten Code bei (oder lass ihn so, wie er ist)
+                code_4: (member._id === itemId) ? document.getElementById('editLibraryCode4').value : member.Code_4
+            };
+        });
 
-                try {
-                    const response = await fetch('/api/update-item', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updateData)
-                    });
+        // 2. Payload zusammenstellen
+        const payload = {
+            series_group_id: currentItem.SeriesGroupId,
+            name: document.getElementById('editLibraryName').value,
+            ort: document.getElementById('editLibraryLocation').value,
+            beschreibung: document.getElementById('editLibraryDescription').value,
+            ansch_jahr: null, // Falls du diese Felder im Formular hast, hier einfügen
+            ansch_kost: null,
+            reservierbar: true,
+            isbn: document.getElementById('editLibraryIsbn').value,
+            item_type: document.getElementById('editLibraryType').value,
+            items: individualUpdates
+        };
 
-                    if (response.ok) {
-                        const editedItem = libraryItems.find(i => i._id === itemId);
-
-                        // Lokale Daten im Array synchronisieren
-                        if (editedItem && editedItem.SeriesGroupId) {
-                            libraryItems.forEach(item => {
-                                if (item.SeriesGroupId === editedItem.SeriesGroupId) {
-                                    item.Name = updateData.name;
-                                    item.ItemType = updateData.item_type;
-                                    item.ISBN = updateData.isbn;
-                                    item.Ort = updateData.ort;
-                                    item.Beschreibung = updateData.beschreibung;
-
-                                    if (item._id === itemId) item.Code_4 = updateData.code_4;
-                                }
-                            });
-                        } else if (editedItem) {
-                            Object.assign(editedItem, updateData);
-                        }
-
-                        closeEditLibraryModal();
-                        // Optional: renderLibraryTable(); 
-                    } else {
-                        const err = await response.json();
-                        alert('Fehler beim Speichern: ' + (err.error || 'Unbekannter Fehler'));
-                    }
-                } catch (error) {
-                    console.error('Fetch error:', error);
-                    alert('Netzwerkfehler.');
-                }
+        // 3. Request senden
+        try {
+            const response = await fetch('/update_group', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // UI Update: Daten im Frontend Array aktualisieren
+                libraryItems.forEach(item => {
+                    if (item.SeriesGroupId === currentItem.SeriesGroupId) {
+                        item.Name = payload.name;
+                        item.Ort = payload.ort;
+                        item.Beschreibung = payload.beschreibung;
+                        item.ISBN = payload.isbn;
+                        item.ItemType = payload.item_type;
+
+                        // Code nur für das aktive Item updaten
+                        if (item._id === itemId) item.Code_4 = document.getElementById('editLibraryCode4').value;
+                    }
+                });
+
+                closeEditLibraryModal();
+                alert("Gruppe erfolgreich aktualisiert!");
+                // renderTable(); // Deine Render-Funktion aufrufen
+            } else {
+                alert('Fehler: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
         }
     });
 </script>
 
 <div id="editLibraryModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width: 760px;">
-        <span class="close" onclick="closeEditLibraryModal()">&times;</span>
+    <div class="modal-content" style="max-width: 760px; padding: 25px; border-radius: 8px;">
+        <span class="close" onclick="closeEditLibraryModal()" style="cursor: pointer; float: right; font-size: 24px;">&times;</span>
         <h3 style="margin-top:0;">Bibliotheksmedium bearbeiten</h3>
         
-        <!-- Bereich für Gruppen-Informationen -->
-        <div id="editLibraryGroupWarning" style="display:none; background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #dee2e6;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <strong style="color: #0ea5e9;">Gruppen-Synchronisierung aktiv</strong>
-                <span style="font-size: 12px; color: #666;">Gesamt: <span id="editLibraryGroupCount"></span> Exemplare</span>
+        <!-- Bereich für Gruppen-Informationen (Hier konsolidiert!) -->
+        <div id="editLibraryGroupWarning" style="display:none; background-color: #fff; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #0ea5e9;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <strong style="color: #0ea5e9;">Gruppen-Range (Total: <span id="editLibraryGroupCount"></span>)</strong>
             </div>
-            <p style="margin: 0 0 10px 0; font-size: 13px;">Codes in dieser Range:</p>
-            <div id="editLibraryAllCodes" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
+            
+            <p style="margin: 5px 0; font-size: 12px; color: #555;">
+                Alle aufgeführten Codes gehören zu diesem Datensatz:
+            </p>
+            
+            <!-- Hier werden die Codes per JS eingefügt -->
+            <div id="editLibraryAllCodes" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px;"></div>
+            
+            <div style="margin-top: 15px; font-size: 11px; background: #e0f2fe; padding: 8px; border-radius: 4px;">
+                <strong>Hinweis:</strong> Änderungen an Titel/Ort/Beschreibung werden auf <strong>alle</strong> Exemplare der Range übertragen.
+            </div>
         </div>
 
         <form id="editLibraryForm">
@@ -1338,11 +1359,11 @@
             <div class="edit-grid">
                 <div class="full">
                     <label for="editLibraryName">Titel</label>
-                    <input id="editLibraryName" required>
+                    <input id="editLibraryName" required style="width: 100%;">
                 </div>
                 <div>
                     <label for="editLibraryType">Medientyp</label>
-                    <select id="editLibraryType">
+                    <select id="editLibraryType" style="width: 100%;">
                         <option value="book">Buch</option>
                         <option value="schulbuch">Schulbuch</option>
                         <option value="cd">CD</option>
@@ -1352,42 +1373,26 @@
                 </div>
                 <div>
                     <label for="editLibraryIsbn">ISBN</label>
-                    <input id="editLibraryIsbn" placeholder="optional ISBN-10/13">
+                    <input id="editLibraryIsbn" placeholder="optional ISBN-10/13" style="width: 100%;">
                 </div>
                 <div>
                     <label for="editLibraryCode4">Code</label>
-                    <input id="editLibraryCode4" placeholder="optional Mediencode">
+                    <input id="editLibraryCode4" placeholder="optional Mediencode" style="width: 100%;">
                 </div>
                 <div class="full">
                     <label for="editLibraryLocation">Ort</label>
-                    <input id="editLibraryLocation" required>
+                    <input id="editLibraryLocation" required style="width: 100%;">
                 </div>
                 <div class="full">
                     <label for="editLibraryDescription">Beschreibung</label>
-                    <textarea id="editLibraryDescription" rows="4" required></textarea>
+                    <textarea id="editLibraryDescription" rows="4" required style="width: 100%;"></textarea>
                 </div>
             </div>
             <div class="edit-actions" style="margin-top:20px;">
-                <button type="submit" class="button" style="background:#0ea5e9;color:#fff;">Speichern</button>
+                <button type="submit" class="button" style="background:#0ea5e9;color:#fff;">Speichern & Synchronisieren</button>
                 <button type="button" class="button" onclick="closeEditLibraryModal()">Abbrechen</button>
             </div>
         </form>
-    </div>
-</div>
-<div id="editLibraryGroupWarning" style="display:none; background-color: #fff; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #0ea5e9;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-        <strong style="color: #0ea5e9;">Gruppen-Range (Total: <span id="editLibraryGroupCount"></span>)</strong>
-    </div>
-    
-    <p style="margin: 5px 0; font-size: 12px; color: #555;">
-        Alle aufgeführten Codes gehören zu diesem Datensatz:
-    </p>
-    
-    <!-- Hier werden die Codes per JS eingefügt -->
-    <div id="editLibraryAllCodes"></div>
-    
-    <div style="margin-top: 15px; font-size: 11px; background: #e0f2fe; padding: 8px; border-radius: 4px;">
-        <strong>Hinweis:</strong> Änderungen an Titel/Ort/Beschreibung werden auf <strong>alle</strong> Exemplare der Range übertragen.
     </div>
 </div>
 {% endblock %}
