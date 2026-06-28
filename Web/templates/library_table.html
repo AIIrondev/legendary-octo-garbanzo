@@ -1199,8 +1199,8 @@
             alert('Fehler: Das Medium konnte nicht gefunden werden.');
             return;
         }
-
-        // Felder befüllen
+    
+        // 1. Formular-Felder normal befüllen
         document.getElementById('editLibraryItemId').value = item._id || '';
         document.getElementById('editLibraryName').value = item.Name || '';
         document.getElementById('editLibraryType').value = item.ItemType || 'book';
@@ -1208,28 +1208,48 @@
         document.getElementById('editLibraryCode4').value = item.Code_4 || item.Code4 || '';
         document.getElementById('editLibraryLocation').value = item.Ort || ''; 
         document.getElementById('editLibraryDescription').value = item.Beschreibung || '';
-
-        // Gruppen-Info-Box Logik
+    
+        // 2. Gruppen-Logik: Hole ALLE Items der Gruppe
         const warningDiv = document.getElementById('editLibraryGroupWarning');
-        const codesContainer = document.getElementById('editLibraryAllCodes');
-
+        const groupCodeContainer = document.getElementById('editLibraryAllCodes');
+        
+        // Prüfen ob Gruppenmitgliedschaft besteht
         if (item.SeriesGroupId) {
+            // Alle Items mit gleicher ID finden und nach Position sortieren
             const groupMembers = libraryItems
                 .filter(i => i.SeriesGroupId === item.SeriesGroupId)
-                .sort((a, b) => a.SeriesPosition - b.SeriesPosition);
-
-            document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
-
-            codesContainer.innerHTML = groupMembers.map(member => {
+                .sort((a, b) => (a.SeriesPosition || 0) - (b.SeriesPosition || 0));
+        
+            // Liste der Codes erstellen
+            let codesListHtml = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top:10px;">
+            `;
+                
+            groupMembers.forEach(member => {
                 const isCurrent = member._id === itemId;
-                return `<span style="background: ${isCurrent ? '#0ea5e9' : '#e0e0e0'}; color: ${isCurrent ? '#fff' : '#333'}; padding: 2px 8px; border-radius: 4px; margin-right: 5px; font-size: 12px;">${member.Code_4 || 'n/a'}</span>`;
-            }).join('');
-
+                // Wenn Code_4 nicht existiert, zeige "Kein Code"
+                const codeVal = member.Code_4 || "---";
+                
+                codesListHtml += `
+                    <div style="text-align: center; padding: 5px; border-radius: 4px; 
+                         background: ${isCurrent ? '#0ea5e9' : '#f1f1f1'}; 
+                         color: ${isCurrent ? '#fff' : '#333'};
+                         border: 1px solid ${isCurrent ? '#0ea5e9' : '#ccc'};">
+                        <span style="font-size: 10px; display:block;">Pos: ${member.SeriesPosition}</span>
+                        <strong style="font-size: 14px;">${codeVal}</strong>
+                    </div>
+                `;
+            });
+            codesListHtml += `</div>`;
+        
+            document.getElementById('editLibraryGroupCount').textContent = groupMembers.length;
+            groupCodeContainer.innerHTML = codesListHtml;
+            
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
         }
-
+    
         document.getElementById('editLibraryModal').style.display = 'flex'; 
     }
 
@@ -1352,6 +1372,22 @@
                 <button type="button" class="button" onclick="closeEditLibraryModal()">Abbrechen</button>
             </div>
         </form>
+    </div>
+</div>
+<div id="editLibraryGroupWarning" style="display:none; background-color: #fff; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #0ea5e9;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+        <strong style="color: #0ea5e9;">Gruppen-Range (Total: <span id="editLibraryGroupCount"></span>)</strong>
+    </div>
+    
+    <p style="margin: 5px 0; font-size: 12px; color: #555;">
+        Alle aufgeführten Codes gehören zu diesem Datensatz:
+    </p>
+    
+    <!-- Hier werden die Codes per JS eingefügt -->
+    <div id="editLibraryAllCodes"></div>
+    
+    <div style="margin-top: 15px; font-size: 11px; background: #e0f2fe; padding: 8px; border-radius: 4px;">
+        <strong>Hinweis:</strong> Änderungen an Titel/Ort/Beschreibung werden auf <strong>alle</strong> Exemplare der Range übertragen.
     </div>
 </div>
 {% endblock %}
