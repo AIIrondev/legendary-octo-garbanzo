@@ -288,7 +288,7 @@ SCHEDULER_INTERVAL = cfg.SCHEDULER_INTERVAL_MIN
 SSL_CERT = cfg.SSL_CERT
 SSL_KEY = cfg.SSL_KEY
 
-LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media', 'schulbuch']
+LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'other', 'schoolbook']
 INVOICE_CURRENCY = 'EUR'
 
 NOTIFICATION_STATUS_CACHE_TTL = max(3, int(os.getenv('INVENTAR_NOTIFICATION_STATUS_CACHE_TTL', '8')))
@@ -3193,7 +3193,7 @@ def api_library_items():
         ausleihungen_db = db['ausleihungen']
 
         query = {
-            'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']},
+            'ItemType': {'$in': ['book', 'cd', 'dvd', 'other', 'schoolbook']},
             'IsGroupedSubItem': {'$ne': True},
             'Deleted': {'$ne': True}
         }

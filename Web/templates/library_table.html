@@ -475,7 +475,7 @@
                 <select id="filterType">
                     <option value="">-- Alle Typen --</option>
                     <option value="book">Buch</option>
-                    <option value="schulbuch">Schulbuch</option>
+                    <option value="schoolbook">Schulbuch</option>
                     <option value="cd">CD</option>
                     <option value="dvd">DVD</option>
                     <option value="other">Sonstige</option>
@@ -1033,7 +1033,7 @@
     }
 
     function getItemTypeLabel(type) {
-        const labels = { 'book': 'Buch', 'cd': 'CD', 'dvd': 'DVD', 'other': 'Sonstige' };
+        const labels = { 'book': 'Buch', 'cd': 'CD', 'dvd': 'DVD', 'other': 'Sonstige', 'schoolbook': 'Schulbuch' };
         return labels[type] || type;
     }
 
@@ -1336,10 +1336,10 @@
                     <label for="editLibraryType">Medientyp</label>
                     <select id="editLibraryType" style="width: 100%;">
                         <option value="book">Buch</option>
-                        <option value="schulbuch">Schulbuch</option>
+                        <option value="schoolbook">Schulbuch</option>
                         <option value="cd">CD</option>
                         <option value="dvd">DVD</option>
-                        <option value="media">Sonstige Medien</option>
+                        <option value="other">Sonstige Medien</option>
                     </select>
                 </div>
                 <div>
