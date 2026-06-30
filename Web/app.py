@@ -5227,7 +5227,7 @@ def upload_item():
             return redirect(url_for(success_redirect_endpoint))
 
     item_isbn = ''
-    item_type = 'general'
+    item_type = 'other'
     if cfg.MODULES.is_enabled('library') and isbn_raw:
         normalized_isbn = normalize_and_validate_isbn(isbn_raw)
         if normalized_isbn:
@@ -5235,8 +5235,7 @@ def upload_item():
             item_type = 'book'
         else:
             item_isbn = isbn_raw
-            if upload_mode == 'library':
-                item_type = 'book'
+
         if item_type_input != "":
             item_type = item_type_input
 
@@ -5253,7 +5252,6 @@ def upload_item():
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'error')
             return redirect(url_for('library_admin'))
-        item_type = 'book'
 
     # Only check for images if not duplicating and no duplicate images provided and no book cover
     # For library mode, skip this check as images come only from ISBN fetch
