@@ -42,6 +42,7 @@ import Web.modules.database.termine as termin
 import Web.modules.log.audit_log as al
 import push_notifications as pn
 import Web.modules.inventarsystem.pdf_export as pdf_export 
+import Web.modules.inventarsystem.excel_export as excel_export
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.objectid import ObjectId
@@ -2979,33 +2980,50 @@ def library_export_excel(scope='all'):
     username = session['username']
     is_admin_user = us.check_admin(username)
     
-    import Web.modules.inventarsystem.excel_export as excel_export
-    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-    db = client[cfg.MONGODB_DB]
-    items_collection = db['items']
+    # Base query
+    query = {
+        'ItemType': {'$in': LIBRARY_ITEM_TYPES}, 
+        'Deleted': {'$ne': True}
+    }
     
-    query = {'ItemType': {'$in': LIBRARY_ITEM_TYPES}, 'Deleted': {'$ne': True}}
-    
+    # Scope modifications
     if scope == 'borrowed_by_me':
         query['User'] = username
         query['Verfuegbar'] = False
         filename = f"Bibliothek_Ausgeliehen_{username}.xlsx"
+        
     elif scope == 'all_borrowed':
         if not is_admin_user:
+            # Consider adding a flash message here before redirecting
             return redirect('/library')
         query['Verfuegbar'] = False
         filename = "Bibliothek_Alle_Ausleihen.xlsx"
+        
     elif scope == 'schulbuecher':
+        # Overwrites the base $in query, which is fine
         query['ItemType'] = 'schulbuch'
         filename = "Schulbuecher_Bestand.xlsx"
+        
+    elif scope == 'all_books':
+        # FIX: Keep the library item types restriction, but exclude 'general'
+        query['ItemType'] = {'$in': [t for t in LIBRARY_ITEM_TYPES if t != 'general']}
+        filename = "Bibliothek_Buecher.xlsx"
+        
     else:
-        # 'all'
+        # 'all' scope
         filename = "Bibliothek_Gesamtbestand.xlsx"
         
+    # Database interaction
+    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    items_collection = db['items']
+    
     items = list(items_collection.find(query))
     client.close()
     
+    # Generate and send file
     excel_file = excel_export.generate_library_excel(items)
+    
     return send_file(
         excel_file,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
