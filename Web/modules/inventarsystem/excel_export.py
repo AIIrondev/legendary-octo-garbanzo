@@ -37,18 +37,21 @@ def generate_library_excel(items):
             item.get("ReturnDate", ""),
             item.get("Anschaffungskosten", "")
         ]
-        ws.append(row)
         
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter 
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        ws.column_dimensions[column].width = min(max_length + 2, 50)
+        # FIX: Clean the row data INSIDE the loop for every single item
+        clean_row = []
+        for value in row:
+            if isinstance(value, list):
+                # Converts ['A', 'B'] to "A, B" and an empty list [] to an empty string ""
+                clean_row.append(", ".join(map(str, value)) if value else "")
+            elif isinstance(value, dict):
+                # Just in case there is an embedded MongoDB sub-document
+                clean_row.append(str(value))
+            else:
+                clean_row.append(value)
+        
+        # Append the safe, flattened row to the worksheet
+        ws.append(clean_row)
 
     excel_buffer = io.BytesIO()
     wb.save(excel_buffer)
